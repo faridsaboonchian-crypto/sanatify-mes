@@ -1,0 +1,74 @@
+[
+  {
+    "username": "admin",
+    "password": "Sanatify@1405",
+    "role": "admin",
+    "name": "مدیر سیستم"
+  },
+  {
+    "username": "qc",
+    "password": "Qc@1405",
+    "role": "qc",
+    "name": "کارشناس کنترل کیفیت"
+  },
+  {
+    "username": "1003",
+    "password": "5678",
+    "role": "admin",
+    "name": "مهندس رضا اکبری"
+  },
+  {
+    "username": "1001",
+    "password": "1234",
+    "role": "qc",
+    "name": "وحید کریمی"
+  },
+  {
+    "username": "1002",
+    "password": "1234",
+    "role": "viewer",
+    "name": "علی محمدی"
+  },
+  {
+    "username": "1004",
+    "password": "1234",
+    "role": "viewer",
+    "name": "مهندس سعید علوی"
+  },
+  {
+    "username": "operator1",
+    "password": "Op@1234",
+    "role": "operator",
+    "name": "اپراتور خط"
+  },
+  {
+    "username": "warehouse1",
+    "password": "Sanatify@1405",
+    "role": "warehouse",
+    "name": "انباردار ۱"
+  },
+  {
+    "username": "manager1",
+    "password": "Mg@1234",
+    "role": "manager",
+    "name": "مدیر (فقط مشاهده)"
+  },
+  {
+    "username": "engineer1",
+    "password": "En@1234",
+    "role": "engineering",
+    "name": "واحد مهندسی"
+  },
+  {
+    "username": "supervisor1",
+    "password": "Sp@1234",
+    "role": "supervisor",
+    "name": "سرپرست تولید"
+  },
+  {
+    "username": "warehouse",
+    "password": "Sanatify@1405",
+    "role": "warehouse",
+    "name": "انباردار"
+  }
+]

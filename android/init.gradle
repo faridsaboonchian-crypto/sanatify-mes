@@ -1,0 +1,45 @@
+// Mirror های غیر-aliyun اول (چون aliyun الان مشکل داره)
+def mirrors = { handler ->
+    handler.maven { url 'https://repo1.maven.org/maven2' }
+    handler.maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+    handler.maven { url 'https://maven.tencent.com/nexus/repository/maven-public/' }
+    // aliyun به عنوان fallback آخر
+    handler.maven { url 'https://maven.aliyun.com/repository/public' }
+    handler.maven { url 'https://maven.aliyun.com/repository/central' }
+    handler.maven { url 'https://maven.aliyun.com/repository/google' }
+    handler.maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+    handler.maven { url 'https://jitpack.io' }
+}
+
+settingsEvaluated { settings ->
+    settings.pluginManagement {
+        repositories {
+            clear()
+            mirrors(delegate)
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+    try {
+        settings.dependencyResolutionManagement {
+            repositories {
+                clear()
+                mirrors(delegate)
+                google()
+                mavenCentral()
+            }
+        }
+    } catch (Exception ignored) {}
+}
+
+allprojects {
+    buildscript {
+        repositories {
+            mirrors(delegate)
+        }
+    }
+    repositories {
+        mirrors(delegate)
+    }
+}

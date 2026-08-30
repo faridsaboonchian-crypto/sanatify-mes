@@ -1,0 +1,18 @@
+const fs = require('fs');
+const vm = require('vm');
+const p = 'public/index.html';
+let c = fs.readFileSync(p, 'utf8');
+const before = c;
+// 1) حذف بلوک HTML که اشتباهاً داخل <script> کپی شده
+c = c.replace(/<script>\s*<h3 class="inv-subtitle">[\s\S]*?<\/table>\s*<\/div>\s*const API/, '<script>\nconst API');
+// 2) تبدیل همه بک‌تیک‌های خراب به کوتیشن تکی
+c = c.split('`').join("'");
+// 3) تعمیر اینترِ خام داخل دو رشتهٔ پیام حذف کالا
+c = c.replace(/حذف شود؟\r?\nاین کالا/g, 'حذف شود؟\\nاین کالا');
+c = c.replace(/msg \+= '\r?\n⚠️/g, "msg += '\\n⚠️");
+if (c === before) { console.log('NO CHANGE'); } else { fs.writeFileSync(p, c, 'utf8'); console.log('PATCHED'); }
+// اعتبارسنجی سینتکس کل اسکریپت
+const i = c.lastIndexOf('<script>');
+const j = c.lastIndexOf('</' + 'script>');
+try { new vm.Script(c.slice(i + 8, j)); console.log('SYNTAX OK'); }
+catch (e) { console.log('SYNTAX ERROR: ' + e.message); }

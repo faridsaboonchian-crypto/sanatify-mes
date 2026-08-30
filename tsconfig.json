@@ -1,0 +1,15 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "bundler",
+    "types": []
+  },
+  "exclude": [
+    "node_modules",
+    "src/archive_deprecated",
+    "src/archive_deprecated/**/*"
+  ]
+}

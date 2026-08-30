@@ -1,0 +1,199 @@
+const fs = require('fs');
+const vm = require('vm');
+
+// ================= CLIENT (index.html) =================
+const hp = 'public/index.html';
+let H = fs.readFileSync(hp, 'utf8');
+if (H.indexOf('FIX-RES-1') === -1) {
+  const clientBlock = `
+// ===== FIX-RES-1 (Reservation UI) =====
+function invResInjectUI() {
+  if (document.getElementById('btnInventoryReserve')) return;
+  var tb = document.querySelector('#tab-warehouse .toolbar');
+  if (tb) tb.insertAdjacentHTML('beforeend', '<button class="act" id="btnInventoryReserve" style="display:none">\\u{1F512} رزرو کالا</button>');
+  var adj = document.getElementById('invAdjustForm');
+  if (adj) adj.insertAdjacentHTML('afterend',
+    '<div class="filters hidden" id="invReserveForm"><div class="frow">' +
+    '<select id="resItem" class="fsel"></select>' +
+    '<input id="resQty" type="number" min="0.001" placeholder="مقدار رزرو" style="width:110px" />' +
+    '<select id="resWarehouse" class="fsel"></select>' +
+    '<input id="resRef" placeholder="مرجع / دستور کار" />' +
+    '<input id="resReason" placeholder="علت رزرو" style="flex:1 1 200px" />' +
+    '<button class="act" id="resSave" data-save style="background:#15803d">ثبت رزرو</button>' +
+    '<button class="act fclear" id="resCancel">انصراف</button>' +
+    '</div><div class="note" id="resMsg"></div></div>');
+  var st = document.getElementById('tbl-inv-stock');
+  if (st && st.closest('.tablewrap')) st.closest('.tablewrap').insertAdjacentHTML('afterend',
+    '<h3 class="inv-subtitle">رزروهای باز (اختصاص یافته)</h3><div class="tablewrap"><table id="tbl-inv-reservations"></table></div>');
+}
+function invResFillSelects() {
+  var items = (inventoryData && inventoryData.items) || [];
+  var io = '<option value="">انتخاب کالا…</option>';
+  items.forEach(function (it) { io += '<option value="' + it.id + '">' + (it.code || '') + ' — ' + (it.name || '') + '</option>'; });
+  var el = document.getElementById('resItem'); if (el) el.innerHTML = io;
+  var WH = (typeof INV_WAREHOUSES !== 'undefined') ? INV_WAREHOUSES : { raw: 'مواد خام', product: 'محصول', spare: 'قطعات یدکی', quarantine: 'قرنطینه' };
+  var wo = '<option value="">انتخاب انبار…</option>';
+  Object.keys(WH).forEach(function (k) { wo += '<option value="' + k + '">' + WH[k] + '</option>'; });
+  var rw = document.getElementById('resWarehouse'); if (rw) rw.innerHTML = wo;
+}
+function invRenderReservations() {
+  var t = document.getElementById('tbl-inv-reservations'); if (!t) return;
+  getJson('/api/inventory/reservations').then(function (res) {
+    var open = (res || []).filter(function (r) { return r.status === 'open'; });
+    var html = '<thead><tr><th>کالا</th><th>انبار</th><th>مقدار رزرو</th><th>مرجع/دستور</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>';
+    if (!open.length) html += '<tr><td colspan="6" class="empty">رزرو بازی وجود ندارد.</td></tr>';
+    open.forEach(function (r) {
+      html += '<tr><td>' + invEsc(invItemName(r.item_id)) + '</td><td>' + invEsc(invWarehouseLabel(r.warehouse)) + '</td><td>' + invQty(r.quantity) + '</td><td>' + invEsc(r.work_order || r.reason || '-') + '</td><td>' + invEsc(fmtDate(r.created_at || r.timestamp)) + '</td>' +
+        '<td><button class="act" data-res-consume="' + r.id + '" style="background:#15803d;padding:4px 10px;font-size:11px">مصرف</button> ' +
+        '<button class="act" data-res-release="' + r.id + '" style="background:#64748b;padding:4px 10px;font-size:11px">آزادسازی</button></td></tr>';
+    });
+    t.innerHTML = html + '</tbody>';
+  }).catch(function () { t.innerHTML = '<tbody><tr><td class="empty">خطا در دریافت رزروها</td></tr></tbody>'; });
+}
+async function invReserveSave() {
+  var body = { item_id: document.getElementById('resItem').value, quantity: Number(document.getElementById('resQty').value), warehouse: document.getElementById('resWarehouse').value, work_order: document.getElementById('resRef').value, reason: document.getElementById('resReason').value, request_id: invNewRequestId('web') };
+  var btn = document.getElementById('resSave'); if (btn) btn.disabled = true;
+  try {
+    var r = await fetch('/api/inventory/reserve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var j = await r.json();
+    if (!r.ok) { invMsg('resMsg', j.error || 'خطا در ثبت رزرو', false); return; }
+    invMsg('resMsg', 'رزرو با موفقیت ثبت شد ✓', true);
+    document.getElementById('invReserveForm').classList.add('hidden');
+    loadInventory(); renderResSafe();
+  } catch (e) { invMsg('resMsg', 'خطا در ارتباط با سرور', false); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function invReserveRelease(id) {
+  try {
+    var r = await fetch('/api/inventory/reserve/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, request_id: invNewRequestId('web') }) });
+    var j = await r.json(); if (!r.ok) { alert(j.error || 'خطا'); return; }
+    loadInventory(); renderResSafe();
+  } catch (e) { alert('خطا در ارتباط با سرور'); }
+}
+async function invReserveConsume(id) {
+  try {
+    var r = await fetch('/api/inventory/reserve/consume', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, request_id: invNewRequestId('web') }) });
+    var j = await r.json(); if (!r.ok) { alert(j.error || 'خطا'); return; }
+    loadInventory(); renderResSafe();
+  } catch (e) { alert('خطا در ارتباط با سرور'); }
+}
+function renderResSafe() { try { invRenderReservations(); } catch (e) {} }
+(function () {
+  if (window.__FIX_RES1__) return; window.__FIX_RES1__ = true;
+  invResInjectUI();
+  var rb = document.getElementById('btnInventoryReserve');
+  if (rb) rb.addEventListener('click', function () { invResFillSelects(); document.getElementById('invReserveForm').classList.toggle('hidden'); });
+  var rs = document.getElementById('resSave'); if (rs) rs.addEventListener('click', invReserveSave);
+  var rc = document.getElementById('resCancel'); if (rc) rc.addEventListener('click', function () { document.getElementById('invReserveForm').classList.add('hidden'); });
+  document.addEventListener('click', function (e) {
+    var c = e.target.closest('button[data-res-consume]'); if (c) { invReserveConsume(c.getAttribute('data-res-consume')); return; }
+    var rl = e.target.closest('button[data-res-release]'); if (rl) { invReserveRelease(rl.getAttribute('data-res-release')); }
+  });
+  // نمایش دکمه رزرو برای انباردار/مدیر + رندر رزروها بعد از هر بار لود
+  var showRes = function () { var b = document.getElementById('btnInventoryReserve'); if (b) b.style.display = ''; };
+  ['warehouse', 'inventory'].forEach(function (k) { if (loaders[k]) { var o = loaders[k]; loaders[k] = async function () { var r = await o.apply(this, arguments); try { invResInjectUI(); showRes(); invRenderReservations(); } catch (e) {} return r; }; } });
+  invResInjectUI(); showRes(); invRenderReservations();
+})();
+// ===== END FIX-RES-1 =====
+`;
+  const idx = H.lastIndexOf('</script>');
+  H = H.slice(0, idx) + clientBlock + H.slice(idx);
+  fs.writeFileSync(hp, H, 'utf8');
+  console.log('CLIENT: FIX-RES-1 appended before </script>');
+} else { console.log('CLIENT: FIX-RES-1 already present'); }
+
+// ================= SERVER (server.js) =================
+const sp = 'server.js';
+let S = fs.readFileSync(sp, 'utf8');
+if (S.indexOf('FIX-RES-2') === -1) {
+  const serverBlock = `
+// ================================================================
+// FIX-RES-2 — RESERVATION ENGINE (Phase 2)
+// ================================================================
+if (req.method === 'GET' && pathname === '/api/inventory/reservations') {
+const live = invEnsure(readLive());
+return sendJson(res, live.inventory_reservations || []);
+}
+if (req.method === 'POST' && pathname === '/api/inventory/reserve') {
+if (!auth.requireRole(req, ['warehouse'])) return sendJson(res, { error: 'دسترسی غیرمجاز: رزرو فقط برای انباردار یا مدیر سیستم است.' }, 403);
+readBody(req).then(body => {
+try {
+const b = JSON.parse(body || '{}');
+const live = invEnsure(readLive());
+const item = invFindItem(live, String(b.item_id || ''));
+const qty = Number(b.quantity);
+const warehouse = String(b.warehouse || '').trim();
+if (!item) return sendJson(res, { error: 'کالای انتخاب‌شده یافت نشد.' }, 400);
+if (!Number.isFinite(qty) || qty <= 0) return sendJson(res, { error: 'مقدار رزرو باید بیشتر از صفر باشد.' }, 400);
+if (!warehouse) return sendJson(res, { error: 'انبار رزرو الزامی است.' }, 400);
+const agg = invAggWarehouse(live, item.id, warehouse);
+if (agg.available < qty - 1e-9) return sendJson(res, { error: 'موجودی قابل مصرف کافی نیست. (قابل مصرف: ' + agg.available + ' | درخواست: ' + qty + ')', available: agg.available }, 409);
+const rec = { id: 'res-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: String(b.request_id || ''), item_id: item.id, warehouse: warehouse, quantity: qty, status: 'open', work_order: String(b.work_order || '').trim(), reason: String(b.reason || '').trim(), created_at: new Date().toISOString(), operator_id: String((req.user && req.user.username) || '') };
+live.inventory_reservations.push(rec);
+invSave(live, req, 'inventory.reserve.insert', rec);
+return sendJson(res, { ok: true, record: rec }, 201);
+} catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+}).catch(e => sendJson(res, { error: e.message }, 500));
+return;
+}
+if (req.method === 'POST' && pathname === '/api/inventory/reserve/release') {
+if (!auth.requireRole(req, ['warehouse'])) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+readBody(req).then(body => {
+try {
+const b = JSON.parse(body || '{}');
+const live = invEnsure(readLive());
+const rec = (live.inventory_reservations || []).find(x => x.id === String(b.id || ''));
+if (!rec) return sendJson(res, { error: 'رزرو یافت نشد.' }, 404);
+if (rec.status !== 'open') return sendJson(res, { error: 'این رزرو قبلاً بسته شده است.' }, 409);
+rec.status = 'released'; rec.closed_at = new Date().toISOString();
+invSave(live, req, 'inventory.reserve.release', rec);
+return sendJson(res, { ok: true, record: rec });
+} catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+}).catch(e => sendJson(res, { error: e.message }, 500));
+return;
+}
+if (req.method === 'POST' && pathname === '/api/inventory/reserve/consume') {
+if (!auth.requireRole(req, ['warehouse'])) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+readBody(req).then(body => {
+try {
+const b = JSON.parse(body || '{}');
+const live = invEnsure(readLive());
+const rec = (live.inventory_reservations || []).find(x => x.id === String(b.id || ''));
+if (!rec) return sendJson(res, { error: 'رزرو یافت نشد.' }, 404);
+if (rec.status !== 'open') return sendJson(res, { error: 'این رزرو قبلاً بسته شده است.' }, 409);
+const item = invFindItem(live, rec.item_id);
+const qty = rec.quantity;
+rec.status = 'released';
+const agg = invAggWarehouse(live, rec.item_id, rec.warehouse);
+if (agg.available < qty - 1e-9) { rec.status = 'open'; return sendJson(res, { error: 'موجودی قابل مصرف کافی نیست.' }, 409); }
+const sources = invPickSources(live, rec.item_id, rec.warehouse, null, null, qty);
+if (!sources) { rec.status = 'open'; return sendJson(res, { error: 'موجودی قابل مصرف کافی نیست.' }, 409); }
+const baseNo = 'GIN-' + Date.now();
+let mainRec = null;
+sources.forEach((src, idx) => {
+const iss = { id: 'gin-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: String(b.request_id || '') + (idx > 0 ? '-' + (idx + 1) : ''), issue_no: baseNo + (idx > 0 ? '-' + (idx + 1) : ''), item_id: rec.item_id, quantity: src.qty, unit: item ? item.unit : '', lot_no: src.lot_no, warehouse: rec.warehouse, location: src.location, destination: String(rec.work_order || rec.reason || 'مصرف رزرو').trim(), work_order: String(rec.work_order || '').trim(), description: 'مصرف رزرو ' + (rec.id || ''), timestamp: new Date().toISOString(), operator_id: String((req.user && req.user.username) || '') };
+live.inventory_issues.push(iss); if (!mainRec) mainRec = iss;
+});
+rec.status = 'consumed'; rec.closed_at = new Date().toISOString();
+invSave(live, req, 'inventory.reserve.consume', { reservation: rec, issue: mainRec });
+return sendJson(res, { ok: true, record: rec, issue: mainRec }, 201);
+} catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+}).catch(e => sendJson(res, { error: e.message }, 500));
+return;
+}
+// ===== END FIX-RES-2 =====
+`;
+  const anchor = '// ===== GET /api/* =====';
+  const ai = S.indexOf(anchor);
+  if (ai !== -1) {
+    S = S.slice(0, ai) + serverBlock + '\n' + S.slice(ai);
+    fs.writeFileSync(sp, S, 'utf8');
+    console.log('SERVER: FIX-RES-2 inserted before GET /api/*');
+  } else { console.log('SERVER: anchor not found!'); }
+} else { console.log('SERVER: FIX-RES-2 already present'); }
+
+// syntax check both
+try { new vm.Script(fs.readFileSync(sp, 'utf8')); console.log('server.js syntax OK'); } catch (e) { console.log('server.js SYNTAX ERROR: ' + e.message); }
+const hh = fs.readFileSync(hp, 'utf8');
+const a = hh.lastIndexOf('<script>'); const b2 = hh.lastIndexOf('</script>');
+try { new vm.Script(hh.slice(a + 8, b2)); console.log('index.html syntax OK'); } catch (e) { console.log('index.html SYNTAX ERROR: ' + e.message); }

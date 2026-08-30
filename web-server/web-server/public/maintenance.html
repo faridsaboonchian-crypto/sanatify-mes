@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sanatify MES — تعمیرات و نگهداری</title>
+    <style>
+        body {
+            font-family: Vazirmatn, Tahoma, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            color: #0f172a
+        }
+
+        header {
+            background: #1e3d59;
+            color: #fff;
+            padding: 14px 20px;
+            font-weight: bold;
+            font-size: 17px
+        }
+
+        .wrap {
+            max-width: 960px;
+            margin: 18px auto;
+            padding: 0 14px
+        }
+
+        .cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 18px
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 150px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+            text-align: center
+        }
+
+        .card b {
+            display: block;
+            font-size: 22px;
+            margin-bottom: 4px
+        }
+
+        .card span {
+            font-size: 12px;
+            color: #64748b
+        }
+
+        .red b {
+            color: #dc2626
+        }
+
+        .green b {
+            color: #059669
+        }
+
+        .orange b {
+            color: #f59e0b
+        }
+
+        h3 {
+            margin: 16px 0 8px;
+            font-size: 15px
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .08)
+        }
+
+        th,
+        td {
+            padding: 9px 12px;
+            font-size: 13px;
+            text-align: right;
+            border-bottom: 1px solid #e2e8f0
+        }
+
+        th {
+            background: #1e3d59;
+            color: #fff
+        }
+
+        button {
+            margin: 14px 0;
+            background: #15803d;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer
+        }
+    </style>
+</head>
+
+<body>
+    <header>🏭 Sanatify MES — پنل تعمیرات و نگهداری خط نورد</header>
+    <div class="wrap">
+        <div class="cards" id="kpi">
+            <p>در حال بارگذاری…</p>
+        </div>
+        <h3>تفکیک خرابی‌ها به تفکیک علت (۷ روز اخیر)</h3>
+        <table id="reasons"></table>
+        <h3>آخرین توقفات / خرابی‌ها</h3>
+        <table id="list"></table>
+        <button onclick="exportCSV()">📊 خروجی اکسل (CSV)</button>
+    </div>
+    <script>
+        let DATA = null;
+        const fa = n => Number(n || 0).toLocaleString('fa-IR');
+        async function load() {
+            try {
+                const r = await fetch('/api/maintenance');
+                if (!r.ok) { document.getElementById('kpi').innerHTML = '<p>ابتدا در سامانه وارد شوید (login) و سپس این صفحه را باز کنید.</p>'; return; }
+                DATA = await r.json(); render();
+            } catch (e) { document.getElementById('kpi').innerHTML = '<p>خطا در ارتباط با سرور.</p>'; }
+        }
+        function render() {
+            const d = DATA;
+            document.getElementById('kpi').innerHTML =
+                '<div class="card red"><b>' + fa(d.mttr_minutes) + '</b><span>MTTR (دقیقه)</span></div>' +
+                '<div class="card green"><b>' + fa(Math.round(d.mtbf_minutes / 60)) + '</b><span>MTBF (ساعت)</span></div>' +
+                '<div class="card red"><b>' + fa(d.failures) + '</b><span>خرابی اضطراری (۷ روز)</span></div>' +
+                '<div class="card orange"><b>' + fa(d.downtime_minutes) + '</b><span>دقیقه توقف</span></div>' +
+                '<div class="card red"><b>' + fa(d.open_downtimes) + '</b><span>توقف باز</span></div>';
+            let rr = '<tr><th>علت</th><th>تعداد</th><th>دقیقه</th></tr>';
+            Object.entries(d.by_reason || {}).forEach(function (e) { rr += '<tr><td>' + e[0] + '</td><td>' + fa(e[1].count) + '</td><td>' + fa(e[1].minutes) + '</td></tr>'; });
+            document.getElementById('reasons').innerHTML = rr;
+            let ll = '<tr><th>تاریخ</th><th>علت</th><th>نوع</th><th>دقیقه</th><th>وضعیت</th></tr>';
+            (d.list || []).forEach(function (r) { ll += '<tr><td>' + (r.start_time || '').slice(0, 10) + '</td><td>' + (r.reason_id || '-') + '</td><td>' + (r.is_unplanned ? 'اضطراری' : 'برنامه‌ریزی') + '</td><td>' + fa(r.duration_minutes) + '</td><td>' + (r.end_time ? 'بسته' : 'باز') + '</td></tr>'; });
+            document.getElementById('list').innerHTML = ll;
+        }
+        function exportCSV() {
+            if (!DATA) return;
+            let csv = '\uFEFFتاریخ,علت,نوع,مدت(دقیقه),وضعیت\n';
+            (DATA.list || []).forEach(function (r) { csv += (r.start_time || '').slice(0, 10) + ',' + (r.reason_id || '-') + ',' + (r.is_unplanned ? 'اضطراری' : 'برنامه‌ریزی') + ',' + (r.duration_minutes != null ? r.duration_minutes : '') + ',' + (r.end_time ? 'بسته' : 'باز') + '\n'; });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+            a.download = 'maintenance_report.csv'; a.click();
+        }
+        load();
+    </script>
+</body>
+
+</html>

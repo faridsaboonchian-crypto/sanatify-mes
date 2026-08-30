@@ -1,0 +1,46 @@
+const fs = require('fs');
+const vm = require('vm');
+const p = 'public/index.html';
+let h = fs.readFileSync(p, 'utf8');
+
+// 1) حذف بلوک HTML سرگردانِ چسبیده به <script>
+h = h.replace(/<script>\s*(<h3[\s\S]*?<\/table>\s*<\/div>\s*)/, '<script>\n');
+
+// 2) تبدیل همهٔ بک‌تیک‌ها به کوتیشن تکی
+h = h.split('`').join("'");
+
+// 3) ادغام رشته‌های چندخطی با شمارش توازن کوتیشن
+function countQ(s) { let c = 0; for (const ch of s) { if (ch === "'") c++; } return c; }
+let lines = h.split('\n');
+let out = []; let open = false;
+for (const ln of lines) {
+  if (open) { out[out.length - 1] += '\\n' + ln; } else { out.push(ln); }
+  open = (countQ(out[out.length - 1]) % 2) === 1;
+}
+
+// 4) ادغام خطوط سرگردانِ ادامه (شروع با متن فارسی/ایموجی/علامت ادامه)
+let out2 = [];
+for (const ln of out) {
+  const t = ln.trim();
+  const isStray = out2.length && /^[\u0600-\u06FF⚠'")+,»]/.test(t) &&
+    !/^(function|var|let|const|if|else|for|while|return|document|window|async|fetch|try|catch|}|\)|\/\/)/.test(t);
+  if (isStray) { out2[out2.length - 1] += ' ' + t; } else { out2.push(ln); }
+}
+
+h = out2.join('\n');
+fs.writeFileSync(p + '.tmp', h, 'utf8');
+
+// 5) بررسی سینتکس
+const i = h.lastIndexOf('<script>');
+const j = h.lastIndexOf('</script>');
+try {
+  new vm.Script(h.slice(i + 8, j));
+  fs.writeFileSync(p, h, 'utf8');
+  fs.unlinkSync(p + '.tmp');
+  console.log('SYNTAX OK — فایل ذخیره شد');
+} catch (e) {
+  const m = /<anonymous>:(\d+)/.exec(e.stack || '');
+  const ln = m ? +m[1] : 0;
+  console.log('SYNTAX ERROR line ' + ln + ': ' + e.message);
+  console.log('LINE TEXT: ' + (out2[ln - 1] || ''));
+}

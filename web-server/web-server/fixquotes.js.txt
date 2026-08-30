@@ -1,0 +1,11 @@
+const fs = require('fs');
+const p = 'public/index.html';
+let c = fs.readFileSync(p, 'utf8');
+const before = c;
+// 1) تبدیل همه بک‌تیک‌ها به کوتیشن تک (در این فایل هیچ template literal با ${} وجود ندارد)
+c = c.replace(/`/g, "'");
+// 2) ترمیم رشته‌های چندخطی خراب (تبدیل اینتر واقعی به \n)
+c = c.replace(/حذف شود؟\r?\nاین کالا/g, 'حذف شود؟\\nاین کالا');
+c = c.replace(/msg \+= '\r?\n⚠️/g, "msg += '\\n⚠️");
+if (c !== before) { fs.writeFileSync(p, c, 'utf8'); console.log('FIXED: index.html repaired'); }
+else { console.log('NO CHANGE'); }

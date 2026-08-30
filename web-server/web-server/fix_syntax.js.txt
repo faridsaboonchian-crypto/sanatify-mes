@@ -1,0 +1,34 @@
+const fs = require('fs');
+const vm = require('vm');
+const p = 'public/index.html';
+let h = fs.readFileSync(p, 'utf8');
+const S = 'function invDeleteItem(id) {';
+const E = 'function invRenderItems() {';
+const si = h.indexOf(S);
+const ei = h.indexOf(E, si);
+if (si === -1 || ei === -1) { console.log('markers not found: ' + si + ' ' + ei); process.exit(1); }
+const fixedFn = `function invDeleteItem(id) {
+var it = ((inventoryData && inventoryData.items) || []).find(function (x) { return String(x.id) === String(id); });
+if (!it) { alert('کالا یافت نشد.'); return; }
+var phys = ((inventoryData && inventoryData.stockview) || []).filter(function (r) { return String(r.item_id) === String(id); }).reduce(function (s, r) { return s + (Number(r.physical) || 0); }, 0);
+var msg = 'کالای «' + (it.code || '') + ' — ' + (it.name || '') + '» از فهرست فعال‌ها حذف شود؟ (سابقهٔ تراکنش‌ها حفظ می‌شود)';
+if (phys !== 0) { msg += ' — توجه: این کالا موجودی غیرصفر (' + phys + ') دارد و با حذف، موجودی آن از نماها پنهان می‌شود.'; }
+if (!confirm(msg)) return;
+var body = { id: it.id, code: it.code, name: it.name, category: it.category, unit: it.unit, reorder_point: Number(it.reorder_point) || 0, min_stock: Number(it.min_stock) || 0, max_stock: Number(it.max_stock) || 0, batch_tracking: !!it.batch_tracking, description: it.description || '', active: false, request_id: invNewRequestId('web') };
+fetch('/api/inventory/item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+.then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+.then(function (res) {
+if (!res.ok) { alert('خطا: ' + ((res.j && res.j.error) || 'حذف انجام نشد.')); return; }
+alert('کالا با موفقیت حذف (غیرفعال) شد ✓');
+loadInventory();
+})
+.catch(function (e) { alert('خطا در ارتباط با سرور: ' + e.message); });
+}
+`;
+h = h.slice(0, si) + fixedFn + h.slice(ei);
+h = h.replace(/\n\}\}\}(\s*<\/script>)/, '\n$1');
+fs.writeFileSync(p, h, 'utf8');
+const a = h.lastIndexOf('<script>');
+const b = h.lastIndexOf('</script>');
+try { new vm.Script(h.slice(a + 8, b)); console.log('SYNTAX OK'); }
+catch (e) { console.log('SYNTAX ERROR: ' + e.message); }

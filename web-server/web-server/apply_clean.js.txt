@@ -1,0 +1,7 @@
+const fs = require('fs');
+if (fs.existsSync('clean_index.html')) {
+  fs.copyFileSync('clean_index.html', 'public/index.html');
+  console.log('OK: index.html replaced from clean_index.html');
+} else {
+  console.log('ERROR: clean_index.html not found. Please save the clean index.html as clean_index.html first.');
+}

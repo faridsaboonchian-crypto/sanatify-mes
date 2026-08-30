@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Sanatify MES",
+    "slug": "sanatify-production-v30",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1e3d59"
+    },
+    "android": {
+      "package": "com.farid.sanatifymes"
+    },
+    "web": {
+      "favicon": "./assets/icon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a97a6dc4-c0d8-4f62-b59f-343787c4cb08"
+      }
+    }
+  }
+}

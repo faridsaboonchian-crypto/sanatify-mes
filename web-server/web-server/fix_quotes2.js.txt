@@ -1,0 +1,21 @@
+const fs = require('fs'), vm = require('vm');
+const p = 'public/index.html';
+let h = fs.readFileSync(p, 'utf8');
+const i = h.lastIndexOf('<script>');
+const j = h.lastIndexOf('</script>');
+let js = h.slice(i + 8, j);
+// 1) تبدیل همه بک‌تیک‌ها به کوتیشن تکی
+js = js.split('`').join("'");
+// 2) درست‌کردن اینترِ خام داخل دو رشته msg
+js = js.split('حذف شود؟\nاین کالا').join('حذف شود؟\\nاین کالا');
+js = js.split("msg += '\n⚠️").join("msg += '\\n⚠️");
+h = h.slice(0, i + 8) + js + h.slice(j);
+try {
+  new vm.Script(js);
+  fs.writeFileSync(p, h, 'utf8');
+  console.log('FIXED + SYNTAX OK');
+} catch (e) {
+  console.log('STILL ERROR:', e.message);
+  const m = e.stack.match(/<anonymous>:(\d+)/);
+  if (m) { const L = js.split('\n'); const ln = +m[1]; console.log('LINE ' + ln + ': ' + L[ln - 1]); }
+}

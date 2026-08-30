@@ -1,0 +1,832 @@
+[
+  {
+    "ts": "2026-08-12T07:44:35.795Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.item.insert",
+    "payload": {
+      "id": "itm-mspsa7rkpmbj",
+      "code": "FFF-01",
+      "name": "آچار بوکس پک کامل",
+      "category": "ملزومات",
+      "unit": "دست",
+      "reorder_point": 1,
+      "min_stock": 2,
+      "max_stock": 5,
+      "batch_tracking": true,
+      "active": true,
+      "description": "",
+      "created_at": "2026-08-12T07:44:35.792Z",
+      "created_by": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T07:46:53.086Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.receipt.insert",
+    "payload": {
+      "id": "grn-mspsd5p8oool",
+      "request_id": "web-mspsd5p6-xs31lp",
+      "receipt_no": "GRN-1786520813084",
+      "item_id": "itm-mspsa7rkpmbj",
+      "quantity": 3,
+      "unit": "دست",
+      "lot_no": "FFF-01",
+      "warehouse": "spare",
+      "location": "قفسه H",
+      "stock_status": "available",
+      "receipt_type": "purchase",
+      "supplier": "بازار",
+      "document_no": "WEW-100",
+      "source_ref": "انبار",
+      "heat_number": "",
+      "description": "خرید به صورت مستقیم",
+      "timestamp": "2026-08-12T07:46:53.084Z",
+      "operator_id": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T07:49:58.002Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.adjustment.insert",
+    "payload": {
+      "id": "adj-mspsh4dsu4yn",
+      "request_id": "web-mspsh458-ea8efq",
+      "adjustment_no": "ADJ-1786520998000",
+      "item_id": "itm-mspsa7rkpmbj",
+      "delta_quantity": -1,
+      "unit": "دست",
+      "lot_no": "FFF-01",
+      "warehouse": "spare",
+      "location": "قفسه D",
+      "stock_status": "available",
+      "reason": "کسری",
+      "description": "",
+      "timestamp": "2026-08-12T07:49:58.000Z",
+      "operator_id": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T10:31:40.514Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-mspy92vv27s1",
+      "request_id": "web-mspy92vm-k2kxa2",
+      "reservation_no": "RES-1786530700507",
+      "item_id": "itm-msnn4p37k2a6",
+      "warehouse": "raw",
+      "quantity": 6,
+      "status": "open",
+      "reason": "",
+      "work_order": "تولید",
+      "created_by": "admin",
+      "created_at": "2026-08-12T10:31:40.507Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-12T10:32:47.974Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.unreserve",
+    "payload": {
+      "id": "res-mspy92vv27s1"
+    }
+  },
+  {
+    "ts": "2026-08-12T11:01:37.963Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-mspzblsx4b9r",
+      "request_id": "web-mspzblsu-jw9cxj",
+      "reservation_no": "RES-1786532497953",
+      "item_id": "itm-msnn4p37k2a6",
+      "warehouse": "raw",
+      "quantity": 12,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-12T11:01:37.953Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-12T11:02:03.285Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.unreserve",
+    "payload": {
+      "id": "res-mspzblsx4b9r"
+    }
+  },
+  {
+    "ts": "2026-08-12T11:03:31.741Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.transfer.insert",
+    "payload": {
+      "id": "trn-mspze1lmujp9",
+      "request_id": "web-mspze1li-u30kc1",
+      "transfer_no": "TRN-1786532611738",
+      "item_id": "itm-msnn4p37k2a6",
+      "quantity": 12,
+      "unit": "عدد",
+      "lot_no": "UUY-10",
+      "from_warehouse": "raw",
+      "from_location": "قفسه D",
+      "to_warehouse": "spare",
+      "to_location": "قفسهB-طبقه چهارم",
+      "description": "",
+      "timestamp": "2026-08-12T11:03:31.738Z",
+      "operator_id": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T11:04:40.952Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.transfer.insert",
+    "payload": {
+      "id": "trn-mspzfj04yl7n",
+      "request_id": "web-mspzfj00-t96wab",
+      "transfer_no": "TRN-1786532680948",
+      "item_id": "itm-msnn4p37k2a6",
+      "quantity": 12,
+      "unit": "عدد",
+      "lot_no": "UUY-10",
+      "from_warehouse": "raw",
+      "from_location": "قفسه D",
+      "to_warehouse": "spare",
+      "to_location": "قفسهB-طبقه چهارم",
+      "description": "",
+      "timestamp": "2026-08-12T11:04:40.948Z",
+      "operator_id": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T12:44:38.452Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.item.insert",
+    "payload": {
+      "id": "itm-msq302p3jdc0",
+      "code": "OERT-100",
+      "name": "بلبرینگ",
+      "category": "قطعات",
+      "unit": "عدد",
+      "reorder_point": 10,
+      "min_stock": 700,
+      "max_stock": 1000,
+      "batch_tracking": true,
+      "active": true,
+      "description": "",
+      "created_at": "2026-08-12T12:44:38.439Z",
+      "created_by": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T12:46:18.989Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.receipt.insert",
+    "payload": {
+      "id": "grn-msq328a30z28",
+      "request_id": "web-msq3281i-abi3z1",
+      "receipt_no": "GRN-1786538778987",
+      "item_id": "itm-msq302p3jdc0",
+      "quantity": 1000,
+      "unit": "عدد",
+      "lot_no": "OERT-100",
+      "warehouse": "spare",
+      "location": "قفسه SD",
+      "stock_status": "available",
+      "receipt_type": "purchase",
+      "supplier": "بازار",
+      "document_no": "INV-001",
+      "source_ref": "سفارش",
+      "heat_number": "OERT-100",
+      "description": "",
+      "timestamp": "2026-08-12T12:46:18.987Z",
+      "operator_id": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-12T12:51:07.381Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msq38eszvmp4",
+      "request_id": "web-msq38eso-ehof6f",
+      "reservation_no": "RES-1786539067379",
+      "item_id": "itm-msnn4p37k2a6",
+      "warehouse": "spare",
+      "quantity": 10,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-12T12:51:07.379Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-12T13:03:23.096Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msq38eszvmp4",
+        "request_id": "web-msq38eso-ehof6f",
+        "reservation_no": "RES-1786539067379",
+        "item_id": "itm-msnn4p37k2a6",
+        "warehouse": "spare",
+        "quantity": 10,
+        "status": "consumed",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-12T12:51:07.379Z",
+        "closed_at": "2026-08-12T13:03:23.092Z"
+      },
+      "issue": {
+        "id": "gin-msq3o6hgoyjj",
+        "request_id": "web-consume-msq3o6hb-ibyxel",
+        "issue_no": "GIN-1786539803091",
+        "item_id": "itm-msnn4p37k2a6",
+        "quantity": 3,
+        "unit": "عدد",
+        "lot_no": "UUY-10",
+        "warehouse": "spare",
+        "location": "قفسهB-طبقه چهارم",
+        "destination": "مصرف رزرو",
+        "destination_ref": "WO-1405-01",
+        "work_order": "WO-1405-01",
+        "description": "WO-1405-01",
+        "timestamp": "2026-08-12T13:03:23.092Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-12T13:06:14.842Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msq3rv07aqk4",
+      "request_id": "web-msq3rv00-9a3c0o",
+      "reservation_no": "RES-1786539974839",
+      "item_id": "itm-msq302p3jdc0",
+      "warehouse": "spare",
+      "quantity": 300,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-12T13:06:14.839Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-12T13:06:27.299Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msq3rv07aqk4",
+        "request_id": "web-msq3rv00-9a3c0o",
+        "reservation_no": "RES-1786539974839",
+        "item_id": "itm-msq302p3jdc0",
+        "warehouse": "spare",
+        "quantity": 300,
+        "status": "consumed",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-12T13:06:14.839Z",
+        "closed_at": "2026-08-12T13:06:27.296Z"
+      },
+      "issue": {
+        "id": "gin-msq3s4m8fpzc",
+        "request_id": "web-consume-msq3s4dk-81rxuf",
+        "issue_no": "GIN-1786539987296",
+        "item_id": "itm-msq302p3jdc0",
+        "quantity": 100,
+        "unit": "عدد",
+        "lot_no": "OERT-100",
+        "warehouse": "spare",
+        "location": "قفسه SD",
+        "destination": "مصرف رزرو",
+        "destination_ref": "",
+        "work_order": "",
+        "description": "مصرف رزرو RES-1786539974839",
+        "timestamp": "2026-08-12T13:06:27.296Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-12T13:20:48.126Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msq4aku1xk8w",
+      "request_id": "web-msq4aktt-mer0ii",
+      "reservation_no": "RES-1786540848121",
+      "item_id": "itm-msq302p3jdc0",
+      "warehouse": "spare",
+      "quantity": 500,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-12T13:20:48.121Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-12T13:20:57.993Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msq4aku1xk8w",
+        "request_id": "web-msq4aktt-mer0ii",
+        "reservation_no": "RES-1786540848121",
+        "item_id": "itm-msq302p3jdc0",
+        "warehouse": "spare",
+        "quantity": 500,
+        "status": "consumed",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-12T13:20:48.121Z",
+        "closed_at": "2026-08-12T13:20:57.991Z"
+      },
+      "issue": {
+        "id": "gin-msq4asg7y5vp",
+        "request_id": "web-consume-msq4as79-54jg7t",
+        "issue_no": "GIN-1786540857990",
+        "item_id": "itm-msq302p3jdc0",
+        "quantity": 200,
+        "unit": "عدد",
+        "lot_no": "OERT-100",
+        "warehouse": "spare",
+        "location": "قفسه SD",
+        "destination": "مصرف رزرو",
+        "destination_ref": "",
+        "work_order": "",
+        "description": "مصرف رزرو RES-1786540848121",
+        "timestamp": "2026-08-12T13:20:57.991Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-12T13:24:36.829Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msq4fhazpz9t",
+      "request_id": "web-msq4fhaw-ej4s96",
+      "reservation_no": "RES-1786541076827",
+      "item_id": "itm-msq302p3jdc0",
+      "warehouse": "spare",
+      "quantity": 100,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-12T13:24:36.827Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-12T13:24:56.656Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msq4fhazpz9t",
+        "request_id": "web-msq4fhaw-ej4s96",
+        "reservation_no": "RES-1786541076827",
+        "item_id": "itm-msq302p3jdc0",
+        "warehouse": "spare",
+        "quantity": 100,
+        "status": "consumed",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-12T13:24:36.827Z",
+        "closed_at": "2026-08-12T13:24:56.654Z"
+      },
+      "issue": {
+        "id": "gin-msq4fwlp2f52",
+        "request_id": "web-consume-msq4fwcz-lkd8tp",
+        "issue_no": "GIN-1786541096653",
+        "item_id": "itm-msq302p3jdc0",
+        "quantity": 20,
+        "unit": "عدد",
+        "lot_no": "OERT-100",
+        "warehouse": "spare",
+        "location": "قفسه SD",
+        "destination": "مصرف رزرو",
+        "destination_ref": "",
+        "work_order": "",
+        "description": "مصرف رزرو RES-1786541076827",
+        "timestamp": "2026-08-12T13:24:56.654Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-12T13:34:27.471Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msq3rv07aqk4",
+        "request_id": "web-msq3rv00-9a3c0o",
+        "reservation_no": "RES-1786539974839",
+        "item_id": "itm-msq302p3jdc0",
+        "warehouse": "spare",
+        "quantity": 150,
+        "status": "open",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-12T13:06:14.839Z",
+        "closed_at": null
+      },
+      "issue": {
+        "id": "gin-msq4s51jg2x1",
+        "request_id": "web-consume-msq4s51c-28s4ir",
+        "issue_no": "GIN-1786541667463",
+        "item_id": "itm-msq302p3jdc0",
+        "quantity": 50,
+        "unit": "عدد",
+        "lot_no": "OERT-100",
+        "warehouse": "spare",
+        "location": "قفسه SD",
+        "destination": "مصرف رزرو",
+        "destination_ref": "",
+        "work_order": "",
+        "description": "مصرف رزرو RES-1786539974839",
+        "timestamp": "2026-08-12T13:34:27.464Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-12T13:34:36.886Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msq4aku1xk8w",
+        "request_id": "web-msq4aktt-mer0ii",
+        "reservation_no": "RES-1786540848121",
+        "item_id": "itm-msq302p3jdc0",
+        "warehouse": "spare",
+        "quantity": 150,
+        "status": "open",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-12T13:20:48.121Z",
+        "closed_at": null
+      },
+      "issue": {
+        "id": "gin-msq4scb55u47",
+        "request_id": "web-consume-msq4scb3-mdvr0y",
+        "issue_no": "GIN-1786541676881",
+        "item_id": "itm-msq302p3jdc0",
+        "quantity": 150,
+        "unit": "عدد",
+        "lot_no": "OERT-100",
+        "warehouse": "spare",
+        "location": "قفسه SD",
+        "destination": "مصرف رزرو",
+        "destination_ref": "",
+        "work_order": "",
+        "description": "مصرف رزرو RES-1786540848121",
+        "timestamp": "2026-08-12T13:34:36.882Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-13T09:19:19.684Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.item.insert",
+    "payload": {
+      "id": "itm-msrb3w5by4vf",
+      "code": "PKM-123",
+      "name": "سمباده",
+      "category": "ملزومات",
+      "unit": "عدد",
+      "reorder_point": 10,
+      "min_stock": 10,
+      "max_stock": 100,
+      "batch_tracking": true,
+      "active": true,
+      "description": "",
+      "created_at": "2026-08-13T09:19:19.679Z",
+      "created_by": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-13T09:20:39.670Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.receipt.insert",
+    "payload": {
+      "id": "grn-msrb5lv86042",
+      "request_id": "web-msrb5lv5-01mgl0",
+      "receipt_no": "GRN-1786612839668",
+      "item_id": "itm-msrb3w5by4vf",
+      "quantity": 50,
+      "unit": "عدد",
+      "lot_no": "PKM-123",
+      "warehouse": "spare",
+      "location": "قفسه dsd",
+      "stock_status": "available",
+      "receipt_type": "purchase",
+      "supplier": "بازار- محبیان",
+      "document_no": "sdsd",
+      "source_ref": "ewew",
+      "heat_number": "PKM-123",
+      "description": "",
+      "timestamp": "2026-08-13T09:20:39.668Z",
+      "operator_id": "admin"
+    }
+  },
+  {
+    "ts": "2026-08-13T09:42:49.143Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "production.insert",
+    "payload": {
+      "id": "web-p-msrby3oyytq1",
+      "operator_id": "admin",
+      "product_id": "DR-220L",
+      "shift_id": "shift-morning-301",
+      "good_quantity": 30,
+      "pallet_count": 2,
+      "machine_id": "st-pack",
+      "description": "",
+      "source": "manual",
+      "timestamp": "2026-08-13T09:42:49.138Z"
+    }
+  },
+  {
+    "ts": "2026-08-13T09:44:37.570Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msrc0fcu7n46",
+      "request_id": "web-msrc0fcp-lyzanm",
+      "reservation_no": "RES-1786614277566",
+      "item_id": "itm-msrb3w5by4vf",
+      "warehouse": "spare",
+      "quantity": 2,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-13T09:44:37.566Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-13T09:45:22.112Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msrc0fcu7n46",
+        "request_id": "web-msrc0fcp-lyzanm",
+        "reservation_no": "RES-1786614277566",
+        "item_id": "itm-msrb3w5by4vf",
+        "warehouse": "spare",
+        "quantity": 1,
+        "status": "open",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-13T09:44:37.566Z",
+        "closed_at": null
+      },
+      "issue": {
+        "id": "gin-msrc1dq5xauw",
+        "request_id": "web-consume-msrc1dhj-wsbkon",
+        "issue_no": "GIN-1786614322108",
+        "item_id": "itm-msrb3w5by4vf",
+        "quantity": 1,
+        "unit": "عدد",
+        "lot_no": "PKM-123",
+        "warehouse": "spare",
+        "location": "قفسه dsd",
+        "destination": "مصرف رزرو",
+        "destination_ref": "",
+        "work_order": "",
+        "description": "مصرف رزرو RES-1786614277566",
+        "timestamp": "2026-08-13T09:45:22.109Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-13T09:56:08.704Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "production.insert",
+    "payload": {
+      "id": "web-p-msrcf8n09s9i",
+      "operator_id": "admin",
+      "product_id": "DR-220L",
+      "shift_id": "shift-morning-301",
+      "good_quantity": 55,
+      "pallet_count": 2,
+      "machine_id": "st-pack",
+      "description": "",
+      "source": "manual",
+      "timestamp": "2026-08-13T09:56:08.700Z"
+    }
+  },
+  {
+    "ts": "2026-08-13T09:59:54.903Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msrck368o68n",
+      "request_id": "web-msrck35y-6x28ao",
+      "reservation_no": "RES-1786615194896",
+      "item_id": "itm-msq302p3jdc0",
+      "warehouse": "spare",
+      "quantity": 2,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-13T09:59:54.896Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-13T10:00:17.535Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msrck368o68n",
+        "request_id": "web-msrck35y-6x28ao",
+        "reservation_no": "RES-1786615194896",
+        "item_id": "itm-msq302p3jdc0",
+        "warehouse": "spare",
+        "quantity": 1,
+        "status": "open",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-13T09:59:54.896Z",
+        "closed_at": null
+      },
+      "issue": {
+        "id": "gin-msrckkn03r54",
+        "request_id": "web-consume-msrckkms-kev2lp",
+        "issue_no": "GIN-1786615217532",
+        "item_id": "itm-msq302p3jdc0",
+        "quantity": 1,
+        "unit": "عدد",
+        "lot_no": "OERT-100",
+        "warehouse": "spare",
+        "location": "قفسه SD",
+        "destination": "مصرف رزرو",
+        "destination_ref": "RC-3.2-X",
+        "work_order": "RC-3.2-X",
+        "description": "RC-3.2-X",
+        "timestamp": "2026-08-13T10:00:17.532Z",
+        "operator_id": "admin"
+      }
+    }
+  },
+  {
+    "ts": "2026-08-13T10:11:19.338Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "production.insert",
+    "payload": {
+      "id": "web-p-msrcyraehjhm",
+      "operator_id": "admin",
+      "product_id": "DR-220L",
+      "shift_id": "shift-morning-301",
+      "good_quantity": 683,
+      "pallet_count": 0,
+      "machine_id": "st-pack",
+      "heat_number": "RC-3.2-X",
+      "description": "",
+      "source": "manual",
+      "timestamp": "2026-08-13T10:11:19.334Z"
+    }
+  },
+  {
+    "ts": "2026-08-13T10:12:24.173Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "production.insert",
+    "payload": {
+      "id": "web-p-msrd05bczknd",
+      "operator_id": "admin",
+      "product_id": "DR-220L",
+      "shift_id": "shift-night-302",
+      "good_quantity": 900,
+      "pallet_count": 5,
+      "machine_id": "st-pack",
+      "heat_number": "RC-3.2-W",
+      "description": "",
+      "source": "manual",
+      "timestamp": "2026-08-13T10:12:24.168Z"
+    }
+  },
+  {
+    "ts": "2026-08-13T10:13:23.851Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.insert",
+    "payload": {
+      "id": "res-msrd1fd3eajr",
+      "request_id": "web-msrd1fcw-vipi8u",
+      "reservation_no": "RES-1786616003847",
+      "item_id": "itm-msnn4p37k2a6",
+      "warehouse": "spare",
+      "quantity": 5,
+      "status": "open",
+      "reason": "",
+      "work_order": "",
+      "created_by": "admin",
+      "created_at": "2026-08-13T10:13:23.847Z",
+      "closed_at": null
+    }
+  },
+  {
+    "ts": "2026-08-13T10:13:54.131Z",
+    "user": "admin",
+    "role": "admin",
+    "action": "inventory.reserve.consume",
+    "payload": {
+      "reservation": {
+        "id": "res-msrd1fd3eajr",
+        "request_id": "web-msrd1fcw-vipi8u",
+        "reservation_no": "RES-1786616003847",
+        "item_id": "itm-msnn4p37k2a6",
+        "warehouse": "spare",
+        "quantity": 3,
+        "status": "open",
+        "reason": "",
+        "work_order": "",
+        "created_by": "admin",
+        "created_at": "2026-08-13T10:13:23.847Z",
+        "closed_at": null
+      },
+      "issue": {
+        "id": "gin-msrd22q7rj6s",
+        "request_id": "web-consume-msrd22q3-0db1ay",
+        "issue_no": "GIN-1786616034127",
+        "item_id": "itm-msnn4p37k2a6",
+        "quantity": 2,
+        "unit": "عدد",
+        "lot_no": "UUY-10",
+        "warehouse": "spare",
+        "location": "قفسهB-طبقه چهارم",
+        "destination": "مصرف رزرو",
+        "destination_ref": "RC-3.2-W",
+        "work_order": "RC-3.2-W",
+        "description": "RC-3.2-W",
+        "timestamp": "2026-08-13T10:13:54.127Z",
+        "operator_id": "admin"
+      }
+    }
+  }
+]

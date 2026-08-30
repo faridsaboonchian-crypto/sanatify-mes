@@ -1,0 +1,24 @@
+const fs=require('fs');
+const vm=require('vm');
+const p='public/index.html';
+let h=fs.readFileSync(p,'utf8');
+const si=h.lastIndexOf('<script>');
+const sj=h.lastIndexOf('</script>');
+if(si===-1||sj===-1||sj<si){console.log('ERROR: script tags not found');process.exit(1);}
+let body=h.slice(si+8,sj);
+body=body.split('</'+'script>').join('');
+function parity(s){let c=0;for(let i=0;i<s.length;i++){if(s[i]==="'"){let b=0;while(i-b-1>=0&&s[i-b-1]==='\\')b++;if(b%2===0)c++;}}return c%2;}
+let lines=body.split('\n');let out=[];let open=false;
+for(const line of lines){ if(open&&out.length){out[out.length-1]+='\\n'+line;}else{out.push(line);} open=(parity(out[out.length-1])===1); }
+let body2=out.join('\n');
+body2=body2.split('\n').filter(l=>l.trim()!=='}').join('\n');
+try{
+new vm.Script(body2);
+const nh=h.slice(0,si+8)+body2+h.slice(sj);
+fs.writeFileSync(p,nh,'utf8');
+console.log('REPAIRED + SYNTAX OK');
+}catch(e){
+console.log('STILL BROKEN:',e.message);
+const m=String(e.stack).match(/<anonymous>:(\d+)/);
+if(m){const ln=+m[1];const L=body2.split('\n');console.log('LINE '+ln+': '+(L[ln-1]||''));}
+}

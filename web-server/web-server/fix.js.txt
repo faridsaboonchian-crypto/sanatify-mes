@@ -1,0 +1,61 @@
+const fs = require('fs');
+const path = require('path');
+
+console.log('🔧 در حال اجرای اسکریپت اصلاح خودکار...');
+
+// بررسی مسیرهای احتمالی index.html
+let indexPath = path.join(__dirname, 'public', 'index.html');
+if (!fs.existsSync(indexPath)) {
+    indexPath = path.join(__dirname, 'index.html');
+}
+
+if (!fs.existsSync(indexPath)) {
+    console.log('❌ فایل index.html یافت نشد. لطفاً مطمئن شوید در مسیر درست هستید.');
+    process.exit(1);
+}
+
+let content = fs.readFileSync(indexPath, 'utf8');
+let original = content;
+
+// لیست اصلاحات برای رفع خطاهای نگارشی (ترکیب اشتباه Backtick و Single Quote)
+const fixes = [
+    { from: /`تولید_بشکه'/g, to: "'تولید_بشکه'" },
+    { from: /`کنترل کیفیت QC`/g, to: "'کنترل کیفیت QC'" },
+    { from: /`<div class="kpi ' \+ k\.c \+ '"><div class="v">' \+ k\.v \+ '<\/div><div class="l">' \+ invEsc\(k\.l\) \+ '<\/div><\/div>/g, to: "'<div class=\"kpi ' + k.c + '\"><div class=\"v\">' + k.v + '</div><div class=\"l\">' + invEsc(k.l) + '</div></div>'" },
+    { from: /\.join\('`\);/g, to: ".join('');" },
+    { from: /`<option value="">\\u0647\\u0645\\u0647 \\u062f\\u0633\\u062a\\u0647\\u200c\\u0647\\u0627<\/option>';/g, to: "'<option value=\"\">\\u0647\\u0645\\u0647 \\u062f\\u0633\\u062a\\u0647\\u200c\\u0647\\u0627</option>';" },
+    { from: /`<span class="chip crit">\\u0628\\u062d\\u0631\\u0627\\u0646\\u06cc<\/span>'/g, to: "'<span class=\"chip crit\">\\u0628\\u062d\\u0631\\u0627\\u0646\\u06cc</span>'" },
+    { from: /`<span class="chip wait">\\u0646\\u0632\\u062f\\u06cc\\u06a9 \\u0646\\u0642\\u0637\\u0647 \\u0633\\u0641\\u0627\\u0631\\u0634<\/span>'/g, to: "'<span class=\"chip wait\">\\u0646\\u0632\\u062f\\u06cc\\u06a9 \\u0646\\u0642\\u0637\\u0647 \\u0633\\u0641\\u0627\\u0631\\u0634</span>'" },
+    { from: /`<span class="chip no">\\u06a9\\u0645\\u0628\\u0648\\u062f \\u0645\\u0648\\u062c\\u0648\\u062f\\u06cc<\/span>'/g, to: "'<span class=\"chip no\">\\u06a9\\u0645\\u0628\\u0648\\u062f \\u0645\\u0648\\u062c\\u0648\\u062f\\u06cc</span>'" },
+    { from: /`<span class="chip ok">\\u0645\\u0648\\u062c\\u0648\\u062f\\u06cc \\u06a9\\u0627\\u0641\\u06cc<\/span>'/g, to: "'<span class=\"chip ok\">\\u0645\\u0648\\u062c\\u0648\\u062f\\u06cc \\u06a9\\u0627\\u0641\\u06cc</span>'" },
+    { from: /return `—';/g, to: "return '—';" },
+    { from: /if \(!code\) return `—';/g, to: "if (!code) return '—';" },
+    { from: /if \(r\.status === `none'\)/g, to: "if (r.status === 'none')" }
+];
+
+for (const fix of fixes) {
+    content = content.replace(fix.from, fix.to);
+}
+
+// یک قانون کلی برای هرگونه ترکیب اشتباه دیگر بین ` و '
+content = content.replace(/`([^`]*?)'/g, "'$1'");
+content = content.replace(/'([^']*?)`/g, "'$1'");
+
+if (content !== original) {
+    fs.writeFileSync(indexPath, content, 'utf8');
+    console.log('✅ فایل index.html با موفقیت اصلاح شد و خطاهای نگارشی (Syntax Errors) برطرف گردید.');
+} else {
+    console.log('ℹ️ هیچ خطای نگارشی شناخته‌شده‌ای در index.html یافت نشد (فایل سالم است).');
+}
+
+// بررسی server.js برای اطمینان از وجود آن
+const serverPath = path.join(__dirname, 'server.js');
+if (fs.existsSync(serverPath)) {
+    console.log('✅ فایل server.js در مسیر یافت شد.');
+} else {
+    console.log('⚠️ فایل server.js یافت نشد!');
+}
+
+console.log('\n🎉 عملیات پاکسازی به پایان رسید.');
+console.log('▶️ حالا می‌توانید سرور را با دستور زیر اجرا کنید:');
+console.log('   node server.js');

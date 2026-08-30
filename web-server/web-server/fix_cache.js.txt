@@ -1,0 +1,8 @@
+const fs = require('fs');
+const p = 'server.js';
+let s = fs.readFileSync(p, 'utf8');
+const old = "res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' }); res.end(data);";
+const neu = "res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(data);";
+if (s.includes(neu)) { console.log('ALREADY PATCHED'); }
+else if (s.includes(old)) { s = s.replace(old, neu); fs.writeFileSync(p, s, 'utf8'); console.log('PATCHED: no-store added'); }
+else { console.log('PATTERN NOT FOUND'); }

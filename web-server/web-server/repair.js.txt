@@ -1,0 +1,33 @@
+const fs = require('fs');
+const vm = require('vm');
+const p = 'public/index.html';
+let h = fs.readFileSync(p, 'utf8');
+function extract(src){const i=src.lastIndexOf('<script>');const j=src.lastIndexOf('</script>');return{i,j,code:src.slice(i+8,j)};}
+function check(code){try{new vm.Script(code);return null;}catch(e){return e;}}
+h = h.replace(/\n\}\}\}\s*(<\/script>)/g, '\n$1');
+h = h.replace(/function invDeleteItem\(id\)\s*\{[\s\S]*?\n\}\s*\nfunction invRenderItems\(\)/,
+"function invDeleteItem(id){var it=((inventoryData&&inventoryData.items)||[]).find(function(x){return String(x.id)===String(id);});if(!it){alert('کالا یافت نشد.');return;}var phys=((inventoryData&&inventoryData.stockview)||[]).filter(function(r){return String(r.item_id)===String(id);}).reduce(function(s,r){return s+(Number(r.physical)||0);},0);var msg='کالای «'+(it.code||'')+' — '+(it.name||'')+'» حذف شود؟\\nسابقه حفظ می‌شود.';if(phys!==0){msg+='\\n⚠️ موجودی غیرصفر ('+phys+') پنهان می‌شود.';}if(!confirm(msg))return;var body={id:it.id,code:it.code,name:it.name,category:it.category,unit:it.unit,reorder_point:Number(it.reorder_point)||0,min_stock:Number(it.min_stock)||0,max_stock:Number(it.max_stock)||0,batch_tracking:!!it.batch_tracking,description:it.description||'',active:false,request_id:invNewRequestId('web')};fetch('/api/inventory/item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});}).then(function(res){if(!res.ok){alert('خطا: '+((res.j&&res.j.error)||'حذف نشد.'));return;}alert('حذف شد ✓');loadInventory();}).catch(function(e){alert('خطا: '+e.message);});}\nfunction invRenderItems()");
+let e1=extract(h);
+let lines=e1.code.split('\n');
+let err=check(lines.join('\n'));
+let guard=0;
+while(err&&guard<30){
+const m=/<anonymous>:(\d+)/.exec(err.stack||'');
+const ln=m?+m[1]:0;
+if(!ln)break;
+const bad=lines[ln-1]||'';
+console.log('ERR line '+ln+': '+bad.trim().slice(0,120));
+if(/^\s*<\/?[a-zA-Z]/.test(bad)){lines.splice(ln-1,1);guard++;err=check(lines.join('\n'));}
+else break;
+}
+if(!err){
+h=h.slice(0,e1.i+8)+lines.join('\n')+h.slice(e1.j);
+fs.writeFileSync(p,h,'utf8');
+console.log('SAVED + SYNTAX OK');
+}else{
+const m=/<anonymous>:(\d+)/.exec(err.stack||'');
+const ln=m?+m[1]:0;
+console.log('STILL BROKEN at line '+ln+':');
+for(let k=Math.max(0,ln-3);k<Math.min(lines.length,ln+2);k++)console.log((k+1)+'| '+lines[k]);
+console.log('NOT SAVED');
+}

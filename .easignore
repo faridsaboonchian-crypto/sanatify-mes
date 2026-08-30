@@ -1,0 +1,8 @@
+node_modules
+.git
+.expo
+.eas
+dist
+web-build
+*.apk
+*.aab

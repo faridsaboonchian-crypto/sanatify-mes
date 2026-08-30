@@ -1,0 +1,466 @@
+﻿
+  public\index.html:1374:                        <select id="irWarehouse" class="fsel"></select>
+  public\index.html:1375:
+  public\index.html:1376:                        <input id="irLocation" placeholder="محل/قفسه" />
+  public\index.html:1377:
+> public\index.html:1378:                        <select id="irStatus" class="fsel">
+  public\index.html:1379:
+  public\index.html:1380:                            <option value="available">
+  public\index.html:1381:                                قابل مصرف
+  public\index.html:1382:                            </option>
+  public\index.html:1383:
+  public\index.html:1384:                            <option value="quarantine">
+  public\index.html:1385:                                قرنطینه
+  public\index.html:1386:                            </option>
+  public\index.html:1537:                        <select id="iaWarehouse" class="fsel"></select>
+  public\index.html:1538:
+  public\index.html:1539:                        <input id="iaLocation" placeholder="محل/قفسه" />
+  public\index.html:1540:
+> public\index.html:1541:                        <select id="iaStatus" class="fsel">
+  public\index.html:1542:
+  public\index.html:1543:                            <option value="available">
+  public\index.html:1544:                                قابل مصرف
+  public\index.html:1545:                            </option>
+  public\index.html:1546:
+  public\index.html:1547:                            <option value="quarantine">
+  public\index.html:1548:                                قرنطینه
+  public\index.html:1549:                            </option>
+  public\index.html:1638:        const stationFa = (v) => STATIONS[String(v || '')] || (v ? String(v) : 
+'-');
+  public\index.html:1639:        const WTYPE_FA = { 'sheet': 'ورق', 'body': 'بدنه', 'ends': 'درب/ته', 
+'full': 'بشکهٔ کامل' };
+  public\index.html:1640:        const wtypeFa = (v) => WTYPE_FA[String(v || '')] || (v ? String(v) : 
+'-');
+  public\index.html:1641:        const fmtDate = (iso) => { if (!iso) return '-'; try { const d = new 
+Date(iso); if (isNaN(d.getTime())) return esc(iso); return d.toLocaleString('fa-IR', { dateStyle: 
+'short', timeStyle: 'short' }); } catch (e) { return esc(iso); } };
+> public\index.html:1642:        async function getJson(path) { const r = await fetch(API + path, { 
+cache: 'no-store' }); if (r.status === 401) { window.location.href = '/login'; throw new 
+Error('unauthorized'); } if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
+  public\index.html:1643:        const COLS = {
+  public\index.html:1644:            production: [{ label: 'ثبت‌کننده', key: 'operator_id' }, { label: 
+'محصول', key: 'product_id' }, { label: 'شیفت', key: 'shift_id' }, { label: 'تعداد سالم', key: 
+'good_quantity', num: 1 }, { label: 'پالت', key: 'pallet_count', num: 1 }, { label: 'ایستگاه', key: 
+'machine_id', station: 1 }, { label: 'منبع', key: 'source', src: 1 }, { label: 'زمان', key: 
+'timestamp', date: 1 }],
+  public\index.html:1645:            waste: [{ label: 'ایستگاه کشف', key: 'machine_id', station: 1 }, { 
+label: 'نوع ضایعات', key: 'waste_type', wt: 1 }, { label: 'علت', key: 'reason_id' }, { label: 'تعداد', 
+key: 'quantity', num: 1 }, { label: 'شیفت', key: 'shift_id' }, { label: 'توضیحات', key: 'description' 
+}, { label: 'زمان', key: 'timestamp', date: 1 }],
+  public\index.html:1646:            downtime: [{ label: 'علت توقف', key: 'reason_id' }, { label: 
+'ایستگاه', key: 'machine_id', station: 1 }, { label: 'مدت (دقیقه)', key: 'duration_minutes', num: 1 }, 
+{ label: 'نوع', key: 'is_unplanned', chip: 1 }, { label: 'شروع', key: 'start_time', date: 1 }, { label: 
+'پایان', key: 'end_time', date: 1 }, { label: 'توضیحات', key: 'description' }],
+  public\index.html:1647:            quality: [{ label: 'کد بچ', key: 'heat_number' }, { label: 'حجم 
+(لیتر)', key: 'rebar_size', num: 1 }, { label: 'فشار هیدرواستاتیک (kPa)', key: 'yield_strength', num: 1 
+}, { label: 'ضخامت لاینینگ (µm)', key: 'tensile_strength', num: 1 }, { label: 'تست سقوط (m)', key: 
+'elongation_percent', num: 1 }, { label: 'تست نشت', key: 'bend_test_passed', chip: 1 }, { label: 
+'بازرسی درز', key: 'visual_inspection', chip: 1 }, { label: 'ثبت‌کننده', key: 'operator_id' }, { label: 
+'توضیحات', key: 'description' }, { label: 'زمان', key: 'timestamp', date: 1 }],
+  public\index.html:1648:        };
+  public\index.html:1649:        const DATE_FIELD = { production: 'timestamp', waste: 'timestamp', 
+downtime: 'start_time', quality: 'timestamp' };
+  public\index.html:1650:        const HAS_SHIFT = { production: 1, waste: 1, downtime: 1, quality: 0 };
+  public\index.html:1856:            const heat = document.getElementById('heatInput').value.trim(); 
+const box = document.getElementById('genealogyResult');
+  public\index.html:1857:            if (!heat) { box.innerHTML = '<div class="empty">یک کد بچ/کویل 
+وارد کنید.</div>'; return; }
+  public\index.html:1858:            const g = await getJson('/api/genealogy/' + 
+encodeURIComponent(heat)); lastGenealogy = g;
+  public\index.html:1859:            let html = '<h3 style="margin:10px 0 6px">کویل‌های ورودی (' + 
+fa(g.billets.length) + ')</h3>';
+> public\index.html:1860:            html += buildMiniTable(g.billets, [{ label: 'شناسه', key: 'id' }, 
+{ label: 'ابعاد', key: 'dimensions' }, { label: 'گرید', key: 'grade' }, { label: 'تامین‌کننده', key: 
+'supplier_name' }, { label: 'وزن (kg)', key: 'initial_weight_kg', f: groupFa }, { label: 'وضعیت', key: 
+'status' }, { label: 'ورود', key: 'received_at', f: fmtDate }]);
+  public\index.html:1861:            html += '<h3 style="margin:14px 0 6px">سوابق ایستگاه‌ها (' + 
+fa(g.furnace_logs.length) + ')</h3>';
+  public\index.html:1862:            html += buildMiniTable(g.furnace_logs, [{ label: 'شارژ', key: 
+'charge_time', f: fmtDate }, { label: 'تخلیه', key: 'discharge_time', f: fmtDate }, { label: 'ماندگاری 
+(دقیقه)', key: 'residence_time_minutes', f: groupFa }, { label: 'دما °C', key: 
+'furnace_temperature_celsius', f: groupFa }]);
+  public\index.html:1863:            html += '<h3 style="margin:14px 0 6px">بشکه‌های خروجی (' + 
+fa(g.rebar_bundles.length) + ')</h3>';
+> public\index.html:1864:            html += buildMiniTable(g.rebar_bundles, [{ label: 'کد محموله', 
+key: 'bundle_code' }, { label: 'حجم (لیتر)', key: 'rebar_size', f: fa }, { label: 'گرید', key: 
+'rebar_grade' }, { label: 'تعداد', key: 'branch_count', f: fa }, { label: 'وزن (kg)', key: 
+'net_weight_kg', f: groupFa }, { label: 'کیفیت', key: 'quality_status', f: qcChip }, { label: 'تولید', 
+key: 'produced_at', f: fmtDate }]);
+  public\index.html:1865:            box.innerHTML = html;
+  public\index.html:1866:        }
+  public\index.html:1867:        const qcChip = (st) => st === 'APPROVED' ? '<span class="chip 
+ok">تأییدشده</span>' : st === 'REJECTED' ? '<span class="chip no">مردود</span>' : '<span class="chip 
+wait">در انتظار</span>';
+  public\index.html:1868:        function buildMiniTable(rows, cols) {
+  public\index.html:1869:            if (!rows || rows.length === 0) return '<div class="empty">موردی 
+نیست.</div>';
+  public\index.html:1870:            let h = '<div class="tablewrap"><table><thead><tr>' + cols.map((c) 
+=> '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>';
+  public\index.html:1871:            rows.forEach((r) => { h += '<tr>' + cols.map((c) => '<td>' + (c.f 
+? c.f(r[c.key]) : esc(r[c.key])) + '</td>').join('') + '</tr>'; });
+  public\index.html:1872:            return h + '</tbody></table></div>';
+  public\index.html:2188:        // ================================================================
+  public\index.html:2189:        // وضعیت PM
+  public\index.html:2190:        // ================================================================
+  public\index.html:2191:
+> public\index.html:2192:        function pmStatus(plan) {
+  public\index.html:2193:
+  public\index.html:2194:            const next =
+  public\index.html:2195:                jalaliAddDays(
+  public\index.html:2196:                    plan.last_done,
+  public\index.html:2197:                    Number(
+  public\index.html:2198:                        plan.interval_days
+  public\index.html:2199:                    ) || 30
+  public\index.html:2200:                );
+  public\index.html:3092:
+  public\index.html:3093:                        lastOkAt =
+  public\index.html:3094:                            Date.now();
+  public\index.html:3095:
+> public\index.html:3096:                        setLiveStatus(
+  public\index.html:3097:                            true
+  public\index.html:3098:                        );
+  public\index.html:3099:
+  public\index.html:3100:                        alert(
+  public\index.html:3101:                            'ثبت تعمیر/PM با موفقیت ذخیره شد ✅'
+  public\index.html:3102:                        );
+  public\index.html:3103:
+  public\index.html:3104:                    } catch (e) {
+  public\index.html:3251:
+  public\index.html:3252:                        lastOkAt =
+  public\index.html:3253:                            Date.now();
+  public\index.html:3254:
+> public\index.html:3255:                        setLiveStatus(
+  public\index.html:3256:                            true
+  public\index.html:3257:                        );
+  public\index.html:3258:
+  public\index.html:3259:                        alert(
+  public\index.html:3260:                            'برنامه PM با موفقیت ثبت شد ✅'
+  public\index.html:3261:                        );
+  public\index.html:3262:
+  public\index.html:3263:                    } catch (e) {
+  public\index.html:3488:                const r = await fetch('/api/entry/production', { method: 
+'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  public\index.html:3489:                const j = await r.json(); if (!r.ok) { msg.textContent = 
+j.error || 'خطا در ثبت'; return; }
+  public\index.html:3490:                
+document.getElementById('formProduction').classList.add('hidden');
+  public\index.html:3491:                ['fpQty', 'fpPallets', 'fpDesc'].forEach((id) => { 
+document.getElementById(id).value = ''; });
+> public\index.html:3492:                await loadProduction(); lastOkAt = Date.now(); 
+setLiveStatus(true); alert('ثبت تولید با موفقیت ذخیره شد ✅');
+  public\index.html:3493:            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }
+  public\index.html:3494:        });
+  public\index.html:3495:        document.getElementById('btnAddWaste').addEventListener('click', () => 
+{ document.getElementById('formWaste').classList.toggle('hidden'); 
+document.getElementById('fwMsg').textContent = ''; });
+  public\index.html:3496:        document.getElementById('fwCancel').addEventListener('click', () => { 
+document.getElementById('formWaste').classList.add('hidden'); });
+  public\index.html:3497:        document.getElementById('fwSave').addEventListener('click', async () 
+=> {
+  public\index.html:3498:            const msg = document.getElementById('fwMsg'); msg.textContent = '';
+  public\index.html:3499:            const body = { operator_id: WEB_USER ? (WEB_USER.username || 
+WEB_USER.name || '') : '', machine_id: document.getElementById('fwStation').value, waste_type: 
+document.getElementById('fwType').value, reason_id: document.getElementById('fwReason').value, 
+shift_id: document.getElementById('fwShift').value, quantity: 
+Number(document.getElementById('fwQty').value), description: 
+document.getElementById('fwDesc').value.trim() };
+  public\index.html:3500:            try {
+  public\index.html:3501:                const r = await fetch('/api/entry/waste', { method: 'POST', 
+headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  public\index.html:3502:                const j = await r.json(); if (!r.ok) { msg.textContent = 
+j.error || 'خطا در ثبت'; return; }
+  public\index.html:3503:                document.getElementById('formWaste').classList.add('hidden');
+  public\index.html:3504:                ['fwQty', 'fwDesc'].forEach((id) => { 
+document.getElementById(id).value = ''; });
+> public\index.html:3505:                await loadWaste(); lastOkAt = Date.now(); setLiveStatus(true); 
+alert('ثبت ضایعات با موفقیت ذخیره شد ✅');
+  public\index.html:3506:            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }
+  public\index.html:3507:        });
+  public\index.html:3508:        document.getElementById('btnAddDowntime').addEventListener('click', () 
+=> { document.getElementById('formDowntime').classList.toggle('hidden'); 
+document.getElementById('fdMsg').textContent = ''; });
+  public\index.html:3509:        document.getElementById('fdCancel').addEventListener('click', () => { 
+document.getElementById('formDowntime').classList.add('hidden'); });
+  public\index.html:3510:        document.getElementById('fdSave').addEventListener('click', async () 
+=> {
+  public\index.html:3511:            const msg = document.getElementById('fdMsg'); msg.textContent = '';
+  public\index.html:3512:            const sd = readJalaliValue(document, 'fds'), ed = 
+readJalaliValue(document, 'fde');
+  public\index.html:3513:            if (!sd || !ed) { msg.textContent = 'تاریخ شمسی را کامل وارد کنید 
+(مثال: ۱۴۰۵/۰۵/۱۶).'; return; }
+  public\index.html:3520:                const j = await r.json(); if (!r.ok) { msg.textContent = 
+j.error || 'خطا در ثبت'; return; }
+  public\index.html:3521:                
+document.getElementById('formDowntime').classList.add('hidden');
+  public\index.html:3522:                ['fdStartTime', 'fdEndTime', 'fdDesc'].forEach((id) => { 
+document.getElementById(id).value = ''; });
+  public\index.html:3523:                document.querySelectorAll('#formDowntime 
+input[data-jp]').forEach((el) => { el.value = ''; });
+> public\index.html:3524:                await loadDowntime(); lastOkAt = Date.now(); 
+setLiveStatus(true); alert('ثبت توقف با موفقیت ذخیره شد ✅');
+  public\index.html:3525:            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }
+  public\index.html:3526:        });
+  public\index.html:3527:        document.getElementById('btnAddQuality').addEventListener('click', () 
+=> { document.getElementById('formQuality').classList.toggle('hidden'); 
+document.getElementById('fqMsg').textContent = ''; });
+  public\index.html:3528:        document.getElementById('fqCancel').addEventListener('click', () => { 
+document.getElementById('formQuality').classList.add('hidden'); });
+  public\index.html:3529:        document.getElementById('fqSave').addEventListener('click', async () 
+=> {
+  public\index.html:3530:            const msg = document.getElementById('fqMsg'); msg.textContent = '';
+  public\index.html:3531:            const body = { operator_id: WEB_USER ? (WEB_USER.username || 
+WEB_USER.name || '') : '', heat_number: document.getElementById('fqHeat').value.trim(), rebar_size: 
+Number(document.getElementById('fqSize').value), yield_strength: 
+Number(document.getElementById('fqPressure').value), tensile_strength: 
+Number(document.getElementById('fqLining').value), elongation_percent: 
+Number(document.getElementById('fqDrop').value) || 0, bend_test_passed: 
+Number(document.getElementById('fqLeak').value), visual_inspection: 
+Number(document.getElementById('fqVisual').value), description: 
+document.getElementById('fqDesc').value.trim() };
+  public\index.html:3532:            try {
+  public\index.html:3533:                const r = await fetch('/api/entry/quality', { method: 'POST', 
+headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  public\index.html:3534:                const j = await r.json(); if (!r.ok) { msg.textContent = 
+j.error || 'خطا در ثبت'; return; }
+  public\index.html:3535:                document.getElementById('formQuality').classList.add('hidden');
+  public\index.html:3536:                ['fqHeat', 'fqPressure', 'fqLining', 'fqDrop', 
+'fqDesc'].forEach((id) => { document.getElementById(id).value = ''; });
+> public\index.html:3537:                await loadQuality(); lastOkAt = Date.now(); 
+setLiveStatus(true); alert('آزمون QC با موفقیت ذخیره شد ✅');
+  public\index.html:3538:            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }
+  public\index.html:3539:        });
+  public\index.html:3540:        // INDUSTRIAL FAY MES
+  public\index.html:3541:        // INVENTORY CLIENT MODULE
+  public\index.html:3542:        // ================================================================
+  public\index.html:3543:
+  public\index.html:3544:        function invNewRequestId(prefix) {
+  public\index.html:3545:
+  public\index.html:3578:            adjustment: 'اصلاح موجودی'
+  public\index.html:3579:        };
+  public\index.html:3580:
+  public\index.html:3581:
+> public\index.html:3582:        const INV_STATUS_FA = {
+  public\index.html:3583:
+  public\index.html:3584:            available: 'قابل مصرف',
+  public\index.html:3585:
+  public\index.html:3586:            quarantine: 'قرنطینه',
+  public\index.html:3587:
+  public\index.html:3588:            rejected: 'مردود'
+  public\index.html:3589:        };
+  public\index.html:3590:
+  public\index.html:3729:            const rows = (inventoryData.stockview || []).filter(x => !wh || 
+x.warehouse === wh);
+  public\index.html:3730:            let html = '<thead><tr><th>کد کالا</th><th>نام 
+کالا</th><th>گروه</th><th>واحد</th><th>انبار</th><th>فیزیکی</th><th>رزرو</th><th>قابل 
+مصرف</th><th>حداقل</th><th>نقطه سفارش</th><th>وضعیت</th></tr></thead><tbody>';
+  public\index.html:3731:            if (!rows.length) html += '<tr><td colspan="11" 
+class="empty">موجودی ثبت نشده است.</td></tr>';
+  public\index.html:3732:            rows.forEach(r => {
+> public\index.html:3733:                const chip = r.status === 'low' ? '<span class="chip no">کمبود 
+موجودی</span>' : r.status === 'warn' ? '<span class="chip wait">نزدیک نقطه سفارش</span>' : '<span 
+class="chip ok">موجودی کافی</span>';
+  public\index.html:3734:                html += '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.name) + 
+'</td><td>' + esc(r.category || '-') + '</td><td>' + esc(r.unit) + '</td><td>' + 
+esc(INV_WAREHOUSES[r.warehouse] || r.warehouse) + '</td><td>' + invQty(r.physical) + '</td><td>' + 
+invQty(r.reserved) + '</td><td>' + invQty(r.available) + '</td><td>' + invQty(r.min_stock) + 
+'</td><td>' + invQty(r.reorder_point) + '</td><td>' + chip + '</td></tr>';
+  public\index.html:3735:            });
+  public\index.html:3736:            document.getElementById('tbl-inv-stock').innerHTML = html + 
+'</tbody>';
+  public\index.html:3737:        }
+  public\index.html:3738:        function invRenderItems() {
+  public\index.html:3739:            if (!inventoryData) return;
+  public\index.html:3740:            const items = inventoryData.items || [];
+  public\index.html:3741:            let itemHtml = 
+'<thead><tr><th>کد</th><th>نام</th><th>دسته</th><th>واحد</th><th>نقطه 
+سفارش</th><th>حداقل</th><th>حداکثر</th><th>رهگیری بچ</th></tr></thead><tbody>';
+  public\index.html:3926:
+  public\index.html:3927:                lastOkAt =
+  public\index.html:3928:                    Date.now();
+  public\index.html:3929:
+> public\index.html:3930:                setLiveStatus(true);
+  public\index.html:3931:
+  public\index.html:3932:
+  public\index.html:3933:                return true;
+  public\index.html:3934:
+  public\index.html:3935:
+  public\index.html:3936:            } catch (e) {
+  public\index.html:3937:
+  public\index.html:3938:                invMsg(
+  public\index.html:4186:                                        'irLocation'
+  public\index.html:4187:                                    )
+  public\index.html:4188:                                    .value,
+  public\index.html:4189:
+> public\index.html:4190:                            stock_status:
+  public\index.html:4191:                                document
+  public\index.html:4192:                                    .getElementById(
+> public\index.html:4193:                                        'irStatus'
+  public\index.html:4194:                                    )
+  public\index.html:4195:                                    .value,
+  public\index.html:4196:
+  public\index.html:4197:                            receipt_type:
+  public\index.html:4198:                                document
+  public\index.html:4199:                                    .getElementById(
+  public\index.html:4200:                                        'irType'
+  public\index.html:4201:                                    )
+  public\index.html:4476:                                        'iaLocation'
+  public\index.html:4477:                                    )
+  public\index.html:4478:                                    .value,
+  public\index.html:4479:
+> public\index.html:4480:                            stock_status:
+  public\index.html:4481:                                document
+  public\index.html:4482:                                    .getElementById(
+> public\index.html:4483:                                        'iaStatus'
+  public\index.html:4484:                                    )
+  public\index.html:4485:                                    .value,
+  public\index.html:4486:
+  public\index.html:4487:                            reason:
+  public\index.html:4488:                                document
+  public\index.html:4489:                                    .getElementById(
+  public\index.html:4490:                                        'iaReason'
+  public\index.html:4491:                                    )
+  public\index.html:4559:                                    lot:
+  public\index.html:4560:                                        row.lot_no ||
+  public\index.html:4561:                                        '',
+  public\index.html:4562:
+> public\index.html:4563:                                    status:
+> public\index.html:4564:                                        INV_STATUS_FA[
+> public\index.html:4565:                                        row.stock_status
+  public\index.html:4566:                                        ] ||
+> public\index.html:4567:                                        row.stock_status,
+  public\index.html:4568:
+  public\index.html:4569:                                    qty:
+  public\index.html:4570:                                        row.quantity
+  public\index.html:4571:                                };
+  public\index.html:4572:
+  public\index.html:4573:                            });
+  public\index.html:4574:
+  public\index.html:4575:
+  public\index.html:4624:                            {
+  public\index.html:4625:                                label:
+  public\index.html:4626:                                    'وضعیت',
+  public\index.html:4627:                                key:
+> public\index.html:4628:                                    'status'
+  public\index.html:4629:                            },
+  public\index.html:4630:
+  public\index.html:4631:                            {
+  public\index.html:4632:                                label:
+  public\index.html:4633:                                    'موجودی',
+  public\index.html:4634:                                key:
+  public\index.html:4635:                                    'qty'
+  public\index.html:4636:                            }
+  public\index.html:4782:            quality: loadQuality,
+  public\index.html:4783:            maintenance: loadMaintenance,
+  public\index.html:4784:            warehouse: loadInventory
+  public\index.html:4785:        };
+> public\index.html:4786:        function setLiveStatus(ok) { const d = 
+document.getElementById('liveDot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'err'); }
+  public\index.html:4787:        function updateAgo() { const el = document.getElementById('liveAgo'); 
+if (!el) return; if (!lastOkAt) { el.textContent = 'هنوز بروزرسانی نشده'; return; } const s = 
+Math.floor((Date.now() - lastOkAt) / 1000); el.textContent = autoRefreshOn ? (s < 60 ? fa(s) + ' ثانیه 
+پیش' : fa(Math.floor(s / 60)) + ' دقیقه پیش') : 'خودکار خاموش'; }
+  public\index.html:4788:        async function refreshCurrentTab() {
+  public\index.html:4789:            try {
+  public\index.html:4790:                autoTick = true;
+  public\index.html:4791:                if (currentTab === 'genealogy') { if 
+(document.getElementById('heatInput').value.trim()) await loadGenealogy(); }
+  public\index.html:4792:                else if (currentTab === 'balance') { if 
+(document.getElementById('balanceHeat').value.trim()) await loadBalance(); }
+  public\index.html:4793:                else if (loaders[currentTab]) { await loaders[currentTab](); }
+> public\index.html:4794:                autoTick = false; lastOkAt = Date.now(); setLiveStatus(true);
+> public\index.html:4795:            } catch (e) { autoTick = false; setLiveStatus(false); }
+  public\index.html:4796:        }
+  public\index.html:4797:        function startAutoRefresh() { stopAutoRefresh(); if (autoRefreshOn) 
+refreshTimer = setInterval(refreshCurrentTab, AUTO_REFRESH_MS); }
+  public\index.html:4798:        function stopAutoRefresh() { if (refreshTimer) { 
+clearInterval(refreshTimer); refreshTimer = null; } }
+  public\index.html:4799:        document.getElementById('nav').addEventListener('click', async (e) => {
+  public\index.html:4800:            const btn = e.target.closest('button[data-tab]'); if (!btn) return;
+  public\index.html:4801:            document.querySelectorAll('#nav button').forEach((b) => 
+b.classList.remove('active')); btn.classList.add('active');
+  public\index.html:4802:            currentTab = btn.dataset.tab; document.querySelectorAll('main > 
+section').forEach((s) => s.classList.add('hidden'));
+  public\index.html:4803:            document.getElementById('tab-' + 
+currentTab).classList.remove('hidden');
+  public\index.html:4804:            applyRoleUI();
+> public\index.html:4805:            if (loaders[currentTab]) { try { await loaders[currentTab](); 
+lastOkAt = Date.now(); setLiveStatus(true); } catch (err) { setLiveStatus(false); } }
+  public\index.html:4806:            startAutoRefresh();
+  public\index.html:4807:        });
+  public\index.html:4808:        document.getElementById('btnGenealogy').addEventListener('click', 
+loadGenealogy);
+  public\index.html:4809:        document.getElementById('btnBalance').addEventListener('click', 
+loadBalance);
+  public\index.html:4810:        document.getElementById('liveToggle').addEventListener('click', () => {
+  public\index.html:4811:            autoRefreshOn = !autoRefreshOn; const b = 
+document.getElementById('liveToggle');
+  public\index.html:4812:            b.textContent = autoRefreshOn ? 'بروزرسانی خودکار: روشن' : 
+'بروزرسانی خودکار: خاموش';
+  public\index.html:4813:            b.className = 'livebtn' + (autoRefreshOn ? '' : ' off'); if 
+(autoRefreshOn) startAutoRefresh(); else { stopAutoRefresh(); updateAgo(); }
+  public\index.html:5001:                                    key: 'responsible'
+  public\index.html:5002:                                },
+  public\index.html:5003:                                {
+  public\index.html:5004:                                    label: 'وضعیت',
+> public\index.html:5005:                                    key: 'status'
+  public\index.html:5006:                                }
+  public\index.html:5007:                            ],
+  public\index.html:5008:
+  public\index.html:5009:                            plans.map(
+  public\index.html:5010:                                (p) => {
+  public\index.html:5011:
+  public\index.html:5012:                                    const st =
+> public\index.html:5013:                                        pmStatus(p);
+  public\index.html:5014:
+  public\index.html:5015:                                    return {
+  public\index.html:5016:
+  public\index.html:5017:                                        machine:
+  public\index.html:5018:                                            stationFa(
+  public\index.html:5019:                                                p.machine_id
+  public\index.html:5020:                                            ),
+  public\index.html:5021:
+  public\index.html:5047:                                        responsible:
+  public\index.html:5048:                                            p.responsible ||
+  public\index.html:5049:                                            '-',
+  public\index.html:5050:
+> public\index.html:5051:                                        status:
+  public\index.html:5052:                                            st.days < 0
+  public\index.html:5053:                                                ? 'عقب‌افتاده'
+  public\index.html:5054:                                                : st.days <= 7
+  public\index.html:5055:                                                    ? 'نزدیک سررسید'
+  public\index.html:5056:                                                    : 'طبق برنامه'
+  public\index.html:5057:                                    };
+  public\index.html:5058:                                }
+  public\index.html:5059:                            ),
+  public\index.html:5072:        });
+  public\index.html:5073:        document.getElementById('expGenealogy').addEventListener('click', () 
+=> {
+  public\index.html:5074:            const g = lastGenealogy; if (!g) { alert('ابتدا استعلام کنید.'); 
+return; }
+  public\index.html:5075:            const rows = [];
+> public\index.html:5076:            g.billets.forEach((b) => rows.push({ بخش: 'کویل', کد: b.id, بچ: 
+b.heat_number, سایز: '-', گرید: b.grade, وزن: b.initial_weight_kg, وضعیت: b.status, زمان: 
+fmtDate(b.received_at) }));
+  public\index.html:5077:            g.furnace_logs.forEach((f) => rows.push({ بخش: 'ایستگاه‌ها', کد: 
+f.id, بچ: f.heat_number, سایز: '-', گرید: '-', وزن: f.residence_time_minutes, وضعیت: 'ماندگاری(دقیقه)', 
+زمان: fmtDate(f.charge_time) }));
+> public\index.html:5078:            g.rebar_bundles.forEach((r) => rows.push({ بخش: 'بشکه', کد: 
+r.bundle_code, بچ: r.heat_number, سایز: r.rebar_size, گرید: r.rebar_grade, وزن: r.net_weight_kg, وضعیت: 
+r.quality_status, زمان: fmtDate(r.produced_at) }));
+  public\index.html:5079:            downloadCsv('ردیابی_بچ_' + g.heat_number, [{ label: 'بخش', key: 
+'بخش' }, { label: 'کد', key: 'کد' }, { label: 'بچ', key: 'بچ' }, { label: 'سایز', key: 'سایز' }, { 
+label: 'گرید', key: 'گرید' }, { label: 'وزن/مقدار', key: 'وزن' }, { label: 'وضعیت', key: 'وضعیت' }, { 
+label: 'زمان', key: 'زمان' }], rows, 'ردیابی بچ تولید ' + g.heat_number);
+  public\index.html:5080:        });
+  public\index.html:5081:        document.getElementById('expBalance').addEventListener('click', () => {
+  public\index.html:5082:            const b = lastBalance; if (!b) { alert('ابتدا محاسبه کنید.'); 
+return; }
+  public\index.html:5083:            downloadCsv('بالانس_' + b.heat_number, [{ label: 'شرح', key: 'k' 
+}, { label: 'وزن (kg)', key: 'w' }, { label: 'درصد', key: 'p' }], [
+  public\index.html:5084:                { k: 'ورق ورودی', w: b.input_weight_kg, p: '100٪' }, { k: 
+'بشکه سالم', w: b.output_weight_kg, p: b.yield_rate_percent + '٪' }, { k: 'پرت ورق', w: 
+b.scale_loss_kg, p: b.scale_loss_percent + '٪' },
+  public\index.html:5085:            ], 'بالانس ورق بچ ' + b.heat_number);
+  public\index.html:5086:        });
+
+

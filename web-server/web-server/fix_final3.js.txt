@@ -1,0 +1,26 @@
+const fs = require('fs');
+const vm = require('vm');
+const p = 'public/index.html';
+let c = fs.readFileSync(p, 'utf8');
+const i = c.lastIndexOf('<script>');
+const j = c.lastIndexOf('</script>');
+if (i === -1 || j === -1) { console.log('ERROR: script tags not found'); process.exit(1); }
+const head = c.slice(0, i + 8);
+let body = c.slice(i + 8, j);
+const tail = c.slice(j);
+// 1) حذف هر HTML سرگردان قبل از اولین دستور JS
+body = body.replace(/[\s\S]*?const API = '';/, "const API = '';");
+// 2) تعمیر اینتر خام داخل رشته‌های invDeleteItem
+body = body.replace(/حذف شود؟[\r\n]+این کالا/g, 'حذف شود؟\\nاین کالا');
+body = body.replace(/msg \+= `?[\r\n]+⚠️/g, "msg += '\\n⚠️");
+// 3) تبدیل همه بک‌تیک‌ها به کوتیشن تکی (رشته‌های هیبریدی را درست می‌کند)
+body = body.replace(/`/g, "'");
+try {
+  new vm.Script(body);
+  fs.writeFileSync(p, head + body + tail, 'utf8');
+  console.log('SAVED + SYNTAX OK');
+} catch (e) {
+  console.log('SYNTAX ERROR: ' + e.message);
+  const m = /<anonymous>:(\d+)/.exec(e.stack || '');
+  if (m) { const ln = +m[1]; const L = body.split('\n'); console.log('LINE ' + ln + ': ' + (L[ln - 1] || '')); }
+}
