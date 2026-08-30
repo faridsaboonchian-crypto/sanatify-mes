@@ -265,46 +265,7 @@ const server = http.createServer((req, res) => {
         });
         return;
     }
-    // ===== ✅ ADDITIVE — W4: ورود داده از وب «کنترل کیفیت» با کنترل نقش =====
-    if (req.method === 'POST' && pathname === '/api/entry/quality') {
-        if (!auth.requireRole(req, ['quality', 'qc'])) {
-            return sendJson(res, { error: 'دسترسی غیرمجاز: نقش شما اجازهٔ ثبت QC ندارد.' }, 403);
-        }
-        let raw = '';
-        req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
-        req.on('end', () => {
-            try {
-                const b = JSON.parse(raw || '{}');
-                const rec = {
-                    id: 'web-q-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                    heat_number: String(b.heat_number || '').trim(),
-                    rebar_size: Number(b.rebar_size) || 0,
-                    yield_strength: Number(b.yield_strength) || 0,
-                    tensile_strength: Number(b.tensile_strength) || 0,
-                    elongation_percent: Number(b.elongation_percent) || 0,
-                    bend_test_passed: Number(b.bend_test_passed) ? 1 : 0,
-                    visual_inspection: Number(b.visual_inspection) ? 1 : 0,
-                    operator_id: String(b.operator_id || (req.user && req.user.username) || '').trim(),
-                    description: String(b.description || '').slice(0, 500),
-                    timestamp: new Date().toISOString(),
-                };
-                if (!rec.heat_number || rec.rebar_size <= 0 || rec.yield_strength <= 0 || rec.tensile_strength <= 0) {
-                    return sendJson(res, { error: 'کد بچ، حجم، فشار هیدرواستاتیک و ضخامت لاینینگ الزامی است.' }, 400);
-                }
-                const live = readLive();
-                live.quality_inspections = Array.isArray(live.quality_inspections) ? live.quality_inspections : [];
-                live.quality_inspections.push(rec);
-                live.generated_at = new Date().toISOString();
-                writeJson(LIVE_FILE, live);
-                cache.data = null; cache.at = 0;
-                auditLog(req, 'quality.insert', rec);
-                return sendJson(res, { ok: true, record: rec }, 201);
-            } catch (e) {
-                return sendJson(res, { error: 'دادهٔ نامعتبر: ' + (e && e.message ? e.message : e) }, 400);
-            }
-        });
-        return;
-    }
+    // ===== FIX-INV-0-HARDENING: حذف endpoint تکراری مرده (نسخهٔ دوم POST /api/entry/quality) =====
 
     // ===== ✅ ADDITIVE — W5: ثبت تعمیرات/PM + برنامهٔ PM =====
     // ================================================================
@@ -958,129 +919,11 @@ const server = http.createServer((req, res) => {
     }
     // ===== ✅ END-ADDITIVE-NEW =====
 
-    // ===== ✅ ADDITIVE — W1: ورود داده از وب «ثبت تولید» با کنترل نقش =====
-    if (req.method === 'POST' && pathname === '/api/entry/production') {
-        if (!auth.requireRole(req, ['operator'])) {
-            return sendJson(res, { error: 'دسترسی غیرمجاز: نقش شما اجازهٔ ثبت تولید ندارد.' }, 403);
-        }
-        let raw = '';
-        req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
-        req.on('end', () => {
-            try {
-                const b = JSON.parse(raw || '{}');
-                const good = Number(b.good_quantity);
-                const rec = {
-                    id: 'web-p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                    operator_id: String(b.operator_id || (req.user && req.user.username) || '').trim(),
-                    product_id: String(b.product_id || '').trim(),
-                    shift_id: String(b.shift_id || '').trim(),
-                    good_quantity: good,
-                    pallet_count: Math.max(0, Number(b.pallet_count) || 0),
-                    machine_id: String(b.machine_id || 'st-pack').trim(), heat_number: String(b.heat_number || '').trim(),
-                    description: String(b.description || '').slice(0, 500),
-                    source: 'manual',
-                    timestamp: new Date().toISOString(),
-                };
-                if (!rec.operator_id || !rec.product_id || !rec.shift_id || !Number.isFinite(good) || good <= 0) {
-                    return sendJson(res, { error: 'محصول، شیفت و «تعداد سالم» الزامی است.' }, 400);
-                }
-                const live = readLive();
-                live.production_logs = Array.isArray(live.production_logs) ? live.production_logs : [];
-                live.production_logs.push(rec);
-                live.generated_at = new Date().toISOString();
-                writeJson(LIVE_FILE, live);
-                cache.data = null; cache.at = 0;
-                auditLog(req, 'production.insert', rec);
-                return sendJson(res, { ok: true, record: rec }, 201);
-            } catch (e) {
-                return sendJson(res, { error: 'دادهٔ نامعتبر: ' + (e && e.message ? e.message : e) }, 400);
-            }
-        });
-        return;
-    }
+    // ===== FIX-INV-0-HARDENING: حذف endpoint تکراری مرده (نسخهٔ دوم POST /api/entry/production) =====
 
-    // ===== ✅ ADDITIVE — W2: ورود داده از وب «ضایعات» با کنترل نقش =====
-    if (req.method === 'POST' && pathname === '/api/entry/waste') {
-        if (!auth.requireRole(req, ['operator'])) {
-            return sendJson(res, { error: 'دسترسی غیرمجاز: نقش شما اجازهٔ ثبت ضایعات ندارد.' }, 403);
-        }
-        let raw = '';
-        req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
-        req.on('end', () => {
-            try {
-                const b = JSON.parse(raw || '{}');
-                const qty = Number(b.quantity);
-                const rec = {
-                    id: 'web-w-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                    shift_id: String(b.shift_id || '').trim(),
-                    reason_id: String(b.reason_id || '').trim(),
-                    quantity: qty,
-                    machine_id: String(b.machine_id || '').trim(),
-                    operator_id: String(b.operator_id || '').trim(),
-                    timestamp: new Date().toISOString(),
-                };
-                if (!rec.reason_id || !rec.shift_id || !rec.machine_id || !rec.operator_id || !Number.isFinite(qty) || qty <= 0) {
-                    return sendJson(res, { error: 'همهٔ فیلدها الزامی است و «تعداد» باید عددی بزرگ‌تر از صفر باشد.' }, 400);
-                }
-                const live = readLive();
-                live.waste_logs = Array.isArray(live.waste_logs) ? live.waste_logs : [];
-                live.waste_logs.push(rec);
-                live.generated_at = new Date().toISOString();
-                writeJson(LIVE_FILE, live);
-                cache.data = null; cache.at = 0;
-                auditLog(req, 'waste.insert', rec);
-                return sendJson(res, { ok: true, record: rec }, 201);
-            } catch (e) {
-                return sendJson(res, { error: 'دادهٔ نامعتبر: ' + (e && e.message ? e.message : e) }, 400);
-            }
-        });
-        return;
-    }
+    // ===== FIX-INV-0-HARDENING: حذف endpoint تکراری مرده (نسخهٔ دوم POST /api/entry/waste) =====
 
-    // ===== ✅ ADDITIVE — W3: ورود داده از وب «توقفات» با کنترل نقش =====
-    if (req.method === 'POST' && pathname === '/api/entry/downtime') {
-        if (!auth.requireRole(req, ['operator', 'engineering'])) {
-            return sendJson(res, { error: 'دسترسی غیرمجاز: نقش شما اجازهٔ ثبت توقف ندارد.' }, 403);
-        }
-        let raw = '';
-        req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
-        req.on('end', () => {
-            try {
-                const b = JSON.parse(raw || '{}');
-                const start = new Date(b.start_time);
-                const end = new Date(b.end_time);
-                if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
-                    return sendJson(res, { error: 'زمان شروع و پایان معتبر نیست؛ «پایان» باید بعد از «شروع» باشد.' }, 400);
-                }
-                const rec = {
-                    id: 'web-d-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                    shift_id: String(b.shift_id || '').trim(),
-                    reason_id: String(b.reason_id || '').trim(),
-                    start_time: start.toISOString(),
-                    end_time: end.toISOString(),
-                    duration_minutes: Math.round((end - start) / 60000),
-                    is_unplanned: Number(b.is_unplanned) ? 1 : 0,
-                    description: String(b.description || '').slice(0, 500),
-                    machine_id: String(b.machine_id || '').trim(),
-                    timestamp: start.toISOString(),
-                };
-                if (!rec.reason_id || !rec.shift_id || !rec.machine_id) {
-                    return sendJson(res, { error: 'علت توقف، شیفت و دستگاه الزامی است.' }, 400);
-                }
-                const live = readLive();
-                live.downtime_logs = Array.isArray(live.downtime_logs) ? live.downtime_logs : [];
-                live.downtime_logs.push(rec);
-                live.generated_at = new Date().toISOString();
-                writeJson(LIVE_FILE, live);
-                cache.data = null; cache.at = 0;
-                auditLog(req, 'downtime.insert', rec);
-                return sendJson(res, { ok: true, record: rec }, 201);
-            } catch (e) {
-                return sendJson(res, { error: 'دادهٔ نامعتبر: ' + (e && e.message ? e.message : e) }, 400);
-            }
-        });
-        return;
-    }
+    // ===== FIX-INV-0-HARDENING: حذف endpoint تکراری مرده (نسخهٔ دوم POST /api/entry/downtime) =====
 
     // ================================================================
     // INDUSTRIAL FAY MES
@@ -2422,59 +2265,15 @@ return sendJson(res, { ok: true, record: rec, issue: mainIssue }, 201);
 return;
 }
 // ===== END FIX-RES-1 =====
-    // ===== GET /api/* =====
-    // ================================================================
-    // RESERVATION (رزرو کالا)
-    // ================================================================
-    if (req.method === 'POST' && pathname === '/api/inventory/reserve') {
-        if (!auth.requireRole(req, ['warehouse', 'operator', 'engineering', 'admin'])) {
-            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
-        }
-        readBody(req).then(body => {
-            try {
-                const b = JSON.parse(body || '{}');
-                const live = invEnsure(readLive());
-                const qty = Number(b.quantity);
-                const item = invFindItem(live, String(b.item_id || ''));
-                if (!item) return sendJson(res, { error: 'کالای انتخاب‌شده یافت نشد.' }, 400);
-                if (!Number.isFinite(qty) || qty <= 0) return sendJson(res, { error: 'مقدار رزرو باید بیشتر از صفر باشد.' }, 400);
-
-                const warehouse = String(b.warehouse || '').trim();
-                const agg = invAggWarehouse(live, item.id, warehouse);
-                if (agg.available < qty - 1e-9) {
-                    return sendJson(res, { error: 'موجودی قابل مصرف برای رزرو کافی نیست.', available: agg.available }, 409);
-                }
-
-                const rec = {
-                    id: 'res-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                    request_id: String(b.request_id || ''),
-                    item_id: item.id,
-                    quantity: qty,
-                    warehouse: warehouse,
-                    location: String(b.location || '').trim(),
-                    lot_no: String(b.lot_no || '').trim(),
-                    reference: String(b.reference || '').trim(),
-                    description: String(b.description || '').slice(0, 500),
-                    status: 'open',
-                    timestamp: new Date().toISOString(),
-                    operator_id: String((req.user && req.user.username) || '')
-                };
-                live.inventory_reservations.push(rec);
-                invSave(live, req, 'inventory.reserve.insert', rec);
-                return sendJson(res, { ok: true, record: rec }, 201);
-            } catch (e) {
-                return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400);
-            }
-        }).catch(e => sendJson(res, { error: e.message }, 500));
-        return;
-    }
+    // ===== FIX-INV-0-HARDENING: حذف endpoint تکراری مرده (نسخهٔ دوم POST /api/inventory/reserve — غیرقابل‌دسترس پس از FIX-RES-1) =====
 
     // ================================================================
     // UNRESERVE (آزادسازی رزرو)
     // ================================================================
     if (req.method === 'POST' && pathname === '/api/inventory/unreserve') {
-        if (!auth.requireRole(req, ['warehouse', 'operator', 'engineering', 'admin'])) {
-            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        // ===== FIX-INV-0-HARDENING: محدودکردن unreserve به نقش انباردار (آزادسازی UI از مسیر reserve/release انجام می‌شود) =====
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز: آزادسازی مستقیم رزرو فقط برای انباردار است.' }, 403);
         }
         readBody(req).then(body => {
             try {
@@ -2500,10 +2299,7 @@ live.inventory_reservations.splice(idx, 1);
     if (pathname.startsWith('/api/')) {
         loadData().then((d) => {
             try {
-                if (pathname === '/api/health') {
-                    const live = readLive();
-                    return sendJson(res, { source: cache.source, configured: isSupabaseConfigured(), live_cache_present: hasAnyLive(live), generated_at: d.generated_at });
-                }
+                // ===== FIX-INV-0-HARDENING: حذف شاخهٔ مردهٔ /api/health (مسیر سریع ابتدای فایل پاسخ می‌دهد) =====
                 if (pathname === '/api/summary') return sendJson(res, buildSummary(d));
                 if (pathname === '/api/production') return sendJson(res, d.production_logs || []);
                 if (pathname === '/api/waste') return sendJson(res, d.waste_logs || []);
