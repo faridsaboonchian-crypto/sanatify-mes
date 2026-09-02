@@ -994,6 +994,27 @@
         body.theme-dark .mnt-reason-head strong { color: #cbd5e1; }
         body.theme-dark .mnt-reason-track { background: #1d3a55; }
         body.theme-dark .inv-subtitle { background: #0e2233; color: #7fb4d8; }
+        /* ===== FIX-UI-4e: کنتراست کامل حالت شب ===== */
+        body.theme-dark { color-scheme: dark; }
+        body.theme-dark input[type="number"],
+        body.theme-dark input[type="time"],
+        body.theme-dark input[type="password"],
+        body.theme-dark input[type="tel"],
+        body.theme-dark select,
+        body.theme-dark textarea { background: #0b2233; border: 1px solid #2a4a66; color: #e2e8f0; border-radius: 8px; font-family: inherit; padding: 8px 10px; }
+        body.theme-dark .rngbtn { background: #0e2233; border-color: #2a4a66; color: #cbd5e1; }
+        body.theme-dark .rngbtn.active { background: #0e7490; color: #fff; border-color: #0e7490; }
+        body.theme-dark #sumRangeNote { color: #8aa6bd; }
+        body.theme-dark .chip.ok { color: #34d399; }
+        body.theme-dark .chip.no { color: #f87171; }
+        body.theme-dark .chip.wait { color: #fbbf24; }
+        body.theme-dark .chip.none { color: #cbd5e1; }
+        body.theme-dark button.act { background: #0e7490; }
+        body.theme-dark button.excel { background: #15803d; }
+        body.theme-dark .fclear { background: #475569; }
+        body.theme-dark .mnt-section-head span { color: #8aa6bd; }
+        body.theme-dark .userbar .ulogout { background: rgba(255, 255, 255, .14); }
+        /* ===== FIX-UI-4e (end) ===== */
         /* ===== FEAT-UI-4c (end) ===== */
         /* ===== FEAT-BI-2 (end) ===== */</style>
 </head>
@@ -2763,7 +2784,7 @@ showRes();
         };
     }
     function biAxisOpts() {
-        const gridC = biDark ? 'rgba(148,163,184,.14)' : '#e2e8f0';
+        const gridC = biDark ? 'rgba(148,163,184,.22)' : '#e2e8f0'; /* FIX-UI-4e: گریدلاین مرئی در شب */
         const txtC = biDark ? '#cbd5e1' : '#334155';
         return {
             gridColor: gridC, textColor: txtC,
