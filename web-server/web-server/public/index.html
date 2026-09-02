@@ -386,6 +386,21 @@
             background: #fff
         }
 
+        /* ===== FIX-THEME-6b: متن گزینه‌های دراپ‌داون در هر دو تم خوانا —
+           ریشهٔ باگ: optionها رنگ #fff پنل فیلتر را به ارث می‌بردند و در لیست نیتیوِ
+           سفیدِ تم روز «سفید-روی-سفید» می‌شدند ===== */
+        select option,
+        select optgroup {
+            background: #fff;
+            color: #0f172a
+        }
+
+        body.theme-dark select option,
+        body.theme-dark select optgroup {
+            background: #0b2233;
+            color: #e2e8f0
+        }
+
         .flbl {
             font-size: 12px;
             color: #475569;
