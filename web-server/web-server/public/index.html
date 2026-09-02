@@ -928,7 +928,9 @@
             font-size: 12.5px;
         }
         .bi-toolbar .bi-hint { color: #64748b; font-size: 11px; }
-        .bi-none { position: absolute; inset: 42px 0 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 12px; background: rgba(255,255,255,.6); }
+        .bi-none { position: absolute; inset: 42px 0 0; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; background: rgba(255,255,255,.78); }
+        /* ===== FIX-UI-4d: ریشهٔ کمرنگی — .bi-none بعد از .hidden تعریف شده بود و display:flex آن display:none را باطل می‌کرد؛ روکش هرگز پنهان نمی‌شد و روی کارت‌های دارای داده سایه می‌انداخت ===== */
+        .bi-none.hidden { display: none !important; }
         .chart-card { position: relative; }
         body.bi-dark { background: #0b1622; }
         body.bi-dark .bi-toolbar { background: #10293c; border-color: #1d3a55; color: #dbe7f3; }
@@ -2351,16 +2353,16 @@ function buildFilterBar(tab) {
             const dt = filterData(cache.downtime || [], 'downtime'); const dtByReason = {};
             dt.forEach((r) => { const k = reasonFa(r.reason_id || 'نامشخص'); dtByReason[k] = (dtByReason[k] || 0) + 1; });
             if (charts.downtime) charts.downtime.destroy();
-            charts.downtime = new Chart(document.getElementById('chart-downtime'), { type: 'bar', data: { labels: Object.keys(dtByReason), datasets: [{ label: 'تعداد توقفات', data: Object.values(dtByReason), backgroundColor: 'rgba(220,38,38,0.8)', borderColor: '#dc2626', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
+            charts.downtime = new Chart(document.getElementById('chart-downtime'), { type: 'bar', data: { labels: Object.keys(dtByReason), datasets: [{ label: 'تعداد توقفات', data: Object.values(dtByReason), backgroundColor: '#dc2626', borderColor: '#dc2626', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
             const ws = filterData(cache.waste || [], 'waste'); const wsByReason = {};
             ws.forEach((r) => { const k = reasonFa(r.reason_id || 'نامشخص'); wsByReason[k] = (wsByReason[k] || 0) + (Number(r.quantity) || 0); });
             if (charts.waste) charts.waste.destroy();
-            charts.waste = new Chart(document.getElementById('chart-waste'), { type: 'bar', data: { labels: Object.keys(wsByReason), datasets: [{ label: 'تعداد ضایعات', data: Object.values(wsByReason), backgroundColor: 'rgba(217,119,6,0.8)', borderColor: '#d97706', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
+            charts.waste = new Chart(document.getElementById('chart-waste'), { type: 'bar', data: { labels: Object.keys(wsByReason), datasets: [{ label: 'تعداد ضایعات', data: Object.values(wsByReason), backgroundColor: '#d97706', borderColor: '#d97706', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
             const pr = filterData(cache.production || [], 'production'); const prByShift = {};
             pr.forEach((r) => { const k = r.shift_id || 'نامشخص'; prByShift[k] = (prByShift[k] || 0) + (Number(r.good_quantity) || 0); });
             const shiftNames = { 'shift-morning-301': 'شیفت صبح', 'shift-night-302': 'شیفت شب' };
             if (charts.shift) charts.shift.destroy();
-            charts.shift = new Chart(document.getElementById('chart-shift'), { type: 'bar', data: { labels: Object.keys(prByShift).map(k => shiftNames[k] || k), datasets: [{ label: 'تولید سالم', data: Object.values(prByShift), backgroundColor: 'rgba(5,150,105,0.8)', borderColor: '#059669', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
+            charts.shift = new Chart(document.getElementById('chart-shift'), { type: 'bar', data: { labels: Object.keys(prByShift).map(k => shiftNames[k] || k), datasets: [{ label: 'تولید سالم', data: Object.values(prByShift), backgroundColor: '#059669', borderColor: '#059669', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
             const prByDay = {};
             pr.forEach((r) => { if (!r.timestamp) return; const d = new Date(r.timestamp); if (isNaN(d.getTime())) return; const key = d.toLocaleDateString('fa-IR', { month: '2-digit', day: '2-digit' }); prByDay[key] = (prByDay[key] || 0) + (Number(r.good_quantity) || 0); });
             if (charts.daily) charts.daily.destroy();
@@ -2796,20 +2798,20 @@ showRes();
             const by = {}; dt.forEach((r) => { const k = reasonFa(r.reason_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.duration_minutes) || 0); });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]); const tot = ent.reduce((s, x) => s + x[1], 0) || 1;
             let cum = 0; const cums = ent.map((x) => { cum += x[1]; return Math.round(cum / tot * 1000) / 10; });
-            biDraw('bi-pareto-dt', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'دقیقه توقف', data: ent.map((x) => x[1]), backgroundColor: 'rgba(220,38,38,.8)', borderColor: BI_COLORS.red, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
+            biDraw('bi-pareto-dt', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'دقیقه توقف', data: ent.map((x) => x[1]), backgroundColor: BI_COLORS.red, borderColor: BI_COLORS.red, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
         })();
         // ۲) پارتو ضایعات (تن)
         (() => {
             const by = {}; ws.forEach((r) => { const k = reasonFa(r.reason_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.quantity) || 0) / 1000; });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]); const tot = ent.reduce((s, x) => s + x[1], 0) || 1;
             let cum = 0; const cums = ent.map((x) => { cum += x[1]; return Math.round(cum / tot * 1000) / 10; });
-            biDraw('bi-pareto-ws', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'تن', data: ent.map((x) => Math.round(x[1] * 1000) / 1000), backgroundColor: 'rgba(217,119,6,.8)', borderColor: BI_COLORS.amber, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
+            biDraw('bi-pareto-ws', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'تن', data: ent.map((x) => Math.round(x[1] * 1000) / 1000), backgroundColor: BI_COLORS.amber, borderColor: BI_COLORS.amber, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
         })();
         // ۳) روند تناژ سالم
         (() => {
             const bk = biBuckets();
             const ser = biSeries(bd, 'produced_at', (r) => Number(r.net_weight_kg) || 0, bk).map((x) => ({ lab: x.lab, v: Math.round(x.v / 100) / 10 }));
-            biDraw('bi-ton', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: 'تن سالم', data: ser.map((x) => x.v), borderColor: BI_COLORS.green, backgroundColor: 'rgba(5,150,105,.12)', borderWidth: 2.5, pointRadius: 2, tension: .35, fill: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
+            biDraw('bi-ton', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: 'تن سالم', data: ser.map((x) => x.v), borderColor: BI_COLORS.green, backgroundColor: 'rgba(5,150,105,.14)', borderWidth: 2.5, pointRadius: 2, tension: .35, fill: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
         })();
         // ۴) روند راندمان مواد (تن سالم ÷ تن شمش تجمعی روز)
         (() => {
@@ -2834,7 +2836,7 @@ showRes();
                 const dd = bd.filter((r) => { const d = new Date(r.produced_at); return !isNaN(d.getTime()) && d >= b.s && d <= b.e && biSizeOk(r) && (r.quality_status === 'APPROVED' || r.quality_status === 'REJECTED'); });
                 return { lab: b.lab, v: dd.length ? Math.round(dd.filter((r) => r.quality_status === 'APPROVED').length / dd.length * 1000) / 10 : null };
             });
-            biDraw('bi-qc', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: '٪ پذیرش', data: ser.map((x) => x.v), borderColor: BI_COLORS.navy, backgroundColor: 'rgba(15,42,67,.1)', borderWidth: 2.5, pointRadius: 2, tension: .35, spanGaps: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: Object.assign({}, ax.y, { max: 105 }) } }) });
+            biDraw('bi-qc', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: '٪ پذیرش', data: ser.map((x) => x.v), borderColor: BI_COLORS.teal, backgroundColor: 'rgba(14,116,144,.14)', borderWidth: 2.5, pointRadius: 2, tension: .35, spanGaps: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: Object.assign({}, ax.y, { max: 105 }) } }) });
         })();
         // ۷) توزیع تولید بر اساس سایز
         (() => {
@@ -2848,7 +2850,7 @@ showRes();
             pr.forEach((r) => { const k = sh[r.shift_id] ? r.shift_id : null; if (k && biSizeOk(r)) sh[k].good += Number(r.good_quantity) || 0; });
             dt.forEach((r) => { const k = sh[r.shift_id] ? r.shift_id : null; if (k) sh[k].min += Number(r.duration_minutes) || 0; });
             const labels = Object.keys(sh).map((k) => sh[k].l);
-            biDraw('bi-shift', { type: 'bar', data: { labels: labels, datasets: [{ label: 'شاخه سالم', data: Object.keys(sh).map((k) => sh[k].good), backgroundColor: 'rgba(14,116,144,.85)', borderRadius: 5 }, { label: 'دقایق توقف', data: Object.keys(sh).map((k) => sh[k].min), backgroundColor: 'rgba(249,115,22,.85)', borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
+            biDraw('bi-shift', { type: 'bar', data: { labels: labels, datasets: [{ label: 'شاخه سالم', data: Object.keys(sh).map((k) => sh[k].good), backgroundColor: BI_COLORS.teal, borderRadius: 5 }, { label: 'دقایق توقف', data: Object.keys(sh).map((k) => sh[k].min), backgroundColor: BI_COLORS.orange, borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
         })();
         // ۹) روند MTTR / MTBF
         (() => {
@@ -2867,7 +2869,7 @@ showRes();
         (() => {
             const by = {}; dt.forEach((r) => { const k = stationFa(r.machine_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.duration_minutes) || 0); });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 5);
-            biDraw('bi-stations', { type: 'bar', data: { labels: ent.map((x) => x[0]), datasets: [{ label: 'دقیقه', data: ent.map((x) => x[1]), backgroundColor: 'rgba(15,42,67,.85)', borderColor: BI_COLORS.navy, borderWidth: 1, borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { indexAxis: 'y', scales: { x: Object.assign({}, ax.y, { grid: { color: ax.gridColor } }), y: { grid: { display: false }, ticks: { color: ax.textColor, font: { size: 10 } } } } }) });
+            biDraw('bi-stations', { type: 'bar', data: { labels: ent.map((x) => x[0]), datasets: [{ label: 'دقیقه', data: ent.map((x) => x[1]), backgroundColor: BI_COLORS.navy, borderColor: BI_COLORS.navy, borderWidth: 1, borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { indexAxis: 'y', scales: { x: Object.assign({}, ax.y, { grid: { color: ax.gridColor } }), y: { grid: { display: false }, ticks: { color: ax.textColor, font: { size: 10 } } } } }) });
         })();
     }
     function biWire() {
