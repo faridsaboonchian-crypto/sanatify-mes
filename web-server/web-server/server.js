@@ -34,6 +34,31 @@ function isSupabaseConfigured() {
 }
 function readJson(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; } }
 function writeJson(file, obj) { try { fs.writeFileSync(file, JSON.stringify(obj, null, 2), 'utf8'); return true; } catch (e) { console.warn('[Server] writeJson failed:', e.message); return false; } }
+// ===== REVERT-STEEL-4: مهاجرت امن و برگشت‌پذیر انبار فولادی — ادغام spare→raw (مواد اولیه/قطعات/ملزومات) =====
+function migrateSteelWarehouses(live) {
+    if (!live || live._steel_wh_v1) return live;
+    const MAP = { spare: 'raw' };
+    const cols = ['inventory_receipts', 'inventory_issues', 'inventory_transfers', 'inventory_adjustments', 'inventory_reservations'];
+    const fields = ['warehouse', 'from_warehouse', 'to_warehouse'];
+    let moved = 0;
+    cols.forEach((k) => {
+        if (!Array.isArray(live[k])) return;
+        live[k].forEach((r) => {
+            fields.forEach((f) => { if (r && r[f] && MAP[r[f]]) { r[f] = MAP[r[f]]; moved++; } });
+        });
+    });
+    let backupOk = false;
+    try {
+        const backupName = LIVE_FILE + '.bak_steel_wh_v1';
+        if (!fs.existsSync(backupName)) fs.copyFileSync(LIVE_FILE, backupName);
+        backupOk = true;
+        console.log('[STEEL-WH] backup ready: live.json.bak_steel_wh_v1');
+    } catch (e) { console.warn('[STEEL-WH] backup failed:', e.message); }
+    live._steel_wh_v1 = { at: new Date().toISOString(), moved: moved, backup: backupOk ? 'live.json.bak_steel_wh_v1' : '', note: 'ادغام انبار قطعات و مصرفی در مواد اولیه/قطعات/ملزومات — بازگشت: بازگردانی فایل بکاپ و حذف این فیلد' };
+    writeJson(LIVE_FILE, live);
+    console.log('[STEEL-WH] migration v1 done, moved=' + moved);
+    return live;
+}
 function readLive() { return readJson(LIVE_FILE) || emptyDataset(); }
 function hasAnyLive(live) { return TABLES.some((t) => Array.isArray(live[t]) && live[t].length > 0); }
 
@@ -2346,6 +2371,8 @@ live.inventory_reservations.splice(idx, 1);
     sendFile(res, safePath);
 });
 
+// ===== REVERT-STEEL-4: اجرای یک‌بارهٔ مهاجرت انبار هنگام راه‌اندازی =====
+try { migrateSteelWarehouses(readLive()); } catch (e) { console.warn('[STEEL-WH] startup migration failed:', e.message); }
 server.listen(PORT, '0.0.0.0', () => {
     console.log('========================================================');
     console.log('  Sanatify MES — سرور مقاوم (ابر=پشتیبان، داخلی=قلب) ✅');
