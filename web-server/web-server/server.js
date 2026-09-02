@@ -276,6 +276,7 @@ const server = http.createServer((req, res) => {
                     kg_per_m: Number(b.kg_per_m) || 0,
                     rib_diameter_mm: Number(b.rib_diameter_mm) || 0,
                     rib_height_mm: Number(b.rib_height_mm) || 0,
+                    nafi_diameter_mm: Number(b.nafi_diameter_mm) || 0, /* ===== FIX-QC-3b: قطر اندازه‌گیری‌شدهٔ نافی — فیلد اختیاری additive ===== */
                     ratio_rm_reh: Number(b.ratio_rm_reh) || 0,
                     /* ===== FEAT-QC-3 (end) ===== */
                     bend_test_passed: Number(b.bend_test_passed) ? 1 : 0,
