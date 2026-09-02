@@ -858,7 +858,29 @@
         .rngbtn.active { background: #0f2a43; color: #fff; border-color: #0f2a43; }
         #sumRangeNote { font-size: 11.5px; color: #64748b; align-self: center; }
         /* ===== FEAT-UX-1 (end) ===== */
-</style>
+        /* ===== FEAT-BI-2 (begin): استایل داشبورد تحلیلی + تم تاریک صنعتی ===== */
+        .bi-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            font-size: 12.5px;
+        }
+        .bi-toolbar .bi-hint { color: #64748b; font-size: 11px; }
+        .bi-none { position: absolute; inset: 42px 0 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 12px; background: rgba(255,255,255,.6); }
+        .chart-card { position: relative; }
+        body.bi-dark { background: #0b1622; }
+        body.bi-dark .bi-toolbar { background: #10293c; border-color: #1d3a55; color: #dbe7f3; }
+        body.bi-dark #tab-analytics .chart-card { background: #10293c; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+        body.bi-dark #tab-analytics .chart-card h3 { color: #dbe7f3; }
+        body.bi-dark #tab-analytics .note { color: #8aa6bd; }
+        body.bi-dark #tab-analytics .bi-none { background: rgba(16,41,60,.7); color: #8aa6bd; }
+        /* ===== FEAT-BI-2 (end) ===== */</style>
 </head>
 
 <body>
@@ -928,6 +950,39 @@
             <div class="kpis" id="kpiBox"></div>
         </section>
         <section id="tab-analytics" class="hidden">
+            <!-- ===== FEAT-BI-2 (begin): داشبورد تحلیلی مدیریتی — فیلتر مشترک + ۱۰ نمودار جدید ===== -->
+            <div class="bi-toolbar">
+                <button class="act" id="biDarkBtn" title="حالت تاریک/روشن صنعتی">🌙 تم</button>
+                <label>بازه: <select id="biRange" class="fsel">
+                    <option value="7">۷ روز</option>
+                    <option value="30" selected>۳۰ روز</option>
+                    <option value="90">۹۰ روز</option>
+                    <option value="all">همه</option>
+                </select></label>
+                <label>سایز میلگرد: <select id="biSize" class="fsel">
+                    <option value="all">همه</option>
+                    <option value="8">۸</option><option value="10">۱۰</option><option value="12">۱۲</option><option value="14">۱۴</option><option value="16">۱۶</option><option value="18">۱۸</option><option value="20">۲۰</option><option value="22">۲۲</option><option value="25">۲۵</option><option value="28">۲۸</option><option value="32">۳۲</option>
+                </select></label>
+                <label>روند تناژ: <select id="biGran" class="fsel">
+                    <option value="day" selected>روزانه</option>
+                    <option value="week">هفتگی</option>
+                </select></label>
+                <span class="bi-hint">فیلترها روی همهٔ کارت‌های تحلیلی اعمال می‌شود.</span>
+            </div>
+            <div class="analytics-grid">
+                <div class="chart-card"><h3>📊 پارتو توقفات (دقیقه + ٪ تجمعی)</h3><div class="chart-container"><canvas id="bi-pareto-dt"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>📊 پارتو ضایعات (تن + ٪ تجمعی)</h3><div class="chart-container"><canvas id="bi-pareto-ws"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🟢 روند تناژ سالم</h3><div class="chart-container"><canvas id="bi-ton"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>♻️ روند راندمان مواد</h3><div class="chart-container"><canvas id="bi-yield"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🗑️ روند درصد ضایعات</h3><div class="chart-container"><canvas id="bi-scrap"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🔬 روند پذیرش QC</h3><div class="chart-container"><canvas id="bi-qc"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>📏 توزیع تولید بر اساس سایز</h3><div class="chart-container"><canvas id="bi-size"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🔄 مقایسه شیفت‌ها (شاخه سالم + توقف)</h3><div class="chart-container"><canvas id="bi-shift"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🛠️ روند MTTR / MTBF (دقیقه)</h3><div class="chart-container"><canvas id="bi-mttr"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🏭 ایستگاه‌های پرتوقف (Top 5)</h3><div class="chart-container"><canvas id="bi-stations"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+            </div>
+            <p class="note">فیلتر سایز فقط روی نمودارهای وابسته به سایز (تناژ، توزیع سایز، راندمان) اعمال می‌شود. MTBF بر مبنای ۷۲۰ دقیقه برنامه‌ریزی روزانه (دو شیفت ۱۲ساعته).</p>
+            <!-- ===== FEAT-BI-2 (end) ===== -->
             <div class="analytics-grid">
                 <div class="chart-card">
                     <h3>📉 توزیع علل توقف</h3>
@@ -2441,4 +2496,166 @@ showRes();
     applyRoleUI = function () { __feux1OrigApply(); try { feux1SyncGroups(); } catch (e) { } };
 })();
 // ===== FEAT-UX-1 (end) =====
+
+// ===== FEAT-BI-2 (begin): داشبورد تحلیلی مدیریتی — پارتو/روند/توزیع/شیفت/MTTR-MTBF =====
+(function () {
+    let biCharts = {};
+    let biDark = false;
+    try { biDark = localStorage.getItem('febi.dark') === '1'; } catch (e) { }
+    const BI_COLORS = { navy: '#0f2a43', teal: '#0e7490', orange: '#f97316', green: '#059669', red: '#dc2626', amber: '#d97706', gray: '#64748b' };
+    const biPal = [BI_COLORS.teal, BI_COLORS.orange, BI_COLORS.green, BI_COLORS.amber, BI_COLORS.red, BI_COLORS.navy, '#7c3aed', '#0891b2'];
+    const biTf = { production: 'timestamp', waste: 'timestamp', downtime: 'start_time', bundles: 'produced_at', billets: 'received_at' };
+    function biIn(ts, from) { if (!from) return true; if (!ts) return false; const d = new Date(ts); return !isNaN(d.getTime()) && d >= from; }
+    function biRows(key) { return (cache[key] || []).filter((r) => biIn(r[biTf[key] || 'timestamp'], biState.from)); }
+    let biState = { from: null, size: 'all', gran: 'day' };
+    function biBuckets() {
+        const n = biState.gran === 'week' ? Math.min(26, Math.ceil((biState.days || 30) / 7)) : Math.min(45, biState.days || 30);
+        const out = []; const now = new Date();
+        const step = biState.gran === 'week' ? 7 : 1;
+        for (let i = n - 1; i >= 0; i--) {
+            const dEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * step, 23, 59, 59, 999);
+            const dStart = new Date(dEnd.getTime() - (step * 86400000 - 1));
+            let lab;
+            try { lab = dStart.toLocaleDateString('fa-IR', biState.gran === 'week' ? { month: '2-digit', day: '2-digit' } : { month: '2-digit', day: '2-digit' }); } catch (e) { lab = dStart.toISOString().slice(5, 10); }
+            out.push({ s: dStart, e: dEnd, lab: lab });
+        }
+        return out;
+    }
+    function biSeries(rows, tf, valFn, buckets, skipSizeFilter) {
+        return buckets.map((b) => {
+            let v = 0;
+            rows.forEach((r) => { const d = new Date(r[tf]); if (!isNaN(d.getTime()) && d >= b.s && d <= b.e && (skipSizeFilter || biSizeOk(r))) { const x = valFn(r); if (x !== null) v += x; } });
+            return { lab: b.lab, v: Math.round(v * 100) / 100 };
+        });
+    }
+    function biSizeOk(r) { if (biState.size === 'all') return true; const v = String(r.rebar_size == null ? (r.product_id == null ? '' : r.product_id) : r.rebar_size); return v === biState.size || v === ('RB-' + biState.size); }
+    function biTip(nums) {
+        return {
+            callbacks: {
+                label: (c) => (c.dataset.label ? c.dataset.label + ': ' : '') + groupFa(Math.round((c.parsed.y === undefined ? c.parsed : c.parsed.y) * 1000) / 1000)
+            }
+        };
+    }
+    function biAxisOpts() {
+        const gridC = biDark ? 'rgba(148,163,184,.14)' : '#e2e8f0';
+        const txtC = biDark ? '#cbd5e1' : '#334155';
+        return {
+            gridColor: gridC, textColor: txtC,
+            x: { grid: { display: false }, ticks: { color: txtC, maxRotation: 45, autoSkip: true, font: { size: 10 } } },
+            y: { beginAtZero: true, grid: { color: gridC }, ticks: { color: txtC, font: { size: 10 } } },
+            y1: { position: 'right', min: 0, max: 100, beginAtZero: true, grid: { display: false }, ticks: { color: txtC, font: { size: 10 }, callback: (v) => fa(v) + '٪' } }
+        };
+    }
+    function biDraw(id, cfg) {
+        const cv = document.getElementById(id);
+        if (!cv || !window.Chart) return;
+        if (biCharts[id]) { try { biCharts[id].destroy(); } catch (e) { } }
+        biCharts[id] = new Chart(cv, cfg);
+        const card = cv.closest('.chart-card'); const none = card ? card.querySelector('.bi-none') : null;
+        const empty = !cfg.data || !cfg.data.datasets || cfg.data.datasets.every((d) => !(d.data || []).some((x) => Number(x) > 0 || Number(x) < 0));
+        if (none) none.classList.toggle('hidden', !empty);
+    }
+    function buildBI() {
+        if (currentTab !== 'analytics') return;
+        const sel = document.getElementById('biRange'); if (!sel) return;
+        biState.size = document.getElementById('biSize').value;
+        biState.gran = document.getElementById('biGran').value;
+        const rv = sel.value;
+        if (rv === 'all') { biState.from = null; biState.days = 90; } else { biState.from = new Date(Date.now() - Number(rv) * 86400000); biState.days = Number(rv); }
+        document.body.classList.toggle('bi-dark', biDark);
+        const ax = biAxisOpts();
+        const baseOpts = { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { color: ax.textColor, font: { size: 11 }, boxWidth: 12 } }, tooltip: biTip() } };
+        const pr = biRows('production'), ws = biRows('waste'), dt = biRows('downtime'), bd = biRows('bundles'), bl = biRows('billets');
+        // ۱) پارتو توقفات (دقیقه)
+        (() => {
+            const by = {}; dt.forEach((r) => { const k = reasonFa(r.reason_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.duration_minutes) || 0); });
+            const ent = Object.entries(by).sort((a, b) => b[1] - a[1]); const tot = ent.reduce((s, x) => s + x[1], 0) || 1;
+            let cum = 0; const cums = ent.map((x) => { cum += x[1]; return Math.round(cum / tot * 1000) / 10; });
+            biDraw('bi-pareto-dt', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'دقیقه توقف', data: ent.map((x) => x[1]), backgroundColor: 'rgba(220,38,38,.8)', borderColor: BI_COLORS.red, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
+        })();
+        // ۲) پارتو ضایعات (تن)
+        (() => {
+            const by = {}; ws.forEach((r) => { const k = reasonFa(r.reason_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.quantity) || 0) / 1000; });
+            const ent = Object.entries(by).sort((a, b) => b[1] - a[1]); const tot = ent.reduce((s, x) => s + x[1], 0) || 1;
+            let cum = 0; const cums = ent.map((x) => { cum += x[1]; return Math.round(cum / tot * 1000) / 10; });
+            biDraw('bi-pareto-ws', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'تن', data: ent.map((x) => Math.round(x[1] * 1000) / 1000), backgroundColor: 'rgba(217,119,6,.8)', borderColor: BI_COLORS.amber, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
+        })();
+        // ۳) روند تناژ سالم
+        (() => {
+            const bk = biBuckets();
+            const ser = biSeries(bd, 'produced_at', (r) => Number(r.net_weight_kg) || 0, bk).map((x) => ({ lab: x.lab, v: Math.round(x.v / 100) / 10 }));
+            biDraw('bi-ton', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: 'تن سالم', data: ser.map((x) => x.v), borderColor: BI_COLORS.green, backgroundColor: 'rgba(5,150,105,.12)', borderWidth: 2.5, pointRadius: 2, tension: .35, fill: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
+        })();
+        // ۴) روند راندمان مواد (تن سالم ÷ تن شمش تجمعی روز)
+        (() => {
+            const bk = biBuckets();
+            const ton = biSeries(bd, 'produced_at', (r) => Number(r.net_weight_kg) || 0, bk);
+            const inp = biSeries(bl, 'received_at', (r) => Number(r.initial_weight_kg) || 0, bk, true);
+            const ser = ton.map((x, i) => ({ lab: x.lab, v: (inp[i].v > 0) ? Math.round(x.v / inp[i].v * 1000) / 10 : null }));
+            biDraw('bi-yield', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: 'راندمان ٪', data: ser.map((x) => x.v), borderColor: BI_COLORS.teal, backgroundColor: 'rgba(14,116,144,.12)', borderWidth: 2.5, pointRadius: 2, tension: .35, spanGaps: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: Object.assign({}, ax.y, { max: 110 }) } }) });
+        })();
+        // ۵) روند درصد ضایعات
+        (() => {
+            const bk = biBuckets();
+            const ton = biSeries(bd, 'produced_at', (r) => Number(r.net_weight_kg) || 0, bk);
+            const wst = biSeries(ws, 'timestamp', (r) => Number(r.quantity) || 0, bk, true);
+            const ser = ton.map((x, i) => ({ lab: x.lab, v: (x.v + wst[i].v) > 0 ? Math.round(wst[i].v / (x.v + wst[i].v) * 1000) / 10 : 0 }));
+            biDraw('bi-scrap', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: '٪ ضایعات', data: ser.map((x) => x.v), borderColor: BI_COLORS.red, backgroundColor: 'rgba(220,38,38,.1)', borderWidth: 2.5, pointRadius: 2, tension: .35, fill: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
+        })();
+        // ۶) روند پذیرش QC
+        (() => {
+            const bk = biBuckets();
+            const ser = bk.map((b) => {
+                const dd = bd.filter((r) => { const d = new Date(r.produced_at); return !isNaN(d.getTime()) && d >= b.s && d <= b.e && biSizeOk(r) && (r.quality_status === 'APPROVED' || r.quality_status === 'REJECTED'); });
+                return { lab: b.lab, v: dd.length ? Math.round(dd.filter((r) => r.quality_status === 'APPROVED').length / dd.length * 1000) / 10 : null };
+            });
+            biDraw('bi-qc', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: '٪ پذیرش', data: ser.map((x) => x.v), borderColor: BI_COLORS.navy, backgroundColor: 'rgba(15,42,67,.1)', borderWidth: 2.5, pointRadius: 2, tension: .35, spanGaps: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: Object.assign({}, ax.y, { max: 105 }) } }) });
+        })();
+        // ۷) توزیع تولید بر اساس سایز
+        (() => {
+            const by = {}; pr.forEach((r) => { if (!biSizeOk(r)) return; const k = productFa(r.product_id || (r.rebar_size ? 'RB-' + r.rebar_size : '')); by[k] = (by[k] || 0) + (Number(r.good_quantity) || 0); });
+            const ent = Object.entries(by).sort((a, b) => b[1] - a[1]);
+            biDraw('bi-size', { type: 'doughnut', data: { labels: ent.map((x) => x[0]), datasets: [{ data: ent.map((x) => x[1]), backgroundColor: biPal, borderColor: biDark ? '#10293c' : '#fff', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '58%', plugins: { legend: { position: 'left', labels: { color: ax.textColor, font: { size: 10 }, boxWidth: 12 } }, tooltip: biTip() } } });
+        })();
+        // ۸) مقایسه شیفت‌ها
+        (() => {
+            const sh = { 'shift-morning-301': { l: 'صبح', good: 0, min: 0 }, 'shift-night-302': { l: 'شب', good: 0, min: 0 } };
+            pr.forEach((r) => { const k = sh[r.shift_id] ? r.shift_id : null; if (k && biSizeOk(r)) sh[k].good += Number(r.good_quantity) || 0; });
+            dt.forEach((r) => { const k = sh[r.shift_id] ? r.shift_id : null; if (k) sh[k].min += Number(r.duration_minutes) || 0; });
+            const labels = Object.keys(sh).map((k) => sh[k].l);
+            biDraw('bi-shift', { type: 'bar', data: { labels: labels, datasets: [{ label: 'شاخه سالم', data: Object.keys(sh).map((k) => sh[k].good), backgroundColor: 'rgba(14,116,144,.85)', borderRadius: 5 }, { label: 'دقایق توقف', data: Object.keys(sh).map((k) => sh[k].min), backgroundColor: 'rgba(249,115,22,.85)', borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y } }) });
+        })();
+        // ۹) روند MTTR / MTBF
+        (() => {
+            const bk = biBuckets();
+            const un = dt.filter((r) => Number(r.is_unplanned));
+            const ser = bk.map((b) => {
+                const rows = un.filter((r) => { const d = new Date(r.start_time); return !isNaN(d.getTime()) && d >= b.s && d <= b.e; });
+                const min = rows.reduce((s, r) => s + (Number(r.duration_minutes) || 0), 0);
+                const n = rows.length;
+                const stepMin = (biState.gran === 'week' ? 7 : 1) * 720;
+                return { lab: b.lab, mttr: n ? Math.round(min / n) : null, mtbf: n ? Math.max(0, Math.round((stepMin - min) / n)) : null };
+            });
+            biDraw('bi-mttr', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: 'MTTR (میانگین رفع خراب)', data: ser.map((x) => x.mttr), borderColor: BI_COLORS.red, borderWidth: 2.5, pointRadius: 2, tension: .3, spanGaps: true }, { label: 'MTBF (میانگین فاصله خرابی)', data: ser.map((x) => x.mtbf), borderColor: BI_COLORS.green, borderWidth: 2.5, pointRadius: 2, tension: .3, spanGaps: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: Object.assign({}, ax.y, { ticks: { color: ax.textColor, font: { size: 10 }, callback: (v) => groupFa(v) } }) } }) });
+        })();
+        // ۱۰) ایستگاه‌های پرتوقف Top5
+        (() => {
+            const by = {}; dt.forEach((r) => { const k = stationFa(r.machine_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.duration_minutes) || 0); });
+            const ent = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            biDraw('bi-stations', { type: 'bar', data: { labels: ent.map((x) => x[0]), datasets: [{ label: 'دقیقه', data: ent.map((x) => x[1]), backgroundColor: 'rgba(15,42,67,.85)', borderColor: BI_COLORS.navy, borderWidth: 1, borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { indexAxis: 'y', scales: { x: Object.assign({}, ax.y, { grid: { color: ax.gridColor } }), y: { grid: { display: false }, ticks: { color: ax.textColor, font: { size: 10 } } } } }) });
+        })();
+    }
+    function biWire() {
+        const r = document.getElementById('biRange'); const s = document.getElementById('biSize'); const g = document.getElementById('biGran'); const d = document.getElementById('biDarkBtn');
+        if (r) r.addEventListener('change', () => buildBI());
+        if (s) s.addEventListener('change', () => buildBI());
+        if (g) g.addEventListener('change', () => buildBI());
+        if (d) d.addEventListener('click', () => { biDark = !biDark; try { localStorage.setItem('febi.dark', biDark ? '1' : '0'); } catch (e) { } document.getElementById('biDarkBtn').textContent = biDark ? '☀️ تم' : '🌙 تم'; document.body.classList.toggle('bi-dark', biDark); buildBI(); });
+        if (d) d.textContent = biDark ? '☀️ تم' : '🌙 تم';
+    }
+    biWire();
+    const __biOrigLoad = loadAnalytics;
+    loadAnalytics = async function () { await __biOrigLoad(); try { if (!cache.bundles) { try { cache.bundles = await getJson('/api/bundles'); } catch (e) { } } if (!cache.billets) { try { cache.billets = await getJson('/api/billets'); } catch (e) { } } buildBI(); } catch (e) { /* بی‌ضرر */ } };
+})();
+// ===== FEAT-BI-2 (end) =====
 </script></body></html>
