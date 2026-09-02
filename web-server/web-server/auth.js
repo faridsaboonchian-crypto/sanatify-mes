@@ -117,30 +117,78 @@ const LOGIN_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ورود | Sanatify MES</title>
+<title>ورود | صنعتی فای — Sanatify MES</title>
+<link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
 <style>
+  /* ===== FEAT-UI-4a: صفحهٔ ورود صنعتی — گرادیان سرمه‌ای + بافت خطوط کارخانه ===== */
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Vazirmatn, Tahoma, "Segoe UI", Arial, sans-serif; background: #1e3d59; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-  .card { background: #fff; border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 380px; box-shadow: 0 20px 50px rgba(0,0,0,.35); }
-  .logo { font-size: 20px; font-weight: bold; color: #1e3d59; text-align: center; margin-bottom: 6px; }
-  .sub { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 24px; }
-  label { display: block; font-size: 12px; color: #475569; margin-bottom: 6px; font-weight: bold; }
-  input { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 14px; margin-bottom: 16px; text-align: right; }
-  input:focus { outline: none; border-color: #1e3d59; box-shadow: 0 0 0 3px rgba(30,61,89,.12); }
+  html, body { min-height: 100vh; }
+  body {
+    font-family: Vazirmatn, Tahoma, "Segoe UI", Arial, sans-serif;
+    background:
+      repeating-linear-gradient(115deg, rgba(127,180,216,.05) 0 2px, transparent 2px 46px),
+      repeating-linear-gradient(0deg, rgba(127,180,216,.035) 0 1px, transparent 1px 90px),
+      linear-gradient(135deg, #0b1622 0%, #0f2a43 55%, #12385a 100%);
+    color: #e6f1f9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+  }
+  .brand-top { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; animation: ui4a-in .55s ease-out both; }
+  .brand-mark {
+    width: 46px; height: 46px; border-radius: 13px;
+    background: linear-gradient(135deg, #0e7490, #0f2a43);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; box-shadow: 0 8px 22px rgba(2, 8, 20, .45), inset 0 0 0 1px rgba(127,180,216,.35);
+  }
+  .brand-name { font-size: 19px; font-weight: 800; letter-spacing: .2px; }
+  .brand-name small { display: block; font-size: 10.5px; font-weight: 400; color: #7fb4d8; margin-top: 2px; }
+  .card {
+    background: #fff; color: #0f172a;
+    border-radius: 18px; padding: 30px 28px 24px; width: 100%; max-width: 400px;
+    box-shadow: 0 24px 60px rgba(2, 8, 20, .5);
+    border-top: 4px solid #0e7490;
+    animation: ui4a-in .55s ease-out .08s both;
+  }
+  @keyframes ui4a-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .brand-top, .card { animation: none; } }
+  .card-head { text-align: center; margin-bottom: 22px; }
+  .card-head .t { font-size: 15.5px; font-weight: 800; color: #0f2a43; }
+  .card-head .s { font-size: 11.5px; color: #64748b; margin-top: 4px; }
+  label { display: block; font-size: 12px; color: #334155; margin-bottom: 6px; font-weight: bold; }
+  input { width: 100%; padding: 11px 13px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 14px; margin-bottom: 16px; text-align: right; background: #f8fafc; transition: border-color .2s, box-shadow .2s; }
+  input:focus { outline: none; border-color: #0e7490; background: #fff; box-shadow: 0 0 0 3px rgba(14,116,144,.15); }
   .pw-wrap { position: relative; margin-bottom: 16px; }
   .pw-wrap input { margin-bottom: 0; padding-left: 46px; }
   .eye { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; color: #64748b; padding: 6px; border-radius: 6px; }
   .eye:hover { background: #f1f5f9; }
-  button.submit { width: 100%; background: #1e3d59; color: #fff; border: none; padding: 12px; border-radius: 10px; font-family: inherit; font-size: 15px; font-weight: bold; cursor: pointer; }
+  button.submit {
+    width: 100%; padding: 12px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, #0e7490, #0f2a43); color: #fff;
+    font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer;
+    box-shadow: 0 6px 16px rgba(14,116,144,.35); transition: filter .2s, transform .1s;
+  }
+  button.submit:hover { filter: brightness(1.12); }
+  button.submit:active { transform: translateY(1px); }
   button.submit:disabled { opacity: .6; cursor: not-allowed; }
   .err { color: #dc2626; font-size: 12px; text-align: center; min-height: 18px; margin-bottom: 10px; }
-  .foot { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 18px; }
+  .secure-note { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 10.5px; color: #64748b; margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+  .page-foot { margin-top: 20px; text-align: center; font-size: 10.5px; color: #7fb4d8; opacity: .85; line-height: 1.9; animation: ui4a-in .55s ease-out .16s both; }
+  .page-foot .sep { margin: 0 7px; opacity: .5; }
 </style>
 </head>
 <body>
+  <div class="brand-top">
+    <div class="brand-mark" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 20V9l6 4V9l6 4V5l8 4v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" fill="#7fd3e8"/><path d="M2 20V9l6 4V9l6 4V5l8 4v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" stroke="#e6f7ff" stroke-width="1.1"/><rect x="5" y="16" width="2.6" height="2.6" fill="#0f2a43"/><rect x="10.5" y="16" width="2.6" height="2.6" fill="#0f2a43"/><rect x="16" y="16" width="2.6" height="2.6" fill="#0f2a43"/></svg></div>
+    <div class="brand-name">صنعتی فای (Sanatify)<small>سامانه یکپارچه MES صنعت فولاد</small></div>
+  </div>
   <form class="card" id="lf" autocomplete="on">
-    <div class="logo">🏭 Sanatify MES</div>
-    <div class="sub">ورود به پنل گزارش‌گیری و ردیابی</div>
+    <div class="card-head">
+      <div class="t">ورود به سامانه</div>
+      <div class="s">گزارش‌گیری و ردیابی تولید فولاد</div>
+    </div>
     <label for="u">نام کاربری</label>
     <input id="u" name="username" type="text" autocomplete="username" required />
     <label for="p">رمز عبور</label>
@@ -149,9 +197,10 @@ const LOGIN_HTML = `<!DOCTYPE html>
       <button type="button" class="eye" id="eye" tabindex="-1" aria-label="نمایش یا پنهان‌کردن رمز">👁</button>
     </div>
     <div class="err" id="err"></div>
-    <button class="submit" id="btn" type="submit">ورود</button>
-    <div class="foot">دسترسی محدود به پرسنل مجاز — تمام ورودها ثبت می‌شود</div>
+    <button class="submit" id="btn" type="submit">ورود به پنل</button>
+    <div class="secure-note">🔒 دسترسی محدود به پرسنل مجاز — تمام ورودها ثبت می‌شود</div>
   </form>
+  <div class="page-foot">Sanatify MES v2.6<span class="sep">|</span>© ۱۴۰۵ صنعتی فای — تمام حقوق محفوظ است</div>
   <script>
     var f = document.getElementById('lf');
     var err = document.getElementById('err');
@@ -178,9 +227,9 @@ const LOGIN_HTML = `<!DOCTYPE html>
         if (o.body && o.body.ok) { window.location.href = '/'; return; }
         if (o.status === 429) { err.textContent = 'تلاش بیش از حد؛ لطفاً کمی صبر کنید.'; }
         else { err.textContent = 'نام کاربری یا رمز عبور اشتباه است.'; }
-        btn.disabled = false; btn.textContent = 'ورود';
+        btn.disabled = false; btn.textContent = 'ورود به پنل';
       })
-      .catch(function () { err.textContent = 'خطا در ارتباط با سرور.'; btn.disabled = false; btn.textContent = 'ورود'; });
+      .catch(function () { err.textContent = 'خطا در ارتباط با سرور.'; btn.disabled = false; btn.textContent = 'ورود به پنل'; });
     });
   </script>
 </body>
