@@ -249,7 +249,7 @@ const server = http.createServer((req, res) => {
                     timestamp: new Date().toISOString(),
                 };
                 if (!rec.heat_number || rec.rebar_size <= 0 || rec.yield_strength <= 0 || rec.tensile_strength <= 0) {
-                    return sendJson(res, { error: 'کد بچ، حجم، فشار هیدرواستاتیک و ضخامت لاینینگ الزامی است.' }, 400);
+                    return sendJson(res, { error: 'کد هیت، سایز میلگرد، ReH (تنش تسلیم) و Rm (مقاومت کششی) الزامی است.' }, 400);
                 }
                 const live = readLive();
                 live.quality_inspections = Array.isArray(live.quality_inspections) ? live.quality_inspections : [];
