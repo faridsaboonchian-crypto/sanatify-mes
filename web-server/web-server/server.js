@@ -267,6 +267,17 @@ const server = http.createServer((req, res) => {
                     yield_strength: Number(b.yield_strength) || 0,
                     tensile_strength: Number(b.tensile_strength) || 0,
                     elongation_percent: Number(b.elongation_percent) || 0,
+                    /* ===== FEAT-QC-3 (begin): فیلدهای اختیاری دستگاه تست کشش — سازگار با رکوردهای قدیمی ===== */
+                    sample_length_mm: Number(b.sample_length_mm) || 0,
+                    sample_weight_g: Number(b.sample_weight_g) || 0,
+                    nominal_diameter_mm: Number(b.nominal_diameter_mm) || 0,
+                    section_area_mm2: Number(b.section_area_mm2) || 0,
+                    yield_kgf: Number(b.yield_kgf) || 0,
+                    kg_per_m: Number(b.kg_per_m) || 0,
+                    rib_diameter_mm: Number(b.rib_diameter_mm) || 0,
+                    rib_height_mm: Number(b.rib_height_mm) || 0,
+                    ratio_rm_reh: Number(b.ratio_rm_reh) || 0,
+                    /* ===== FEAT-QC-3 (end) ===== */
                     bend_test_passed: Number(b.bend_test_passed) ? 1 : 0,
                     visual_inspection: Number(b.visual_inspection) ? 1 : 0,
                     operator_id: String(b.operator_id || (req.user && req.user.username) || '').trim(),
