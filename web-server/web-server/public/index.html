@@ -2276,7 +2276,7 @@ function buildFilterBar(tab) {
         const feux1Spark = (key, series, color, fmt) => {
             const cv = document.getElementById('spark-' + key); if (!cv || !window.Chart) return;
             if (sumSpark[key]) { try { sumSpark[key].destroy(); } catch (e) { } }
-            sumSpark[key] = new Chart(cv, { type: 'line', data: { labels: series.map((x) => x.lab), datasets: [{ data: series.map((x) => x.v), borderColor: color, backgroundColor: 'rgba(14,116,144,.14)', borderWidth: 2, tension: .35, pointRadius: 0, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => groupFa(fmt ? fmt(c.parsed.y) : c.parsed.y) } } }, scales: { x: { display: false }, y: { display: false } } } });
+            sumSpark[key] = new Chart(cv, { type: 'line', data: { labels: series.map((x) => x.lab), datasets: [{ data: series.map((x) => x.v), borderColor: ui4ChartSeriesColor(color), backgroundColor: ui4IsDark() ? 'rgba(127,180,216,.12)' : 'rgba(14,116,144,.14)' /* FIX-THEME-6a */, borderWidth: 2, tension: .35, pointRadius: 0, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => groupFa(fmt ? fmt(c.parsed.y) : c.parsed.y) } } }, scales: { x: { display: false }, y: { display: false } } } });
         };
         async function loadSummary() {
             const box = document.getElementById('kpiBox'); if (!box) return;
@@ -2343,6 +2343,12 @@ function buildFilterBar(tab) {
         function ui4ChartChrome() {
             const dark = document.body.classList.contains('theme-dark') || document.body.classList.contains('bi-dark');
             return { dark: dark, grid: dark ? 'rgba(148,163,184,.22)' : '#e2e8f0', tick: dark ? '#cbd5e1' : '#334155' };
+        }
+        /* FIX-THEME-6a: نسخهٔ روشن‌شدهٔ پالت روی پس‌زمینهٔ تیره — هیچ سری نامرئی نمی‌ماند */
+        function ui4ChartSeriesColor(c) {
+            if (!ui4IsDark()) return c;
+            const m = { '#059669': '#34d399', '#d97706': '#fbbf24', '#dc2626': '#f87171', '#0e7490': '#38bdf8', '#0f2a43': '#7fb4d8', '#1e3d59': '#7fb4d8', '#94a3b8': '#cbd5e1' };
+            return m[String(c).toLowerCase()] || c;
         }
         function buildAnalytics() {
             const chrome = ui4ChartChrome();
@@ -2780,6 +2786,10 @@ showRes();
     function buildBI() {
         if (currentTab !== 'analytics') return;
         biDark = ui4IsDark(); /* ===== FEAT-UI-4c: همگام‌سازی تم تحلیلی با تم سراسری ===== */
+        /* ===== FIX-THEME-6a: پالت تم‌آگاه — سرمه‌ای تیره روی کارت شب نامرئی بود ===== */
+        const ui4Pal = biDark
+            ? { navy: '#7fb4d8', sizePal: ['#38bdf8', '#fb923c', '#34d399', '#fbbf24', '#f87171', '#7fb4d8', '#c084fc', '#22d3ee'] }
+            : { navy: BI_COLORS.navy, sizePal: biPal };
         const sel = document.getElementById('biRange'); if (!sel) return;
         biState.size = document.getElementById('biSize').value;
         biState.gran = document.getElementById('biGran').value;
@@ -2794,14 +2804,14 @@ showRes();
             const by = {}; dt.forEach((r) => { const k = reasonFa(r.reason_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.duration_minutes) || 0); });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]); const tot = ent.reduce((s, x) => s + x[1], 0) || 1;
             let cum = 0; const cums = ent.map((x) => { cum += x[1]; return Math.round(cum / tot * 1000) / 10; });
-            biDraw('bi-pareto-dt', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'دقیقه توقف', data: ent.map((x) => x[1]), backgroundColor: BI_COLORS.red, borderColor: BI_COLORS.red, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
+            biDraw('bi-pareto-dt', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'دقیقه توقف', data: ent.map((x) => x[1]), backgroundColor: BI_COLORS.red, borderColor: BI_COLORS.red, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: ui4Pal.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
         })();
         // ۲) پارتو ضایعات (تن)
         (() => {
             const by = {}; ws.forEach((r) => { const k = reasonFa(r.reason_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.quantity) || 0) / 1000; });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]); const tot = ent.reduce((s, x) => s + x[1], 0) || 1;
             let cum = 0; const cums = ent.map((x) => { cum += x[1]; return Math.round(cum / tot * 1000) / 10; });
-            biDraw('bi-pareto-ws', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'تن', data: ent.map((x) => Math.round(x[1] * 1000) / 1000), backgroundColor: BI_COLORS.amber, borderColor: BI_COLORS.amber, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: BI_COLORS.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
+            biDraw('bi-pareto-ws', { data: { labels: ent.map((x) => x[0]), datasets: [{ type: 'bar', label: 'تن', data: ent.map((x) => Math.round(x[1] * 1000) / 1000), backgroundColor: BI_COLORS.amber, borderColor: BI_COLORS.amber, borderWidth: 1, borderRadius: 5, yAxisID: 'y' }, { type: 'line', label: '٪ تجمعی', data: cums, borderColor: ui4Pal.navy, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2.5, tension: .3, yAxisID: 'y1' }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: ax.y, y1: ax.y1 } }) });
         })();
         // ۳) روند تناژ سالم
         (() => {
@@ -2838,7 +2848,7 @@ showRes();
         (() => {
             const by = {}; pr.forEach((r) => { if (!biSizeOk(r)) return; const k = productFa(r.product_id || (r.rebar_size ? 'RB-' + r.rebar_size : '')); by[k] = (by[k] || 0) + (Number(r.good_quantity) || 0); });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]);
-            biDraw('bi-size', { type: 'doughnut', data: { labels: ent.map((x) => x[0]), datasets: [{ data: ent.map((x) => x[1]), backgroundColor: biPal, borderColor: biDark ? '#10293c' : '#fff', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '58%', plugins: { legend: { position: 'left', labels: { color: ax.textColor, font: { size: 10 }, boxWidth: 12 } }, tooltip: biTip() } } });
+            biDraw('bi-size', { type: 'doughnut', data: { labels: ent.map((x) => x[0]), datasets: [{ data: ent.map((x) => x[1]), backgroundColor: ui4Pal.sizePal, borderColor: biDark ? '#10293c' : '#fff', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '58%', plugins: { legend: { position: 'left', labels: { color: ax.textColor, font: { size: 10 }, boxWidth: 12 } }, tooltip: biTip() } } });
         })();
         // ۸) مقایسه شیفت‌ها
         (() => {
@@ -2865,7 +2875,7 @@ showRes();
         (() => {
             const by = {}; dt.forEach((r) => { const k = stationFa(r.machine_id || 'unknown'); by[k] = (by[k] || 0) + (Number(r.duration_minutes) || 0); });
             const ent = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 5);
-            biDraw('bi-stations', { type: 'bar', data: { labels: ent.map((x) => x[0]), datasets: [{ label: 'دقیقه', data: ent.map((x) => x[1]), backgroundColor: BI_COLORS.navy, borderColor: BI_COLORS.navy, borderWidth: 1, borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { indexAxis: 'y', scales: { x: Object.assign({}, ax.y, { grid: { color: ax.gridColor } }), y: { grid: { display: false }, ticks: { color: ax.textColor, font: { size: 10 } } } } }) });
+            biDraw('bi-stations', { type: 'bar', data: { labels: ent.map((x) => x[0]), datasets: [{ label: 'دقیقه', data: ent.map((x) => x[1]), backgroundColor: ui4Pal.navy, borderColor: ui4Pal.navy, borderWidth: 1, borderRadius: 5 }] }, options: Object.assign({}, baseOpts, { indexAxis: 'y', scales: { x: Object.assign({}, ax.y, { grid: { color: ax.gridColor } }), y: { grid: { display: false }, ticks: { color: ax.textColor, font: { size: 10 } } } } }) });
         })();
     }
     function biWire() {
