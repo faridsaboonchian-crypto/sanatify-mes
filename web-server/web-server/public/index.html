@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>سامانه یکپارچه Sanatify MES — پنل گزارش‌گیری</title>
+    <title>صنعتی فای (Sanatify) — سامانه یکپارچه MES فولاد</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
     </script>
@@ -34,8 +34,23 @@
             gap: 10px
         }
 
+        /* ===== FEAT-UI-4b: عنوان برندینگ — همیشه یک‌خطی، بدون به‌هم‌ریختگی ===== */
         header h1 {
-            font-size: 18px
+            font-size: clamp(13px, 1.75vw, 19px);
+            white-space: nowrap;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: .1px;
+        }
+
+        header h1 .bt-compact {
+            display: none
+        }
+
+        @media (max-width: 900px) {
+            header h1 .bt-full { display: none }
+            header h1 .bt-compact { display: inline }
         }
 
         .livebar {
@@ -886,7 +901,8 @@
 <body>
     <header>
         <button id="navToggle" aria-controls="nav" aria-expanded="true" aria-label="باز و بسته کردن منو" title="منو">☰</button>
-        <h1>🏭 سامانه یکپارچه Sanatify MES — پنل گزارش‌گیری و ردیابی</h1>
+        <!-- ===== FEAT-UI-4b: عنوان برندینگ — کامل در دسکتاپ، فشردهٔ یک‌خطی در موبایل ===== -->
+        <h1 class="brand-title"><span class="bt-full">سامانه یکپارچه صنعتی فای (Sanatify) — MES گزارش‌گیری و ردیابی تولید فولاد</span><span class="bt-compact">صنعتی فای (Sanatify) — MES فولاد</span></h1>
         <div class="userbar" id="userbar"></div>
         <div class="livebar">
             <span class="dot" id="liveDot" title="وضعیت اتصال زنده"></span>
