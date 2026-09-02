@@ -117,7 +117,7 @@
         <table id="reasons"></table>
         <h3>آخرین توقفات / خرابی‌ها</h3>
         <table id="list"></table>
-        <button onclick="exportCSV()">📊 خروجی اکسل (CSV)</button>
+        <button onclick="exportCSV()">📊 خروجی اکسل (Excel .xls)<!-- FIX-EXP-3c --></button>
     </div>
     <script>
         let DATA = null;
@@ -146,11 +146,15 @@
         }
         function exportCSV() {
             if (!DATA) return;
-            let csv = '\uFEFFتاریخ,علت,نوع,مدت(دقیقه),وضعیت\n';
-            (DATA.list || []).forEach(function (r) { csv += (r.start_time || '').slice(0, 10) + ',' + (r.reason_id || '-') + ',' + (r.is_unplanned ? 'اضطراری' : 'برنامه‌ریزی') + ',' + (r.duration_minutes != null ? r.duration_minutes : '') + ',' + (r.end_time ? 'بسته' : 'باز') + '\n'; });
+            /* ===== FIX-EXP-3c: خروجی تعمیرات به‌صورت HTML-table با پسوند .xls — باز شدن مستقیم در Excel ===== */
+            const esc2 = function (v) { return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+            const heads = ['تاریخ', 'علت', 'نوع', 'مدت (دقیقه)', 'وضعیت'];
+            let rowsHtml = '<tr>' + heads.map(function (h) { return '<th>' + esc2(h) + '</th>'; }).join('') + '</tr>';
+            (DATA.list || []).forEach(function (r) { rowsHtml += '<tr><td>' + esc2((r.start_time || '').slice(0, 10)) + '</td><td>' + esc2(r.reason_id || '-') + '</td><td>' + esc2(r.is_unplanned ? 'اضطراری' : 'برنامه‌ریزی') + '</td><td>' + esc2(r.duration_minutes != null ? r.duration_minutes : '') + '</td><td>' + esc2(r.end_time ? 'بسته' : 'باز') + '</td></tr>'; });
+            const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Report</x:Name><x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><style>table{border-collapse:collapse;font-family:Tahoma,Arial;font-size:11pt}th{background:#0f2a43;color:#fff;border:1px solid #94a3b8;padding:4px 8px;text-align:right}td{border:1px solid #94a3b8;padding:3px 8px;text-align:right}</style></head><body dir="rtl"><table>' + rowsHtml + '</table></body></html>';
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-            a.download = 'maintenance_report.csv'; a.click();
+            a.href = URL.createObjectURL(new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }));
+            a.download = 'maintenance_report.xls'; a.click();
         }
         load();
     </script>
