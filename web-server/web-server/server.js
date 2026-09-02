@@ -302,6 +302,417 @@ const server = http.createServer((req, res) => {
         });
         return;
     }
+    // ================================================================
+    // ===== FEAT-PLAN-7 (begin): ماژول برنامه‌ریزی تولید + مشاور AI =====
+    // مدل داده: live.production_plans[] + live.power_outages[] (افزاینده، سازگار با live.json قدیمی)
+    // ================================================================
+    const PLAN_READ_ROLES = ['admin', 'planner', 'manager', 'supervisor', 'operator'];
+    const PLAN_WRITE_ROLES = ['admin', 'planner'];
+    function planAudit(req, action, payload) { try { auditLog(req, 'plan.' + action, payload); } catch (e) { /* بی‌ضرر */ } }
+
+    function planSeenRequest(list, rid) { return rid ? (list || []).find((x) => x.request_id === rid) || null : null; }
+
+    /* تبدیل جلالی→میلادی (الگوریتم فشردهٔ Borkowski/Bradley — برای پنجرهٔ PM و قطعی برق) */
+    function planJalaliToTs(dateStr, hour) {
+        const s = String(dateStr || '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)).trim();
+        const m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/); if (!m) return null;
+        let jy = Number(m[1]), jm = Number(m[2]), jd = Number(m[3]);
+        if (jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
+        jy += 1595;
+        let days = -355668 + (365 * jy) + ((jy / 33 | 0) * 8) + (((jy % 33) + 3) / 4 | 0) + jd + ((jm < 7) ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
+        let gy = 400 * (days / 146097 | 0);
+        days %= 146097;
+        if (days > 36524) {
+            gy += 100 * ((--days) / 36524 | 0);
+            days %= 36524;
+            if (days >= 365) days++;
+        }
+        gy += 4 * (days / 1461 | 0);
+        days %= 1461;
+        if (days > 365) {
+            gy += ((days - 1) / 365 | 0);
+            days = (days - 1) % 365;
+        }
+        let gd = days + 1;
+        const leap = (gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0);
+        const ml = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        let gm = 0;
+        while (gm < 12 && gd > ml[gm]) { gd -= ml[gm]; gm++; }
+        const d = new Date(Date.UTC(gy, gm, gd, Number(hour) || 6, 0, 0));
+        return isNaN(d.getTime()) ? null : d.toISOString();
+    }
+
+    /* تناژ واقعی هر برنامه از دادهٔ زندهٔ تولید (production_logs + باندل‌ها) */
+    function planActualTonnage(live, plan) {
+        if (!plan || !plan.start_ts) return null;
+        const fromMs = Date.parse(plan.start_ts); if (isNaN(fromMs)) return null;
+        const days = plan.period === 'week' ? 7 : (plan.period === 'shift' ? 0.5 : 1);
+        const toMs = fromMs + days * 86400000;
+        const target = String(plan.product_size || '');
+        const sizeNum = Number((target.match(/(\d+)/) || [])[1] || NaN);
+        let kg = 0;
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
+            const t = Date.parse(b.produced_at || ''); if (isNaN(t) || t < fromMs || t >= toMs) return;
+            if (Number.isFinite(sizeNum) && Number(b.rebar_size) !== sizeNum) return;
+            kg += Number(b.net_weight_kg) || 0;
+        });
+        (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
+            const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < fromMs || t >= toMs) return;
+            const pid = String(p.product_id || '');
+            const pidSize = Number((pid.match(/^RB-(\d+)$/) || [])[1] || NaN);
+            if (Number.isFinite(pidSize)) { if (Number.isFinite(sizeNum) && pidSize !== sizeNum) return; kg += (Number(p.good_quantity) || 0) * 0.0061654 * pidSize * pidSize * 12; }
+            else if (pid === target) { const s = Number((target.match(/(\d+)/) || [])[1] || 0); kg += (Number(p.good_quantity) || 0) * 0.0061654 * s * s * 12; }
+        });
+        return Math.round(kg / 10) / 100;
+    }
+
+    /* موتور داخلی: هیوریستیک آماری روی دادهٔ زنده — همیشه فعال (فقط سایزهای میلگرد معتبر ۶..۵۰) */
+    function planningEngineInternal(live) {
+        const now = Date.now();
+        const dAgo = (n) => new Date(now - n * 86400000).toISOString();
+        const d90 = dAgo(90), d30 = dAgo(30);
+        const rounds = (x) => Math.round((Number(x) || 0) * 100) / 100;
+        const REBAR_MIN = 6, REBAR_MAX = 50;
+
+        /* ۱) نرخ تولید واقعی per سایز (kg/day فعال) — باندل‌ها + لاگ تولید (فرمول جرم فقط برای سایز معتبر) */
+        const sizes = {};
+        const bump = (k) => (sizes[k] = sizes[k] || { kg: 0, bars: 0, daysMap: {} });
+        const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
+            const t = Date.parse(b.produced_at || ''); if (isNaN(t) || t < d90) return;
+            const n = Number(b.rebar_size); const g = String(b.rebar_grade || '');
+            let k = null;
+            if (n >= REBAR_MIN && n <= REBAR_MAX) k = 'RB-' + n;
+            else if (g === '5SP') k = '5SP';
+            if (!k) return;
+            const s = bump(k); s.kg += Number(b.net_weight_kg) || 0; s.daysMap[dayOf(t)] = 1;
+        });
+        (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
+            const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < d90) return;
+            const pid = String(p.product_id || ''); if (!pid) return;
+            const m = /^RB-(\d+)$/.exec(pid); const n = m ? Number(m[1]) : NaN;
+            if (Number.isFinite(n) && n >= REBAR_MIN && n <= REBAR_MAX) {
+                const s = bump('RB-' + n); const q = Number(p.good_quantity) || 0;
+                s.bars += q; s.kg += q * 0.0061654 * n * n * 12; s.daysMap[dayOf(t)] = 1;
+            } else if (pid === '5SP') {
+                const s = bump('5SP'); s.bars += Number(p.good_quantity) || 0; s.daysMap[dayOf(t)] = 1;
+            }
+        });
+        Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.kgPerDay = s.kg / s.days; delete s.daysMap; });
+
+        /* ۲) ضایعات وزنی ۳۰ روز */
+        let wasteKg = 0;
+        (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => {
+            const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return;
+            wasteKg += Number(w.quantity) || 0;
+        });
+        let prodKg30 = 0;
+        Object.keys(sizes).forEach((k) => { prodKg30 += sizes[k].kg; });
+        const wastePct = (prodKg30 + wasteKg) > 0 ? wasteKg / (prodKg30 + wasteKg) * 100 : 0;
+
+        /* ۳) الگوی توقفات — سهم برق/برقی */
+        let elecMin = 0, allDays = {};
+        (Array.isArray(live.downtime_logs) ? live.downtime_logs : []).forEach((r) => {
+            const t = Date.parse(r.start_time || ''); if (isNaN(t) || t < d90) return;
+            allDays[dayOf(t)] = 1;
+            const rid = String(r.reason_id || '').toLowerCase();
+            if (rid.indexOf('electr') !== -1 || rid.indexOf('power') !== -1) elecMin += Number(r.duration_minutes) || 0;
+        });
+        const obsDays = Math.max(1, Object.keys(allDays).length);
+        const elecPctDay = Math.min(25, (elecMin / obsDays) / 720 * 100);
+
+        /* ۴) قطعی برق ثبت‌شدهٔ آینده */
+        const outages = (Array.isArray(live.power_outages) ? live.power_outages : []).filter((o) => { const t = Date.parse(o.start_ts || ''); return !isNaN(t) && t >= now && t <= now + 7 * 86400000; });
+        let outageCut = 0; const outageReasons = [];
+        outages.forEach((o) => {
+            const h = Number(o.duration_hours) || 0;
+            outageCut = Math.max(outageCut, Math.min(50, h / 12 * 100));
+            outageReasons.push('قطعی برنامه‌ریزی‌شدهٔ برق (' + toFa(String(o.note || (o.shift_id === 'shift-night-302' ? 'شیفت شب' : 'شیفت صبح')) ) + ' — ' + fa(h) + ' ساعت)');
+        });
+
+        /* ۵) PM نزدیک (۷ روز آینده) — بدون تکرار */
+        let pmCut = 0; const pmSeen = {}; const pmReasons = [];
+        (Array.isArray(live.pm_plans) ? live.pm_plans : []).forEach((p) => {
+            const last = p.last_done ? planJalaliToTs(p.last_done, 6) : null; if (!last) return;
+            const due = Date.parse(last) + (Number(p.interval_days) || 30) * 86400000;
+            const key = String(p.title || p.machine_id || '');
+            if (due >= now && due <= now + 7 * 86400000 && !pmSeen[key]) {
+                pmSeen[key] = 1;
+                pmCut = Math.min(15, pmCut + 5);
+                pmReasons.push('PM «' + key + '» در هفتهٔ پیش‌رو سررسید می‌شود');
+            }
+        });
+
+        /* ۶) موجودی مواد اولیه از انبار (شمش/بیلت) */
+        let rawAvail = 0;
+        const items = Array.isArray(live.inventory_items) ? live.inventory_items : [];
+        const rawIds = {};
+        items.forEach((it) => {
+            const hay = String((it.name || '') + ' ' + (it.code || '') + ' ' + (it.category || '')).toLowerCase();
+            if (hay.indexOf('شمش') !== -1 || hay.indexOf('بیلت') !== -1 || hay.indexOf('billet') !== -1) rawIds[it.id] = 1;
+        });
+        if (Object.keys(rawIds).length) {
+            const sum = (arr, f) => (Array.isArray(arr) ? arr : []).reduce((s, r) => s + (rawIds[r.item_id] ? (Number(f(r)) || 0) : 0), 0);
+            rawAvail = Math.max(0, sum(live.inventory_receipts, (r) => r.quantity) - sum(live.inventory_issues, (r) => r.quantity) + sum(live.inventory_adjustments, (r) => r.delta_quantity));
+        }
+        let billetAvgKg = 0, billetCount = 0;
+        (Array.isArray(live.billets) ? live.billets : []).forEach((b) => { const w = Number(b.initial_weight_kg) || 0; if (w > 0) { billetAvgKg += w; billetCount++; } });
+        billetAvgKg = billetCount ? Math.round(billetAvgKg / billetCount) : 0;
+
+        const capFactor = Math.max(0.35, 1 - elecPctDay / 100 - outageCut / 100 - pmCut / 100);
+        const keyFa = (k) => (k.indexOf('RB-') === 0 ? 'میلگرد سایز ' + k.slice(3) : (k === '5SP' ? 'میلگرد گرید 5SP' : k));
+
+        const ranked = Object.keys(sizes).filter((k) => sizes[k].kg > 0).sort((a, b) => sizes[b].kg - sizes[a].kg).slice(0, 3);
+        let suggestions = [];
+        ranked.forEach((k, i) => {
+            const s = sizes[k];
+            let target = (s.kgPerDay / 1000) * capFactor * 0.9; /* تن */
+            let capped = null;
+            if (rawAvail > 0) { const cap = (rawAvail * 0.8) / 1000; if (target > cap) { capped = cap; target = cap; } }
+            target = Math.min(2000, Math.max(0.1, rounds(target)));
+            const conf = Math.min(92, Math.max(45, Math.round(40 + s.days * 1.8 - wastePct / 2 + (rawAvail > 0 ? 4 : 0))));
+            const reasons = [];
+            reasons.push('میانگین تولید واقعی ' + keyFa(k) + ' در ۹۰ روز اخیر: ' + fa(rounds(s.kgPerDay / 1000)) + ' تن در روز');
+            if (elecPctDay > 1) reasons.push('کاهش ' + fa(Math.round(elecPctDay)) + '٪ ظرفیت به‌دلیل الگوی قطعی/اختلال برق');
+            outageReasons.slice(0, 2).forEach((r) => reasons.push(r));
+            pmReasons.slice(0, 2).forEach((r) => reasons.push(r));
+            if (wastePct > 0.5) reasons.push('نرخ ضایعات ۳۰ روز اخیر: ' + fa(Math.round(wastePct * 10) / 10) + '٪ لحاظ شد');
+            if (capped !== null) reasons.push('سقف موجودی قابل‌مصرف مواد اولیه انبار: ' + fa(rounds(rawAvail / 1000)) + ' تن');
+            else if (rawAvail > 0) reasons.push('موجودی قابل‌مصرف مواد اولیه: ' + fa(rounds(rawAvail / 1000)) + ' تن — محدودیتی نیست');
+            else reasons.push('موجودی شمش در انبار ثبت نشده؛ بر پایهٔ ورودی اخیر شمش تخمین زده شد');
+            reasons.push('ضریب اطمینان بر پایهٔ ' + fa(s.days) + ' روز دادهٔ واقعی');
+            suggestions.push({
+                title: 'پیشنهاد ' + fa(i + 1) + ' — ' + keyFa(k),
+                period: 'day', product_size: k, target_tonnage: target,
+                required_billets: billetAvgKg > 200 ? Math.ceil(target * 1000 / billetAvgKg) : null,
+                machine: 'st-form', shift_id: i === 1 ? 'shift-night-302' : 'shift-morning-301',
+                priority: i === 0 ? 'high' : 'medium', confidence: conf,
+                reasons: Array.from(new Set(reasons)).slice(0, 6),
+                engine: 'internal', based_on: 'نرخ ۹۰ روزه + ضایعات ۳۰ روزه + توقفات + PM + انبار + قطعی برق'
+            });
+        });
+        if (ranked.length) {
+            const best = suggestions[0];
+            suggestions.push({
+                title: 'گزینهٔ شیفت شب — ' + best.title.replace(/^پیشنهاد \d+ — /, ''),
+                period: 'shift', product_size: best.product_size,
+                target_tonnage: Math.max(0.1, rounds(best.target_tonnage * 0.45)),
+                required_billets: best.required_billets ? Math.max(1, Math.ceil(best.required_billets * 0.45)) : null,
+                machine: best.machine, shift_id: 'shift-night-302', priority: 'low',
+                confidence: Math.max(40, best.confidence - 12),
+                reasons: Array.from(new Set(['نصف ظرفیت روزانه برای شیفت شب (الگوی دو شیفت ۱۲ساعته)'].concat(best.reasons.slice(1, 3)))),
+                engine: 'internal', based_on: best.based_on
+            });
+        }
+        if (!suggestions.length) {
+            suggestions.push({
+                title: 'دادهٔ کافی برای پیشنهاد تناژ موجود نیست',
+                period: 'day', product_size: '', target_tonnage: 1, required_billets: null,
+                machine: 'st-form', shift_id: 'shift-morning-301', priority: 'low', confidence: 15,
+                reasons: ['تا امروز تولیدی با سایز استاندارد میلگرد (۶ تا ۵۰) یا گرید 5SP ثبت نشده است.', 'می‌توانید برنامه را دستی ثبت کنید؛ با ثبت دادهٔ تولید، موتور پیشنهاد دقیق‌تر می‌شود.'],
+                engine: 'internal', based_on: 'بدون دادهٔ کافی'
+            });
+        }
+        return { engine: 'internal', ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), suggestions: suggestions.slice(0, 5), meta: { wastePct: rounds(wastePct), elecPctDay: rounds(elecPctDay), pmCut, outageCut, rawAvailKg: rounds(rawAvail), obsDays } };
+    }
+    function toFa(s) { return String(s == null ? '' : s).replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d))); }
+    function fa(x) { return toFa(String(x)); }
+
+    /* لایهٔ AI خارجی (سازگار OpenAI) — اختیاری؛ در هر خطا fallback به داخلی */
+    async function planningEngineExternal(live, internal) {
+        const url = process.env.AI_PLANNING_URL;
+        const key = process.env.AI_PLANNING_KEY || '';
+        if (!url || typeof fetch !== 'function') return null;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => { try { ctrl.abort(); } catch (e) { } }, 12000);
+        try {
+            const stats = {
+                generated_at: new Date().toISOString(),
+                sizes_90d: Object.keys(internal.meta || {}).length ? undefined : undefined,
+                internal_suggestions: internal.suggestions,
+                meta: internal.meta
+            };
+            const r = await fetch(url, {
+                method: 'POST', signal: ctrl.signal,
+                headers: Object.assign({ 'Content-Type': 'application/json' }, key ? { 'Authorization': 'Bearer ' + key } : {}),
+                body: JSON.stringify({
+                    model: process.env.AI_PLANNING_MODEL || 'gpt-4o-mini',
+                    temperature: 0.2,
+                    messages: [
+                        { role: 'system', content: 'تو مشاور برنامه‌ریزی تولید یک کارخانه نورد میلگرد فولاد ایران هستی. فقط و فقط یک آرایه JSON معتبر برگردان (بدون متن اضافه) با ۳ تا ۵ پیشنهاد. هر آیتم: {"title":"فارسی","period":"day|shift|week","product_size":"RB-8..32 یا 5SP","target_tonnage":عدد تن,"required_billets":عدد یا null,"machine":"st-form","shift_id":"shift-morning-301|shift-night-302","priority":"low|medium|high","confidence":عدد 0..100,"reasons":["دلایل فارسی انسانی‌خوان"]}. بر پایهٔ دادهٔ آماری کارخانه که برایت می‌فرستم.' },
+                        { role: 'user', content: JSON.stringify(stats) }
+                    ]
+                })
+            });
+            if (!r.ok) return null;
+            const j = await r.json();
+            const txt = j && j.choices && j.choices[0] && j.choices[0].message ? String(j.choices[0].message.content || '') : '';
+            const m = txt.match(/\[[\s\S]*\]/); if (!m) return null;
+            let arr; try { arr = JSON.parse(m[0]); } catch (e) { return null; }
+            if (!Array.isArray(arr)) return null;
+            const out = arr.filter((x) => x && x.product_size && Number(x.target_tonnage) > 0).slice(0, 5).map((x) => ({
+                title: String(x.title || 'پیشنهاد هوش مصنوعی').slice(0, 120),
+                period: ['day', 'shift', 'week'].indexOf(x.period) !== -1 ? x.period : 'day',
+                product_size: String(x.product_size).slice(0, 24),
+                target_tonnage: Math.round(Number(x.target_tonnage) * 100) / 100,
+                required_billets: Number(x.required_billets) > 0 ? Math.round(Number(x.required_billets)) : null,
+                machine: String(x.machine || 'st-form').slice(0, 40),
+                shift_id: ['shift-morning-301', 'shift-night-302'].indexOf(x.shift_id) !== -1 ? x.shift_id : 'shift-morning-301',
+                priority: ['low', 'medium', 'high'].indexOf(x.priority) !== -1 ? x.priority : 'medium',
+                confidence: Math.min(99, Math.max(5, Math.round(Number(x.confidence) || 60))),
+                reasons: (Array.isArray(x.reasons) ? x.reasons : []).slice(0, 6).map((s) => String(s).slice(0, 200)),
+                engine: 'ai', based_on: 'AI_PLANNING_URL'
+            }));
+            return out.length ? out : null;
+        } catch (e) { return null; } finally { clearTimeout(timer); }
+    }
+
+    /* ===== endpointهای برنامه‌ریزی ===== */
+    if (req.method === 'GET' && pathname === '/api/planning/plans') {
+        if (!auth.requireRole(req, PLAN_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ برنامه‌ریزی برای نقش شما مجاز نیست.' }, 403);
+        const live = readLive();
+        const plans = (Array.isArray(live.production_plans) ? live.production_plans : []).slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        plans.forEach((p) => { p.actual_tonnage = planActualTonnage(live, p); });
+        return sendJson(res, { ok: true, plans });
+    }
+    if (req.method === 'POST' && pathname === '/api/planning/plans') {
+        if (!auth.requireRole(req, PLAN_WRITE_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت برنامه فقط برای برنامه‌ریز/مدیر مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر: JSON نادرست است.' }, 400); }
+            const live = readLive();
+            const rid = String(b.request_id || '').slice(0, 64);
+            const dup = planSeenRequest(live.production_plans, rid);
+            if (dup) { planAudit(req, 'duplicate', { id: dup.id }); return sendJson(res, { ok: true, duplicate: true, plan: dup }); }
+            const plan = {
+                id: 'plan-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                request_id: rid || null,
+                period: ['day', 'shift', 'week'].indexOf(b.period) !== -1 ? b.period : 'day',
+                product_size: String(b.product_size || '').trim().slice(0, 24),
+                target_tonnage: Math.round((Number(b.target_tonnage) || 0) * 100) / 100,
+                required_billets: Number(b.required_billets) > 0 ? Math.round(Number(b.required_billets)) : null,
+                machine: String(b.machine || 'st-form').slice(0, 40),
+                shift_id: ['shift-morning-301', 'shift-night-302'].indexOf(b.shift_id) !== -1 ? b.shift_id : null,
+                start_date_j: String(b.start_date_j || '').trim().slice(0, 10),
+                start_ts: String(b.start_ts || '').trim(),
+                status: 'draft',
+                priority: ['low', 'medium', 'high'].indexOf(b.priority) !== -1 ? b.priority : 'medium',
+                source: ['manual', 'smart', 'ai'].indexOf(b.source) !== -1 ? b.source : 'manual',
+                smart_meta: b.smart_meta && typeof b.smart_meta === 'object' ? { confidence: Number(b.smart_meta.confidence) || null, reasons: Array.isArray(b.smart_meta.reasons) ? b.smart_meta.reasons.slice(0, 8) : [], based_on: String(b.smart_meta.based_on || '').slice(0, 200), engine: String(b.smart_meta.engine || '').slice(0, 40) } : null,
+                notes: String(b.notes || '').slice(0, 400),
+                created_by: (req.user && (req.user.name || req.user.username)) || '?',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+            if (!plan.product_size || !(plan.target_tonnage > 0)) return sendJson(res, { error: 'سایز محصول و تناژ هدف (بزرگ‌تر از صفر) الزامی است.' }, 400);
+            live.production_plans = Array.isArray(live.production_plans) ? live.production_plans : [];
+            live.production_plans.push(plan);
+            live.generated_at = new Date().toISOString();
+            writeJson(LIVE_FILE, live);
+            cache.data = null; cache.at = 0;
+            planAudit(req, 'create', { id: plan.id, size: plan.product_size, target: plan.target_tonnage, source: plan.source });
+            return sendJson(res, { ok: true, plan }, 201);
+        }).catch((e) => sendJson(res, { error: 'خطا در ثبت برنامه: ' + (e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/planning/plans') {
+        if (!auth.requireRole(req, Array.from(new Set(PLAN_WRITE_ROLES.concat(['supervisor']))))) return sendJson(res, { error: 'دسترسی غیرمجاز: ویرایش برنامه مجاز نیست.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر: JSON نادرست است.' }, 400); }
+            const live = readLive();
+            live.production_plans = Array.isArray(live.production_plans) ? live.production_plans : [];
+            const p = live.production_plans.find((x) => x.id === String(b.id || '')); if (!p) return sendJson(res, { error: 'برنامهٔ موردنظر یافت نشد.' }, 404);
+            const role = String((req.user && req.user.role) || 'viewer');
+            const action = String(b.action || 'update');
+            const canWrite = PLAN_WRITE_ROLES.indexOf(role) !== -1;
+            if (action === 'start') {
+                if (!(canWrite || role === 'supervisor')) return sendJson(res, { error: 'فقط سرپرست/برنامه‌ریز/مدیر می‌تواند برنامه را «در حال اجرا» کند.' }, 403);
+                if (p.status !== 'approved') return sendJson(res, { error: 'فقط برنامهٔ «تأییدشده» قابل شروع است.' }, 400);
+                p.status = 'in_progress';
+            } else if (action === 'approve') {
+                if (!canWrite) return sendJson(res, { error: 'تأیید برنامه فقط برای برنامه‌ریز/مدیر مجاز است.' }, 403);
+                if (p.status !== 'draft') return sendJson(res, { error: 'فقط برنامهٔ پیش‌نویس قابل تأیید است.' }, 400);
+                p.status = 'approved';
+            } else if (action === 'complete') {
+                if (!canWrite) return sendJson(res, { error: 'تکمیل برنامه فقط برای برنامه‌ریز/مدیر مجاز است.' }, 403);
+                if (p.status !== 'in_progress') return sendJson(res, { error: 'فقط برنامهٔ «در حال اجرا» قابل تکمیل است.' }, 400);
+                p.status = 'done';
+            } else if (action === 'cancel') {
+                if (!canWrite) return sendJson(res, { error: 'لغو برنامه فقط برای برنامه‌ریز/مدیر مجاز است.' }, 403);
+                if (p.status === 'done') return sendJson(res, { error: 'برنامهٔ تکمیل‌شده قابل لغو نیست.' }, 400);
+                p.status = 'cancelled';
+            } else {
+                if (!canWrite) return sendJson(res, { error: 'ویرایش برنامه فقط برای برنامه‌ریز/مدیر مجاز است.' }, 403);
+                if (p.status !== 'draft') return sendJson(res, { error: 'فقط برنامهٔ پیش‌نویس قابل ویرایش است.' }, 400);
+                if (b.target_tonnage !== undefined) p.target_tonnage = Math.round((Number(b.target_tonnage) || 0) * 100) / 100;
+                if (b.required_billets !== undefined) p.required_billets = Number(b.required_billets) > 0 ? Math.round(Number(b.required_billets)) : null;
+                if (b.priority !== undefined && ['low', 'medium', 'high'].indexOf(b.priority) !== -1) p.priority = b.priority;
+                if (b.shift_id !== undefined && ['shift-morning-301', 'shift-night-302'].indexOf(b.shift_id) !== -1) p.shift_id = b.shift_id;
+                if (b.notes !== undefined) p.notes = String(b.notes).slice(0, 400);
+                if (!(p.target_tonnage > 0)) return sendJson(res, { error: 'تناژ هدف باید بزرگ‌تر از صفر باشد.' }, 400);
+            }
+            p.updated_at = new Date().toISOString();
+            live.generated_at = new Date().toISOString();
+            writeJson(LIVE_FILE, live);
+            cache.data = null; cache.at = 0;
+            planAudit(req, action, { id: p.id, by: role });
+            return sendJson(res, { ok: true, plan: p });
+        }).catch((e) => sendJson(res, { error: 'خطا در ویرایش برنامه: ' + (e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'GET' && pathname === '/api/planning/suggest') {
+        if (!auth.requireRole(req, PLAN_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز: پیشنهاد هوشمند برای نقش شما مجاز نیست.' }, 403);
+        const live = readLive();
+        const internal = planningEngineInternal(live);
+        planningEngineExternal(live, internal).then((ai) => {
+            const used = ai && ai.length ? { engine: 'ai', suggestions: ai } : { engine: (process.env.AI_PLANNING_URL ? 'internal (fallback)' : 'internal'), suggestions: internal.suggestions };
+            return sendJson(res, { ok: true, generated_at: new Date().toISOString(), ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), engine: used.engine, suggestions: used.suggestions, meta: internal.meta });
+        }).catch(() => sendJson(res, { ok: true, generated_at: new Date().toISOString(), ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), engine: 'internal', suggestions: internal.suggestions, meta: internal.meta }));
+        return;
+    }
+    if (req.method === 'GET' && pathname === '/api/planning/outage') {
+        if (!auth.requireRole(req, PLAN_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive();
+        const manual = (Array.isArray(live.power_outages) ? live.power_outages : []).slice().sort((a, b) => String(b.start_ts || '').localeCompare(String(a.start_ts || ''))).slice(0, 50);
+        let elecMin = 0, elecCount = 0;
+        (Array.isArray(live.downtime_logs) ? live.downtime_logs : []).forEach((r) => {
+            const rid = String(r.reason_id || '').toLowerCase();
+            if (rid.indexOf('electr') !== -1 || rid.indexOf('power') !== -1) { elecMin += Number(r.duration_minutes) || 0; elecCount++; }
+        });
+        return sendJson(res, { ok: true, manual, pattern: { count: elecCount, minutes: elecMin } });
+    }
+    if (req.method === 'POST' && pathname === '/api/planning/outage') {
+        if (!auth.requireRole(req, PLAN_WRITE_ROLES)) return sendJson(res, { error: 'ثبت قطعی برق فقط برای برنامه‌ریز/مدیر مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر: JSON نادرست است.' }, 400); }
+            const live = readLive();
+            live.power_outages = Array.isArray(live.power_outages) ? live.power_outages : [];
+            const rid = String(b.request_id || '').slice(0, 64);
+            const dup = planSeenRequest(live.power_outages, rid);
+            if (dup) { planAudit(req, 'outage-duplicate', { id: dup.id }); return sendJson(res, { ok: true, duplicate: true, outage: dup }); }
+            const ts = Date.parse(String(b.start_ts || ''));
+            if (isNaN(ts)) return sendJson(res, { error: 'تاریخ و ساعت شروع قطعی نامعتبر است.' }, 400);
+            const o = {
+                id: 'out-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                request_id: rid || null,
+                start_ts: new Date(ts).toISOString(),
+                duration_hours: Math.min(24, Math.max(0.5, Number(b.duration_hours) || 1)),
+                shift_id: ['shift-morning-301', 'shift-night-302'].indexOf(b.shift_id) !== -1 ? b.shift_id : null,
+                scope: 'shift',
+                note: String(b.note || '').slice(0, 200),
+                created_by: (req.user && (req.user.name || req.user.username)) || '?',
+                created_at: new Date().toISOString()
+            };
+            live.power_outages.push(o);
+            live.generated_at = new Date().toISOString();
+            writeJson(LIVE_FILE, live);
+            cache.data = null; cache.at = 0;
+            planAudit(req, 'outage-create', { id: o.id, hours: o.duration_hours });
+            return sendJson(res, { ok: true, outage: o }, 201);
+        }).catch((e) => sendJson(res, { error: 'خطا در ثبت قطعی: ' + (e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    // ===== FEAT-PLAN-7 (end) =====
+
     // ===== FIX-INV-0-HARDENING: حذف endpoint تکراری مرده (نسخهٔ دوم POST /api/entry/quality) =====
 
     // ===== ✅ ADDITIVE — W5: ثبت تعمیرات/PM + برنامهٔ PM =====

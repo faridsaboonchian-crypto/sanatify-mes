@@ -828,6 +828,8 @@
         #nav button[data-tab="balance"]::before { content: "⚖️"; }
         #nav button[data-tab="warehouse"]::before { content: "📦"; }
         #nav button[data-tab="maintenance"]::before { content: "🔧"; }
+        /* FEAT-PLAN-7 */
+        #nav button[data-tab="planning"]::before { content: "🗓️"; }
         #nav button.nav-soon {
             width: 100%;
             text-align: right;
@@ -1007,6 +1009,46 @@
         body.theme-dark .userbar .ulogout { background: rgba(255, 255, 255, .14); }
         /* ===== FIX-UI-4e (end) ===== */
         /* ===== FEAT-UI-4c (end) ===== */
+        /* ===== FEAT-PLAN-7 (begin): UI برنامه‌ریزی تولید ===== */
+        .plan-engine { font-size: 11px; font-weight: normal; color: #0e7490; background: rgba(14, 116, 144, .12); padding: 2px 10px; border-radius: 10px; }
+
+        body.theme-dark .plan-engine { color: #38bdf8; background: rgba(56, 189, 248, .12); }
+
+        .plan-suggest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+        .plan-card { background: #f8fafc; border: 1px solid #e2e8f0; border-right: 4px solid #0e7490; border-radius: 10px; padding: 12px; }
+
+        body.theme-dark .plan-card { background: #0e2233; border-color: #1d3a55; }
+
+        .plan-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+
+        .plan-card-head strong { font-size: 13px; color: #0f2a43; }
+
+        body.theme-dark .plan-card-head strong { color: #dbe7f3; }
+
+        .plan-conf { height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+
+        body.theme-dark .plan-conf { background: #1d3a55; }
+
+        .plan-conf > div { height: 100%; background: linear-gradient(90deg, #0e7490, #059669); }
+
+        .plan-card-target { font-size: 12px; color: #475569; margin-bottom: 8px; }
+
+        body.theme-dark .plan-card-target { color: #9fb3c8; }
+
+        .plan-reasons { margin: 0 0 10px; padding: 0 16px 0 0; font-size: 11.5px; color: #64748b; }
+
+        body.theme-dark .plan-reasons { color: #8aa6bd; }
+
+        .plan-reasons li { margin-bottom: 3px; }
+
+        .plan-actions button { margin: 1px; padding: 5px 9px; font-size: 11px; }
+
+        .plan-outage-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 6px; font-size: 12px; }
+
+        body.theme-dark .plan-outage-row { border-color: #1d3a55; }
+
+        /* ===== FEAT-PLAN-7 (end) ===== */
         /* ===== FEAT-BI-2 (end) ===== */</style>
 </head>
 
@@ -1044,7 +1086,7 @@
         <button data-tab="warehouse">انبار و موجودی</button>
         <button data-tab="maintenance">تعمیرات و PM</button>
         <div class="nav-group">برنامه‌ریزی</div>
-        <button class="nav-soon" disabled title="در فاز بعدی فعال می‌شود">🗓️ برنامه‌ریزی — به‌زودی</button>
+        <button data-tab="planning">🗓️ برنامه‌ریزی تولید</button>
     </nav>
     <main>
         <div class="filter-panel" id="filterPanel" style="display:none">
@@ -1643,6 +1685,84 @@
                 </div>
 
             </div>
+        </section>
+<section id="tab-planning" class="hidden">
+            <!-- ===== FEAT-PLAN-7 (begin): ماژول برنامه‌ریزی تولید متصل به AI ===== -->
+            <div class="panel">
+                <h2>🗓️ برنامه‌ریزی تولید <span class="plan-engine" id="planEngineChip">در حال بارگذاری…</span></h2>
+                <div class="toolbar">
+                    <button class="act" id="btnPlanSuggest">🤖 پیشنهادهای هوشمند</button>
+                    <button class="act" id="btnPlanNew">➕ برنامهٔ جدید</button>
+                    <button class="act excel" id="expPlans">خروجی اکسل برنامه‌ها 📊</button>
+                </div>
+                <div id="planKpis" class="kpis"></div>
+            </div>
+            <div class="panel hidden" id="planSuggestPanel">
+                <h2>پیشنهادهای مشاور هوشمند <span class="plan-engine" id="planEngineChip2"></span></h2>
+                <div class="plan-suggest-grid" id="planSuggestBox"></div>
+                <p class="note">پیشنهادها بر پایهٔ نرخ واقعی تولید، ضایعات، الگوی توقفات و برق، پنجره‌های PM و موجودی مواد اولیه انبار محاسبه می‌شوند. «اعمال در فرم» فقط فرم را پیش‌پر می‌کند؛ ثبت نهایی با شماست.</p>
+            </div>
+            <div class="panel hidden" id="planFormPanel">
+                <h2 id="planFormTitle">ثبت برنامهٔ تولید</h2>
+                <div class="filters" id="planForm">
+                    <div class="frow">
+                        <label>تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="plDate" id="plDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>دوره: <select id="plPeriod" class="fsel">
+                            <option value="day" selected>روزانه</option>
+                            <option value="shift">شیفت</option>
+                            <option value="week">هفتگی</option>
+                        </select></label>
+                        <label>محصول: <select id="plProduct" class="fsel"></select></label>
+                        <label>تناژ هدف (تن): <input type="number" id="plTarget" min="0.1" step="0.1" style="width:100px"></label>
+                        <label>شمش موردنیاز: <input type="number" id="plBillets" min="0" step="1" style="width:90px"></label>
+                        <label>خط/ایستگاه: <select id="plMachine" class="fsel"></select></label>
+                        <label>شیفت: <select id="plShift" class="fsel">
+                            <option value="shift-morning-301">شیفت صبح</option>
+                            <option value="shift-night-302">شیفت شب</option>
+                        </select></label>
+                        <label>اولویت: <select id="plPriority" class="fsel">
+                            <option value="low">کم</option>
+                            <option value="medium" selected>متوسط</option>
+                            <option value="high">زیاد</option>
+                        </select></label>
+                    </div>
+                    <div class="frow"><span class="note" id="plMeta"></span></div>
+                    <div class="frow">
+                        <button class="act" id="plSave">ذخیرهٔ برنامه</button>
+                        <button class="fclear" id="plCancel">انصراف</button>
+                        <span class="note" id="plMsg"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>📅 تقویم قطعی برق</h2>
+                <div class="filters">
+                    <div class="frow">
+                        <label>تاریخ شروع (شمسی): <input type="text" inputmode="numeric" data-jp="plOut" id="plOutDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>ساعت شروع: <input type="time" id="plOutTime" value="08:00" style="width:110px"></label>
+                        <label>مدت (ساعت): <input type="number" id="plOutHours" min="0.5" max="24" step="0.5" value="4" style="width:80px"></label>
+                        <label>شیفت: <select id="plOutShift" class="fsel">
+                            <option value="shift-morning-301">شیفت صبح</option>
+                            <option value="shift-night-302">شیفت شب</option>
+                        </select></label>
+                        <label>شرح: <input type="text" id="plOutNote" placeholder="مثلاً قطعی منطقه‌ای" style="min-width:170px"></label>
+                        <button class="act" id="plOutSave">ثبت قطعی</button>
+                    </div>
+                    <div class="frow"><span class="note" id="plOutMsg"></span></div>
+                </div>
+                <div id="planOutageList"></div>
+                <p class="note">موتور برنامه‌ریزی، ظرفیت شیفت‌های دارای قطعی ثبت‌شده را خودکار کاهش می‌دهد؛ الگوی قطعی‌های اضطراری برق از سابقهٔ توقفات هم استخراج می‌شود.</p>
+            </div>
+            <div class="panel">
+                <h2>برنامه در برابر واقع</h2>
+                <div class="chart-container"><canvas id="plan-achv"></canvas></div>
+                <p class="note">درصد تحقق = تناژ واقعی (خودکار از دادهٔ تولید همان سایز در پنجرهٔ برنامه) ÷ تناژ هدف.</p>
+            </div>
+            <div class="panel">
+                <h2>لیست برنامه‌ها</h2>
+                <div class="tablewrap" style="max-height:420px;overflow-y:auto"><div id="planTableBox"></div></div>
+            </div>
+            <!-- ===== FEAT-PLAN-7 (end) ===== -->
         </section>
         <section id="tab-warehouse" class="hidden">
 
@@ -2434,7 +2554,7 @@ box.innerHTML = html;
                         'background:linear-gradient(90deg,#dc2626,#f87171);' +
                         'height:100%;border-radius:6px"></div>' +                        '</div>' +                        '</div>'                    );                }).join('') || '<div class="empty">داده‌ای نیست.</div>';            // ================================================================            // برنامه‌های PM            // ================================================================            const todayJ =                toEnDigits(                    new Date().toLocaleDateString('fa-IR')                ).trim();            const todayJdn = jdnOf(todayJ);            let ph =                '<thead><tr>' +                '<th>ایستگاه</th>' +                '<th>عنوان کار</th>' +                '<th>دوره (روز)</th>' +                '<th>آخرین انجام</th>' +                '<th>سررسید بعدی</th>' +                '<th>مسئول</th>' +                '<th>وضعیت</th>' +                '</tr></thead><tbody>';            const plans = cache.mntPlans || [];            if (!plans.length) {                ph +=                    '<tr>' +                    '<td colspan="7" class="empty">' +                    'برنامه‌ای تعریف نشده است.' +                    '</td>' +                    '</tr>';            }            plans.forEach((p) => {                const next =                    jalaliAddDays(                        p.last_done,                        Number(p.interval_days) || 30                    );                const nd = jdnOf(next);                let st =                    '<span class="chip ok">سالم</span>';                if (                    nd !== null &&                    todayJdn !== null                ) {                    const dn = nd - todayJdn;                    if (dn < 0) {                        st =                            '<span class="chip no">' +                            'عقب‌افتاده' +                            '</span>';                    } else if (dn <= 7) {                        st =                            '<span class="chip wait">' +                            'نزدیک سررسید' +                            '</span>';                    }                }                ph +=                    '<tr>' +                    '<td>' +                    esc(stationFa(p.machine_id)) +                    '</td>' +                    '<td>' +                    esc(p.title) +                    '</td>' +                    '<td>' +                    groupFa(p.interval_days) +                    '</td>' +                    '<td>' +                    esc(toFaDigits(p.last_done || '-')) +                    '</td>' +                    '<td>' +                    esc(toFaDigits(next || '-')) +                    '</td>' +                    '<td>' +                    esc(p.responsible || '-') +                    '</td>' +                    '<td>' +                    st +                    '</td>' +                    '</tr>';            });            document.getElementById('tbl-pmplans').innerHTML =                ph + '</tbody>';            // ================================================================            // تاریخچه تعمیرات و PM            // ================================================================            let lh =                '<thead><tr>' +                '<th>تاریخ</th>' +                '<th>ایستگاه</th>' +                '<th>نوع کار</th>' +                '<th>تکنسین</th>' +                '<th>قطعه</th>' +                '<th>مدت (دقیقه)</th>' +                '<th>توضیحات</th>' +                '</tr></thead><tbody>';            const logs = cache.mntLogs || [];            if (!logs.length) {                lh +=                    '<tr>' +                    '<td colspan="7" class="empty">' +                    'ثبتی نیست.' +                    '</td>' +                    '</tr>';            }            logs                .slice()                .reverse()                .forEach((r) => {                    lh +=                        '<tr>' +                        '<td>' +                        esc(toFaDigits(r.work_date)) +                        '</td>' +                        '<td>' +                        esc(stationFa(r.machine_id)) +                        '</td>' +                        '<td>' +                        esc(                            WORKTYPE_FA[r.work_type] ||                            r.work_type                        ) +                        '</td>' +                        '<td>' +                        esc(r.technician || '-') +                        '</td>' +                        '<td>' +                        esc(r.parts || '-') +                        '</td>' +                        '<td>' +                        groupFa(r.duration_minutes) +                        '</td>' +                        '<td>' +                        esc(r.description || '-') +                        '</td>' +                        '</tr>';                });            document.getElementById('tbl-mntlogs').innerHTML =                lh + '</tbody>';            // ================================================================            // آخرین توقفات / خرابی‌ها            // ================================================================            let th =                '<thead><tr>' +                '<th>تاریخ</th>' +                '<th>علت</th>' +                '<th>ایستگاه</th>' +                '<th>نوع</th>' +                '<th>مدت (دقیقه)</th>' +                '<th>وضعیت</th>' +                '</tr></thead><tbody>';            if (!rows.length) {                th +=                    '<tr>' +                    '<td colspan="6" class="empty">' +                    'داده‌ای ثبت نشده است.' +                    '</td>' +                    '</tr>';            }            rows                .slice()                .sort(                    (a, b) =>                        new Date(b.start_time) -                        new Date(a.start_time)                )                .forEach((r) => {                    th +=                        '<tr>' +                        '<td>' +                        fmtDate(r.start_time) +                        '</td>' +                        '<td>' +                        esc(reasonFa(r.reason_id)) +                        '</td>' +                        '<td>' +                        esc(stationFa(r.machine_id)) +                        '</td>' +                        '<td>' +                        (                            Number(r.is_unplanned)                                ? '<span class="chip no">اضطراری</span>'                                : '<span class="chip ok">برنامه‌ریزی</span>'                        ) +                        '</td>' +                        '<td>' +                        groupFa(r.duration_minutes) +                        '</td>' +                        '<td>' +                        (                            r.end_time                                ? 'بسته'                                : '<span class="chip wait">باز</span>'                        ) +                        '</td>' +                        '</tr>';                });            document.getElementById('tbl-maintenance').innerHTML =                th + '</tbody>';        }        // ================================================================        // Load Maintenance        // ================================================================        async function loadMaintenance() {            if (!cache.downtime) {                try {                    cache.downtime =                        await getJson(                            '/api/downtime'                        );                } catch (e) {                    cache.downtime = [];                }            }            try {                const x =                    await getJson(                        '/api/maintenance-extra'                    );                cache.mntLogs =                    x.logs || [];                cache.mntPlans =                    x.plans || [];            } catch (e) {                cache.mntLogs = [];                cache.mntPlans = [];            }            // پر کردن لیست ایستگاه‌ها            [                'fmStation',                'plStation'            ].forEach((id) => {                const el =                    document.getElementById(id);                if (el) {                    el.innerHTML =                        STATION_OPTIONS;                }            });            // پر کردن لیست PM            const pl =                document.getElementById(                    'fmPlan'                );            if (pl) {                pl.innerHTML =                    '<option value="">' +                    'بدون ارجاع به برنامه PM' +                    '</option>' +                    (                        cache.mntPlans || []                    )                        .map(                            (p) =>                                '<option value="' +
                                 esc(p.id) +
-                                '">' +                                esc(p.title) +                                ' — ' +                                esc(                                    stationFa(                                        p.machine_id                                    )                                ) +                                '</option>'                        )                        .join('');            }            renderMaintenance();        }        // ================================================================        // تغییر بازه گزارش        // ================================================================        document            .getElementById('mntRange')            .addEventListener(                'change',                renderMaintenance            );        // ================================================================        // باز/بسته کردن فرم تعمیر        // ================================================================        document            .getElementById(                'btnAddMaintenance'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'fmMsg'                    ).textContent = '';                }            );        // ================================================================        // باز/بسته کردن فرم PM        // ================================================================        document            .getElementById(                'btnAddPlan'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'plMsg'                    ).textContent = '';                }            );        // ================================================================        // Cancel        // ================================================================        document            .getElementById(                'fmCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .add('hidden');                }            );        document            .getElementById(                'plCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .add('hidden');                }            );        // ================================================================        // انتخاب PM → ایستگاه خودکار        // ================================================================        document            .getElementById(                'fmPlan'            )            .addEventListener(                'change',                () => {                    const id =                        document.getElementById(                            'fmPlan'                        ).value;                    const p =                        (                            cache.mntPlans || []                        ).find(                            (x) =>                                x.id === id                        );                    if (p) {                        document.getElementById(                            'fmStation'                        ).value =                            p.machine_id;                    }                }            );        // ================================================================        // ثبت تعمیر / PM        // ================================================================        document            .getElementById(                'fmSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'fmMsg'                        );                    msg.textContent = '';                    const workDate =                        readJalaliValue(                            document,                            'fmd'                        );                    const body = {                        machine_id:                            document.getElementById(                                'fmStation'                            ).value,                        work_type:                            document.getElementById(                                'fmType'                            ).value,                        plan_id:                            document.getElementById(                                'fmPlan'                            ).value,                        work_date:                            workDate,                        duration_minutes:                            Number(                                document.getElementById(                                    'fmDuration'                                ).value                            ) || 0,                        technician:                            document.getElementById(                                'fmTech'                            ).value.trim(),                        priority:                            document.getElementById(                                'fmPriority'                            ).value,                        parts:                            document.getElementById(                                'fmParts'                            ).value.trim(),                        cost:                            Number(                                document.getElementById(                                    'fmCost'                                ).value                            ) || 0,                        root_cause:                            document.getElementById(                                'fmRootCause'                            ).value.trim(),                        action_taken:                            document.getElementById(                                'fmAction'                            ).value.trim(),                        description:                            document.getElementById(                                'fmDesc'                            ).value.trim()                    };                    if (!workDate) {                        msg.textContent =                            'تاریخ کار را به‌صورت شمسی کامل وارد کنید.';                        return;                    }                    if (                        body.work_type === 'pm' &&                        !body.plan_id                    ) {                        msg.textContent =                            'برای ثبت PM باید یک برنامه PM انتخاب شود.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/entry/maintenance',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در ثبت تعمیرات';                            return;                        }                        document                            .getElementById(                                'formMaintenance'                            )                            .classList                            .add('hidden');                        [                            'fmDuration',                            'fmTech',                            'fmParts',                            'fmCost',                            'fmRootCause',                            'fmAction',                            'fmDesc'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document                            .querySelectorAll(                                '#formMaintenance input[data-jp]'                            )                            .forEach(                                (el) => {                                    el.value = '';                                }                            );                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'ثبت تعمیر/PM با موفقیت ذخیره شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        // ================================================================        // ثبت برنامه PM        // ================================================================        document            .getElementById(                'plSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'plMsg'                        );                    msg.textContent = '';                    const lastDone =                        readJalaliValue(                            document,                            'pllast'                        );                    const body = {                        machine_id:                            document.getElementById(                                'plStation'                            ).value,                        title:                            document.getElementById(                                'plTitle'                            ).value.trim(),                        interval_days:                            Number(                                document.getElementById(                                    'plInterval'                                ).value                            ),                        last_done:                            lastDone,                        responsible:                            document.getElementById(                                'plResp'                            ).value.trim(),                        priority:                            document.getElementById(                                'plPriority'                            ).value,                        notes:                            document.getElementById(                                'plNotes'                            ).value.trim()                    };                    if (                        !body.title ||                        !body.interval_days ||                        !lastDone                    ) {                        msg.textContent =                            'ایستگاه، عنوان، دوره و آخرین انجام الزامی است.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/pm/plan',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در تعریف PM';                            return;                        }                        document                            .getElementById(                                'formPlan'                            )                            .classList                            .add('hidden');                        [                            'plTitle',                            'plInterval',                            'plResp',                            'plNotes'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document.getElementById(                            'plLast'                        ).value = '';                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'برنامه PM با موفقیت ثبت شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        let WEB_ROLE = 'viewer';        const ROLE_CAN = { production: ['admin', 'operator', 'supervisor'], waste: ['admin', 'operator', 'supervisor'], downtime: ['admin', 'operator', 'engineering', 'supervisor'], quality: ['admin', 'quality', 'qc'], warehouse: ['admin', 'warehouse'], maintenance: ['admin', 'engineering', 'supervisor'] };        const ROLE_VIEW = {            admin: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse'],            manager: ['summary', 'analytics'], operator: ['production', 'waste', 'downtime'], supervisor: ['production', 'waste', 'downtime', 'maintenance'], warehouse: ['warehouse'], quality: ['quality'], qc: ['quality'], engineering: ['downtime', 'maintenance'],        };        async function loadRole() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' });                if (r.ok) { const j = await r.json(); if (j.ok && j.user) { WEB_ROLE = j.user.role || 'viewer'; WEB_USER = j.user; const fp = document.getElementById('fpBy'); if (fp) fp.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); const fq = document.getElementById('fqBy'); if (fq) fq.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); } }            } catch (e) { /* بی‌ضرر */ }            applyRoleUI();        }        function applyRoleUI() {            const can = (tab) =>                WEB_ROLE === 'admin' ||                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        view.indexOf(                            button.dataset.tab                        ) !== -1                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                view.indexOf(                    currentTab                ) === -1            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
+                                '">' +                                esc(p.title) +                                ' — ' +                                esc(                                    stationFa(                                        p.machine_id                                    )                                ) +                                '</option>'                        )                        .join('');            }            renderMaintenance();        }        // ================================================================        // تغییر بازه گزارش        // ================================================================        document            .getElementById('mntRange')            .addEventListener(                'change',                renderMaintenance            );        // ================================================================        // باز/بسته کردن فرم تعمیر        // ================================================================        document            .getElementById(                'btnAddMaintenance'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'fmMsg'                    ).textContent = '';                }            );        // ================================================================        // باز/بسته کردن فرم PM        // ================================================================        document            .getElementById(                'btnAddPlan'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'plMsg'                    ).textContent = '';                }            );        // ================================================================        // Cancel        // ================================================================        document            .getElementById(                'fmCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .add('hidden');                }            );        document            .getElementById(                'plCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .add('hidden');                }            );        // ================================================================        // انتخاب PM → ایستگاه خودکار        // ================================================================        document            .getElementById(                'fmPlan'            )            .addEventListener(                'change',                () => {                    const id =                        document.getElementById(                            'fmPlan'                        ).value;                    const p =                        (                            cache.mntPlans || []                        ).find(                            (x) =>                                x.id === id                        );                    if (p) {                        document.getElementById(                            'fmStation'                        ).value =                            p.machine_id;                    }                }            );        // ================================================================        // ثبت تعمیر / PM        // ================================================================        document            .getElementById(                'fmSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'fmMsg'                        );                    msg.textContent = '';                    const workDate =                        readJalaliValue(                            document,                            'fmd'                        );                    const body = {                        machine_id:                            document.getElementById(                                'fmStation'                            ).value,                        work_type:                            document.getElementById(                                'fmType'                            ).value,                        plan_id:                            document.getElementById(                                'fmPlan'                            ).value,                        work_date:                            workDate,                        duration_minutes:                            Number(                                document.getElementById(                                    'fmDuration'                                ).value                            ) || 0,                        technician:                            document.getElementById(                                'fmTech'                            ).value.trim(),                        priority:                            document.getElementById(                                'fmPriority'                            ).value,                        parts:                            document.getElementById(                                'fmParts'                            ).value.trim(),                        cost:                            Number(                                document.getElementById(                                    'fmCost'                                ).value                            ) || 0,                        root_cause:                            document.getElementById(                                'fmRootCause'                            ).value.trim(),                        action_taken:                            document.getElementById(                                'fmAction'                            ).value.trim(),                        description:                            document.getElementById(                                'fmDesc'                            ).value.trim()                    };                    if (!workDate) {                        msg.textContent =                            'تاریخ کار را به‌صورت شمسی کامل وارد کنید.';                        return;                    }                    if (                        body.work_type === 'pm' &&                        !body.plan_id                    ) {                        msg.textContent =                            'برای ثبت PM باید یک برنامه PM انتخاب شود.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/entry/maintenance',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در ثبت تعمیرات';                            return;                        }                        document                            .getElementById(                                'formMaintenance'                            )                            .classList                            .add('hidden');                        [                            'fmDuration',                            'fmTech',                            'fmParts',                            'fmCost',                            'fmRootCause',                            'fmAction',                            'fmDesc'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document                            .querySelectorAll(                                '#formMaintenance input[data-jp]'                            )                            .forEach(                                (el) => {                                    el.value = '';                                }                            );                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'ثبت تعمیر/PM با موفقیت ذخیره شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        // ================================================================        // ثبت برنامه PM        // ================================================================        document            .getElementById(                'plSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'plMsg'                        );                    msg.textContent = '';                    const lastDone =                        readJalaliValue(                            document,                            'pllast'                        );                    const body = {                        machine_id:                            document.getElementById(                                'plStation'                            ).value,                        title:                            document.getElementById(                                'plTitle'                            ).value.trim(),                        interval_days:                            Number(                                document.getElementById(                                    'plInterval'                                ).value                            ),                        last_done:                            lastDone,                        responsible:                            document.getElementById(                                'plResp'                            ).value.trim(),                        priority:                            document.getElementById(                                'plPriority'                            ).value,                        notes:                            document.getElementById(                                'plNotes'                            ).value.trim()                    };                    if (                        !body.title ||                        !body.interval_days ||                        !lastDone                    ) {                        msg.textContent =                            'ایستگاه، عنوان، دوره و آخرین انجام الزامی است.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/pm/plan',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در تعریف PM';                            return;                        }                        document                            .getElementById(                                'formPlan'                            )                            .classList                            .add('hidden');                        [                            'plTitle',                            'plInterval',                            'plResp',                            'plNotes'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document.getElementById(                            'plLast'                        ).value = '';                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'برنامه PM با موفقیت ثبت شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        let WEB_ROLE = 'viewer';        const ROLE_CAN = { production: ['admin', 'operator', 'supervisor'], waste: ['admin', 'operator', 'supervisor'], downtime: ['admin', 'operator', 'engineering', 'supervisor'], quality: ['admin', 'quality', 'qc'], warehouse: ['admin', 'warehouse'], maintenance: ['admin', 'engineering', 'supervisor'] };        const ROLE_VIEW = {            admin: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning'],            manager: ['summary', 'analytics', 'planning'], operator: ['production', 'waste', 'downtime', 'planning'], supervisor: ['production', 'waste', 'downtime', 'maintenance', 'planning'], planner: ['summary', 'analytics', 'planning'], warehouse: ['warehouse'], quality: ['quality'], qc: ['quality'], engineering: ['downtime', 'maintenance'],        };        async function loadRole() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' });                if (r.ok) { const j = await r.json(); if (j.ok && j.user) { WEB_ROLE = j.user.role || 'viewer'; WEB_USER = j.user; const fp = document.getElementById('fpBy'); if (fp) fp.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); const fq = document.getElementById('fqBy'); if (fq) fq.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); } }            } catch (e) { /* بی‌ضرر */ }            applyRoleUI();        }        function applyRoleUI() {            const can = (tab) =>                WEB_ROLE === 'admin' ||                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        view.indexOf(                            button.dataset.tab                        ) !== -1                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                view.indexOf(                    currentTab                ) === -1            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
                         view[0] +
                         '"]'                    );                if (first) {                    first.click();                } else {                    document                        .querySelectorAll(                            'main > section'                        )                        .forEach(                            section =>                                section.classList                                    .add('hidden')                        );                }            }        }        loadRole();        document.getElementById('applyFilter').addEventListener('click', () => {            activeFilter = { from: readJalaliValue(document, 'pf'), to: readJalaliValue(document, 'pt'), shift: document.getElementById('filterShift').value, product: document.getElementById('filterProduct').value };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('clearFilter').addEventListener('click', () => {            ['pf', 'pt'].forEach((p) => { document.querySelectorAll('input[data-jp="' + p + '"]').forEach((el) => { el.value = ''; }); });            document.getElementById('filterShift').value = 'all'; document.getElementById('filterProduct').value = 'all';            activeFilter = { from: '', to: '', shift: 'all', product: 'all' };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('btnAddProduction').addEventListener('click', () => { document.getElementById('formProduction').classList.toggle('hidden'); document.getElementById('fpMsg').textContent = ''; });        document.getElementById('fpCancel').addEventListener('click', () => { document.getElementById('formProduction').classList.add('hidden'); });        document.getElementById('fpSave').addEventListener('click', async () => {            const msg = document.getElementById('fpMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', product_id: document.getElementById('fpProduct').value, shift_id: document.getElementById('fpShift').value, good_quantity: Number(document.getElementById('fpQty').value), pallet_count: Number(document.getElementById('fpPallets').value) || 0, machine_id: 'st-pack', heat_number: document.getElementById('fpHeat').value.trim(), description: document.getElementById('fpDesc').value.trim() };            try {                const r = await fetch('/api/entry/production', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formProduction').classList.add('hidden');                ['fpQty', 'fpPallets', 'fpDesc', 'fpHeat'].forEach((id) => { document.getElementById(id).value = ''; });                await loadProduction(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت تولید با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddWaste').addEventListener('click', () => { document.getElementById('formWaste').classList.toggle('hidden'); document.getElementById('fwMsg').textContent = ''; });        document.getElementById('fwCancel').addEventListener('click', () => { document.getElementById('formWaste').classList.add('hidden'); });        document.getElementById('fwSave').addEventListener('click', async () => {            const msg = document.getElementById('fwMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', machine_id: document.getElementById('fwStation').value, waste_type: document.getElementById('fwType').value, reason_id: document.getElementById('fwReason').value, shift_id: document.getElementById('fwShift').value, quantity: Number(document.getElementById('fwQty').value), description: document.getElementById('fwDesc').value.trim() };            try {                const r = await fetch('/api/entry/waste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formWaste').classList.add('hidden');                ['fwQty', 'fwDesc'].forEach((id) => { document.getElementById(id).value = ''; });                await loadWaste(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت ضایعات با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddDowntime').addEventListener('click', () => { document.getElementById('formDowntime').classList.toggle('hidden'); document.getElementById('fdMsg').textContent = ''; });        document.getElementById('fdCancel').addEventListener('click', () => { document.getElementById('formDowntime').classList.add('hidden'); });        document.getElementById('fdSave').addEventListener('click', async () => {            const msg = document.getElementById('fdMsg'); msg.textContent = '';            const sd = readJalaliValue(document, 'fds'), ed = readJalaliValue(document, 'fde');            if (!sd || !ed) { msg.textContent = 'تاریخ شمسی را کامل وارد کنید (مثال: ۱۴۰۵/۰۵/۱۶).'; return; }            const start = parseJalaliDateTime(sd, document.getElementById('fdStartTime').value);            const end = parseJalaliDateTime(ed, document.getElementById('fdEndTime').value);            if (!start || !end) { msg.textContent = 'تاریخ یا ساعت نامعتبر است.'; return; }            const body = { reason_id: document.getElementById('fdReason').value, is_unplanned: Number(document.getElementById('fdType').value), shift_id: document.getElementById('fdShift').value, start_time: start.toISOString(), end_time: end.toISOString(), machine_id: document.getElementById('fdStation').value, description: document.getElementById('fdDesc').value.trim() };            try {                const r = await fetch('/api/entry/downtime', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formDowntime').classList.add('hidden');                ['fdStartTime', 'fdEndTime', 'fdDesc'].forEach((id) => { document.getElementById(id).value = ''; });                document.querySelectorAll('#formDowntime input[data-jp]').forEach((el) => { el.value = ''; });                await loadDowntime(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت توقف با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddQuality').addEventListener('click', () => { document.getElementById('formQuality').classList.toggle('hidden'); document.getElementById('fqMsg').textContent = ''; });        document.getElementById('fqCancel').addEventListener('click', () => { document.getElementById('formQuality').classList.add('hidden'); });        document.getElementById('fqSave').addEventListener('click', async () => {            const msg = document.getElementById('fqMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', heat_number: document.getElementById('fqHeat').value.trim(), rebar_size: Number(document.getElementById('fqSize').value), yield_strength: Number(document.getElementById('fqPressure').value), tensile_strength: Number(document.getElementById('fqLining').value), elongation_percent: Number(document.getElementById('fqDrop').value) || 0, /* ===== FEAT-QC-3: ارسال فیلدهای دستگاه ===== */ sample_length_mm: Number(document.getElementById('fqLen').value) || 0, sample_weight_g: Number(document.getElementById('fqWt').value) || 0, nominal_diameter_mm: Number(document.getElementById('fqDia').value) || 0, section_area_mm2: Number(document.getElementById('fqArea').value) || 0, yield_kgf: Number(document.getElementById('fqYkgf').value) || 0, kg_per_m: Number(document.getElementById('fqKgM').value) || 0, rib_diameter_mm: Number(document.getElementById('fqRibD').value) || 0, nafi_diameter_mm: Number(document.getElementById('fqNafi').value) || 0 /* FIX-QC-3b: نافی */, ratio_rm_reh: Number(document.getElementById('fqRatio').value) || 0, bend_test_passed: Number(document.getElementById('fqLeak').value), visual_inspection: Number(document.getElementById('fqVisual').value), description: document.getElementById('fqDesc').value.trim() };            try {                const r = await fetch('/api/entry/quality', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formQuality').classList.add('hidden');                ['fqHeat', 'fqPressure', 'fqLining', 'fqDrop', 'fqDesc', 'fqLen', 'fqWt', 'fqRibD', 'fqNafi'].forEach((id) => { document.getElementById(id).value = ''; });                await loadQuality(); lastOkAt = Date.now(); setLiveStatus(true); alert('آزمون QC با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        // ===== REVERT-STEEL-2: ارزیابی زندهٔ QC در فرم (هم‌تراز مانیتور دستگاه تست کشش) =====
         /* ===== FEAT-QC-3 (begin): محاسبات خودکار + ارزیابی زندهٔ هم‌تراز مانیتور دستگاه تست کشش ===== */
@@ -2907,4 +3027,342 @@ showRes();
     loadAnalytics = async function () { await __biOrigLoad(); try { if (!cache.bundles) { try { cache.bundles = await getJson('/api/bundles'); } catch (e) { } } if (!cache.billets) { try { cache.billets = await getJson('/api/billets'); } catch (e) { } } buildBI(); } catch (e) { /* بی‌ضرر */ } };
 })();
 // ===== FEAT-BI-2 (end) =====
+// ===== FEAT-PLAN-7 (begin): ماژول برنامه‌ریزی تولید متصل به AI (دولایه: داخلی + AI اختیاری) =====
+(function plan7() {
+    const PLAN_STATUS_FA = { draft: 'پیش‌نویس', approved: 'تأییدشده', in_progress: 'در حال اجرا', done: 'تکمیل‌شده', cancelled: 'لغوشده' };
+    const PLAN_STATUS_CHIP = { draft: 'wait', approved: 'ok', in_progress: 'wait', done: 'ok', cancelled: 'no' };
+    const PLAN_PERIOD_FA = { day: 'روزانه', shift: 'شیفت', week: 'هفتگی' };
+    const PLAN_PRIO_FA = { low: 'کم', medium: 'متوسط', high: 'زیاد' };
+    const PLAN_SOURCE_FA = { manual: 'دستی', smart: 'هوشمند', ai: 'هوش مصنوعی' };
+    const PLAN_SHIFT_FA = { 'shift-morning-301': 'شیفت صبح', 'shift-night-302': 'شیفت شب' };
+    const planCache = { plans: [], suggestions: [], engine: '', aiConfigured: false, meta: null, outages: [], pattern: null };
+    let planEditingId = null, planPrefillMeta = null, planChart = null;
+
+    const planCanWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'planner';
+    const planCanStart = () => planCanWrite() || WEB_ROLE === 'supervisor';
+    const planRid = () => 'req-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    const planFaNum = (x) => (x === null || x === undefined || x === '') ? '—' : toFaDigits(String(x));
+
+    /* FIX: تبدیل مستقیم میلادی→جلالی (d2g خروجی میلادی می‌دهد) */
+    function planGrgToJalali(gy, gm, gd) {
+        const gdm = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        let jy = (gy <= 1600) ? 0 : 979;
+        gy -= (gy <= 1600) ? 621 : 1600;
+        const gy2 = (gm > 2) ? (gy + 1) : gy;
+        let days = (365 * gy) + ((gy2 + 3) / 4 | 0) - ((gy2 + 99) / 100 | 0) + ((gy2 + 399) / 400 | 0) - 80 + gd + gdm[gm - 1];
+        jy += 33 * (days / 12053 | 0);
+        days %= 12053;
+        jy += 4 * (days / 1461 | 0);
+        days %= 1461;
+        if (days > 365) { jy += (days - 1) / 365 | 0; days = (days - 1) % 365; }
+        const jm = (days < 186) ? 1 + days / 31 | 0 : 7 + (days - 186) / 31 | 0;
+        const jd = 1 + ((days < 186) ? days % 31 : (days - 186) % 31);
+        return { jy: jy, jm: jm, jd: jd };
+    }
+    function planJalaliToday() {
+        try { const d = new Date(); const j = planGrgToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate()); const p2 = (n) => (n < 10 ? '0' : '') + n; return j.jy + '/' + p2(j.jm) + '/' + p2(j.jd); } catch (e) { return ''; }
+    }
+
+    function planFillProduct() {
+        const sel = document.getElementById('plProduct'); if (!sel) return;
+        const cur = sel.value;
+        const base = ['RB-8', 'RB-10', 'RB-12', 'RB-14', 'RB-16', 'RB-18', 'RB-20', 'RB-22', 'RB-25', 'RB-28', 'RB-32', '5SP'];
+        const legacy = [];
+        (cache.production || []).forEach((r) => { const v = String(r.product_id || '').trim(); if (v && base.indexOf(v) === -1 && legacy.indexOf(v) === -1) legacy.push(v); });
+        const ids = base.concat(legacy);
+        sel.innerHTML = ids.map((id) => '<option value="' + esc(id) + '">' + esc(productFa(id)) + '</option>').join('');
+        sel.value = ids.indexOf(cur) !== -1 ? cur : 'RB-14';
+    }
+
+    function planRenderEngineChips() {
+        const txt = planCache.aiConfigured
+            ? (planCache.engine === 'ai' ? '🤖 متصل به AI خارجی' : '⚙️ موتور داخلی (fallback از AI)')
+            : '⚙️ موتور داخلی';
+        ['planEngineChip', 'planEngineChip2'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
+    }
+
+    function planRenderKpis() {
+        const box = document.getElementById('planKpis'); if (!box) return;
+        const ps = planCache.plans.filter((p) => p.status !== 'cancelled');
+        let achSum = 0, achN = 0;
+        ps.forEach((p) => { if (p.target_tonnage > 0 && p.actual_tonnage != null) { achSum += (p.actual_tonnage / p.target_tonnage) * 100; achN++; } });
+        const avgAch = achN ? Math.round(achSum / achN * 10) / 10 : null;
+        const active = ps.filter((p) => p.status === 'approved' || p.status === 'in_progress').length;
+        const targetSum = Math.round(ps.reduce((s, p) => s + (Number(p.target_tonnage) || 0), 0) * 10) / 10;
+        box.innerHTML = [
+            { l: 'تعداد برنامه‌ها', v: groupFa(ps.length), c: '' },
+            { l: 'برنامه‌های فعال', v: groupFa(active), c: 'teal' },
+            { l: 'میانگین تحقق', v: avgAch == null ? '—' : toFaDigits(avgAch) + '٪', c: avgAch == null ? 'gray' : (avgAch >= 90 ? 'green' : avgAch >= 60 ? 'amber' : 'red') },
+            { l: 'جمع تناژ هدف (تن)', v: groupFa(targetSum), c: 'orange' }
+        ].map((k) => '<div class="kpi kpi2 ' + k.c + '"><div class="k">' + esc(k.l) + '</div><div class="v">' + k.v + '</div></div>').join('');
+    }
+
+    function planRenderSuggestions() {
+        const panel = document.getElementById('planSuggestPanel'); const box = document.getElementById('planSuggestBox');
+        if (!panel || !box) return;
+        if (!planCache.suggestions.length) { panel.classList.add('hidden'); return; }
+        panel.classList.remove('hidden');
+        box.innerHTML = planCache.suggestions.map((s, i) => {
+            const conf = Math.max(0, Math.min(100, Number(s.confidence) || 0));
+            const canApply = planCanWrite() && !!s.product_size && Number(s.target_tonnage) > 0; /* فقط نقش نوشتاری */
+            return '<div class="plan-card">'
+                + '<div class="plan-card-head"><strong>' + esc(s.title || 'پیشنهاد') + '</strong><span class="chip ' + (conf >= 70 ? 'ok' : conf >= 50 ? 'wait' : 'no') + '">' + toFaDigits(conf) + '٪ اطمینان</span></div>'
+                + '<div class="plan-conf"><div style="width:' + conf + '%"></div></div>'
+                + '<div class="plan-card-target">هدف: <b>' + groupFa(s.target_tonnage) + ' تن</b>'
+                + (s.product_size ? ' — ' + esc(productFa(s.product_size)) : '')
+                + ' — ' + (PLAN_PERIOD_FA[s.period] || 'روزانه')
+                + ' — ' + (PLAN_SHIFT_FA[s.shift_id] || 'بدون شیفت')
+                + ' — اولویت: ' + (PLAN_PRIO_FA[s.priority] || 'متوسط')
+                + (s.required_billets ? ' — شمش: ' + groupFa(s.required_billets) : '')
+                + '</div>'
+                + '<ul class="plan-reasons">' + (s.reasons || []).map((r) => '<li>' + esc(r) + '</li>').join('') + '</ul>'
+                + '<button class="act" data-plan-apply="' + i + '"' + (canApply ? '' : ' disabled title="' + (planCanWrite() ? 'قابل اعمال نیست' : 'فقط برنامه‌ریز/مدیر') + '"') + '>اعمال در فرم</button>'
+                + '</div>';
+        }).join('');
+    }
+
+    function planRenderOutage() {
+        const box = document.getElementById('planOutageList'); if (!box) return;
+        const pat = planCache.pattern || {};
+        let html = '<p class="note">الگوی قطعی برق از توقفات ۹۰ روز اخیر: <b>' + groupFa(pat.count || 0) + '</b> رویداد — <b>' + groupFa(pat.minutes || 0) + '</b> دقیقه</p>';
+        if (!planCache.outages.length) { html += '<div class="empty">قطعی برنامه‌ریزی‌شده‌ای ثبت نشده است.</div>'; box.innerHTML = html; return; }
+        html += planCache.outages.slice(0, 12).map((o) => '<div class="plan-outage-row"><span>' + fmtDate(o.start_ts) + '</span><span>مدت: <b>' + toFaDigits(o.duration_hours) + '</b> ساعت</span><span>' + (PLAN_SHIFT_FA[o.shift_id] || 'کل خط') + '</span><span>' + esc(o.note || '—') + '</span><span class="note">' + esc(o.created_by || '') + '</span></div>').join('');
+        box.innerHTML = html;
+    }
+
+    function planRenderChart() {
+        const cv = document.getElementById('plan-achv'); if (!cv || !window.Chart) return;
+        const rows = planCache.plans.filter((p) => p.status !== 'cancelled' && Number(p.target_tonnage) > 0).slice(0, 10).reverse();
+        const chrome = ui4ChartChrome();
+        const cT = ui4ChartSeriesColor('#0e7490'), cA = ui4ChartSeriesColor('#059669');
+        if (planChart) { try { planChart.destroy(); } catch (e) { } }
+        planChart = new Chart(cv, {
+            type: 'bar',
+            data: {
+                labels: rows.map((p) => toFaDigits(p.start_date_j || '—') + (p.shift_id ? ' | ' + PLAN_SHIFT_FA[p.shift_id] : '')),
+                datasets: [
+                    { label: 'هدف (تن)', data: rows.map((p) => Number(p.target_tonnage) || 0), backgroundColor: cT, borderRadius: 4 },
+                    { label: 'واقعی (تن)', data: rows.map((p) => (p.actual_tonnage == null ? 0 : p.actual_tonnage)), backgroundColor: cA, borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: {
+                    legend: { labels: { color: chrome.tick, font: { size: 11 }, boxWidth: 12 } },
+                    tooltip: { callbacks: { label: (c) => { const p = rows[c.dataIndex]; const base = c.dataset.label + ': ' + groupFa(c.parsed.y); const ach = p && p.target_tonnage ? ' | تحقق: ' + toFaDigits(Math.round((p.actual_tonnage || 0) / p.target_tonnage * 1000) / 10) + '٪' : ''; return base + ach; } } }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: chrome.tick, font: { size: 10 }, maxRotation: 35 } },
+                    y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick, font: { size: 10 } } }
+                }
+            }
+        });
+    }
+
+    function planRenderTable() {
+        const box = document.getElementById('planTableBox'); if (!box) return;
+        const rows = planCache.plans;
+        if (!rows.length) { box.innerHTML = '<div class="empty">هنوز برنامه‌ای ثبت نشده است؛ از «پیشنهادهای هوشمند» یا «برنامهٔ جدید» شروع کنید.</div>'; return; }
+        let html = '<table><thead><tr><th>تاریخ</th><th>دوره</th><th>محصول</th><th>هدف (تن)</th><th>شمش</th><th>خط</th><th>شیفت</th><th>واقعی (تن)</th><th>تحقق</th><th>وضعیت</th><th>اولویت</th><th>منبع</th><th>ثبت‌کننده</th><th>اقدام</th></tr></thead><tbody>';
+        rows.forEach((p) => {
+            const ach = (Number(p.target_tonnage) > 0 && p.actual_tonnage != null) ? Math.round(p.actual_tonnage / p.target_tonnage * 1000) / 10 : null;
+            const achCell = ach == null ? '—' : '<span class="chip ' + (ach >= 90 ? 'ok' : ach >= 60 ? 'wait' : 'no') + '">' + toFaDigits(ach) + '٪</span>';
+            const sm = p.smart_meta || {};
+            const src = (PLAN_SOURCE_FA[p.source] || p.source || '—') + (sm.engine ? ' <span class="note">(' + esc(sm.engine) + (sm.confidence ? ' ' + toFaDigits(sm.confidence) + '٪' : '') + ')</span>' : '');
+            let act = '';
+            if (p.status === 'draft' && planCanWrite()) act += '<button class="act" data-plan-act="approve" data-plan-id="' + esc(p.id) + '">تأیید</button> <button class="act" data-plan-edit="' + esc(p.id) + '">ویرایش</button>';
+            if (p.status === 'approved' && planCanStart()) act += (act ? ' ' : '') + '<button class="act" data-plan-act="start" data-plan-id="' + esc(p.id) + '">شروع اجرا</button>';
+            if (p.status === 'in_progress' && planCanWrite()) act += (act ? ' ' : '') + '<button class="act" data-plan-act="complete" data-plan-id="' + esc(p.id) + '">تکمیل</button>';
+            if ((p.status === 'draft' || p.status === 'approved') && planCanWrite()) act += (act ? ' ' : '') + '<button class="fclear" data-plan-act="cancel" data-plan-id="' + esc(p.id) + '">لغو</button>';
+            html += '<tr><td>' + esc(toFaDigits(p.start_date_j || '—')) + '</td><td>' + (PLAN_PERIOD_FA[p.period] || '—') + '</td><td>' + esc(productFa(p.product_size)) + '</td><td>' + groupFa(p.target_tonnage) + '</td><td>' + planFaNum(p.required_billets) + '</td><td>' + esc(stationFa(p.machine)) + '</td><td>' + (PLAN_SHIFT_FA[p.shift_id] || '—') + '</td><td>' + (p.actual_tonnage == null ? '—' : groupFa(p.actual_tonnage)) + '</td><td>' + achCell + '</td><td><span class="chip ' + PLAN_STATUS_CHIP[p.status] + '">' + PLAN_STATUS_FA[p.status] + '</span></td><td>' + (PLAN_PRIO_FA[p.priority] || '—') + '</td><td>' + src + '</td><td>' + esc(p.created_by || '—') + '</td><td class="plan-actions">' + (act || '—') + '</td></tr>';
+        });
+        box.innerHTML = html + '</tbody></table>';
+    }
+
+    function planOpenForm(prefill) {
+        const panel = document.getElementById('planFormPanel'); if (!panel) return;
+        panel.classList.remove('hidden');
+        planFillProduct();
+        const mach = document.getElementById('plMachine');
+        if (mach && !mach.options.length) mach.innerHTML = STATION_OPTIONS;
+        const today = planJalaliToday();
+        if (prefill) {
+            planEditingId = null; planPrefillMeta = prefill.meta || null;
+            document.getElementById('planFormTitle').textContent = 'ثبت برنامهٔ تولید (از پیشنهاد هوشمند)';
+            document.getElementById('plDate').value = toFaDigits(today);
+            document.getElementById('plPeriod').value = prefill.period || 'day';
+            document.getElementById('plProduct').value = prefill.product_size || 'RB-14';
+            document.getElementById('plTarget').value = prefill.target_tonnage || '';
+            document.getElementById('plBillets').value = prefill.required_billets || '';
+            document.getElementById('plMachine').value = STATIONS[prefill.machine] ? prefill.machine : 'st-form';
+            document.getElementById('plShift').value = prefill.shift_id || 'shift-morning-301';
+            document.getElementById('plPriority').value = prefill.priority || 'medium';
+            const meta = prefill.meta || {};
+            document.getElementById('plMeta').textContent = 'منبع: ' + (PLAN_SOURCE_FA[meta.source] || 'هوشمند') + (meta.confidence ? ' — اطمینان ' + toFaDigits(meta.confidence) + '٪' : '') + (meta.engine ? ' — موتور: ' + meta.engine : '');
+        } else {
+            planEditingId = null; planPrefillMeta = null;
+            document.getElementById('planFormTitle').textContent = 'ثبت برنامهٔ تولید';
+            document.getElementById('plDate').value = toFaDigits(today);
+            document.getElementById('plPeriod').value = 'day';
+            document.getElementById('plProduct').value = 'RB-14';
+            document.getElementById('plTarget').value = '';
+            document.getElementById('plBillets').value = '';
+            document.getElementById('plMachine').value = 'st-form';
+            document.getElementById('plShift').value = 'shift-morning-301';
+            document.getElementById('plPriority').value = 'medium';
+            document.getElementById('plMeta').textContent = '';
+        }
+        const msg = document.getElementById('plMsg'); if (msg) msg.textContent = '';
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function planSave() {
+        const msg = document.getElementById('plMsg'); msg.textContent = '';
+        const dj = readJalaliValue(document, 'plDate');
+        if (!dj) { msg.textContent = 'تاریخ شمسی معتبر وارد کنید (مثال: ۱۴۰۵/۰۶/۱۲).'; return; }
+        const target = Number(document.getElementById('plTarget').value);
+        if (!(target > 0)) { msg.textContent = 'تناژ هدف باید عددی بزرگ‌تر از صفر باشد.'; return; }
+        const startTs = parseJalaliDateTime(dj, '06:00');
+        const body = {
+            period: document.getElementById('plPeriod').value,
+            product_size: document.getElementById('plProduct').value,
+            target_tonnage: target,
+            required_billets: Number(document.getElementById('plBillets').value) || null,
+            machine: document.getElementById('plMachine').value,
+            shift_id: document.getElementById('plShift').value,
+            priority: document.getElementById('plPriority').value,
+            start_date_j: dj,
+            start_ts: startTs ? startTs.toISOString() : '',
+            notes: '',
+            request_id: planRid()
+        };
+        if (planPrefillMeta) { body.source = planPrefillMeta.source || 'smart'; body.smart_meta = planPrefillMeta; }
+        try {
+            const editing = planEditingId;
+            const r = await fetch(editing ? '/api/planning/plans' : '/api/planning/plans', { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing ? Object.assign({ id: editing, action: 'update' }, body) : body) });
+            const j = await r.json();
+            if (!r.ok) { msg.textContent = j.error || 'خطا در ذخیرهٔ برنامه.'; return; }
+            document.getElementById('planFormPanel').classList.add('hidden');
+            planEditingId = null; planPrefillMeta = null;
+            await loadPlanning(); lastOkAt = Date.now(); setLiveStatus(true);
+            alert(editing ? 'برنامه با موفقیت ویرایش شد ✅' : 'برنامه با موفقیت ذخیره شد ✅' + (j.duplicate ? ' (تکراری — همان برنامهٔ قبلی)' : ''));
+        } catch (e) { msg.textContent = 'خطا در ارتباط با سرور.'; }
+    }
+
+    async function planAction(id, action) {
+        try {
+            const r = await fetch('/api/planning/plans', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, action: action }) });
+            const j = await r.json();
+            if (!r.ok) { alert(j.error || 'خطا در انجام عملیات.'); return; }
+            await loadPlanning(); lastOkAt = Date.now(); setLiveStatus(true);
+        } catch (e) { alert('خطا در ارتباط با سرور.'); }
+    }
+
+    function planEdit(id) {
+        const p = planCache.plans.find((x) => x.id === id); if (!p) return;
+        planOpenForm(null);
+        planEditingId = id;
+        document.getElementById('planFormTitle').textContent = 'ویرایش برنامهٔ پیش‌نویس — ' + (p.id || '');
+        document.getElementById('plDate').value = toFaDigits(p.start_date_j || planJalaliToday());
+        document.getElementById('plPeriod').value = p.period || 'day';
+        document.getElementById('plProduct').value = p.product_size || 'RB-14';
+        document.getElementById('plTarget').value = p.target_tonnage || '';
+        document.getElementById('plBillets').value = p.required_billets || '';
+        document.getElementById('plMachine').value = STATIONS[p.machine] ? p.machine : 'st-form';
+        document.getElementById('plShift').value = p.shift_id || 'shift-morning-301';
+        document.getElementById('plPriority').value = p.priority || 'medium';
+    }
+
+    async function loadPlanning() {
+        try {
+            const [rp, rs, ro] = await Promise.all([getJson('/api/planning/plans'), getJson('/api/planning/suggest'), getJson('/api/planning/outage')]);
+            planCache.plans = rp.plans || [];
+            planCache.suggestions = rs.suggestions || [];
+            planCache.engine = rs.engine || 'internal';
+            planCache.aiConfigured = !!rs.ai_configured;
+            planCache.meta = rs.meta || null;
+            planCache.outages = ro.manual || [];
+            planCache.pattern = ro.pattern || null;
+        } catch (e) {
+            const m = document.getElementById('plMsg');
+            if (m) m.textContent = 'خطا در دریافت داده‌های برنامه‌ریزی: ' + (e && e.message ? e.message : e);
+        }
+        planFillProduct();
+        planRenderEngineChips();
+        planRenderKpis();
+        planRenderSuggestions();
+        planRenderOutage();
+        planRenderChart();
+        planRenderTable();
+        const bn = document.getElementById('btnPlanNew'); /* FEAT-PLAN-7: فقط برنامه‌ریز/مدیر ثبت می‌کند */
+        if (bn) bn.style.display = planCanWrite() ? '' : 'none';
+    }
+
+    /* ===== سیم‌کشی (یک‌بار) ===== */
+    function plan7Wire() {
+        const bs = document.getElementById('btnPlanSuggest');
+        if (bs) bs.addEventListener('click', async () => { await loadPlanning(); const p = document.getElementById('planSuggestPanel'); if (p && !p.classList.contains('hidden')) p.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        const bn = document.getElementById('btnPlanNew');
+        if (bn) bn.addEventListener('click', () => planOpenForm(null));
+        const bc = document.getElementById('plCancel');
+        if (bc) bc.addEventListener('click', () => { document.getElementById('planFormPanel').classList.add('hidden'); planEditingId = null; planPrefillMeta = null; });
+        const sv = document.getElementById('plSave');
+        if (sv) sv.addEventListener('click', planSave);
+        const os = document.getElementById('plOutSave');
+        if (os) os.addEventListener('click', async () => {
+            const msg = document.getElementById('plOutMsg'); msg.textContent = '';
+            const dj = readJalaliValue(document, 'plOut');
+            if (!dj) { msg.textContent = 'تاریخ شمسی معتبر وارد کنید.'; return; }
+            const tm = toEnDigits(document.getElementById('plOutTime').value || '08:00');
+            const ts = parseJalaliDateTime(dj, /^\d{1,2}:\d{2}$/.test(tm) ? tm : '08:00');
+            if (!ts) { msg.textContent = 'ساعت شروع نامعتبر است.'; return; }
+            try {
+                const r = await fetch('/api/planning/outage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start_ts: ts.toISOString(), duration_hours: Number(document.getElementById('plOutHours').value) || 1, shift_id: document.getElementById('plOutShift').value, note: document.getElementById('plOutNote').value.trim(), request_id: planRid() }) });
+                const j = await r.json();
+                if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت قطعی.'; return; }
+                msg.textContent = 'قطعی ثبت شد ✅' + (j.duplicate ? ' (تکراری)' : '');
+                document.getElementById('plOutNote').value = '';
+                await loadPlanning(); lastOkAt = Date.now(); setLiveStatus(true);
+            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور.'; }
+        });
+        const ex = document.getElementById('expPlans');
+        if (ex) ex.addEventListener('click', () => {
+            const rows = planCache.plans;
+            if (!rows.length) { alert('برنامه‌ای برای خروجی وجود ندارد.'); return; }
+            downloadXls('برنامه‌های_تولید', [
+                { label: 'تاریخ', key: 'start_date_j' }, { label: 'دوره', key: 'periodFa' }, { label: 'محصول', key: 'productFa' },
+                { label: 'هدف (تن)', key: 'target_tonnage' }, { label: 'شمش', key: 'billetsFa' }, { label: 'خط', key: 'machineFa' }, { label: 'شیفت', key: 'shiftFa' },
+                { label: 'واقعی (تن)', key: 'actual' }, { label: 'تحقق ٪', key: 'achFa' }, { label: 'وضعیت', key: 'statusFa' },
+                { label: 'اولویت', key: 'prioFa' }, { label: 'منبع', key: 'sourceFa' }, { label: 'اطمینان ٪', key: 'confFa' }, { label: 'ثبت‌کننده', key: 'created_by' }
+            ], rows.map((p) => {
+                const sm = p.smart_meta || {};
+                const ach = (Number(p.target_tonnage) > 0 && p.actual_tonnage != null) ? Math.round(p.actual_tonnage / p.target_tonnage * 1000) / 10 : null;
+                return {
+                    start_date_j: p.start_date_j || '—', periodFa: PLAN_PERIOD_FA[p.period] || p.period, productFa: productFa(p.product_size),
+                    target_tonnage: p.target_tonnage, billetsFa: p.required_billets || '—', machineFa: stationFa(p.machine), shiftFa: PLAN_SHIFT_FA[p.shift_id] || '—',
+                    actual: p.actual_tonnage == null ? '—' : p.actual_tonnage, achFa: ach == null ? '—' : ach + '٪', statusFa: PLAN_STATUS_FA[p.status] || p.status,
+                    prioFa: PLAN_PRIO_FA[p.priority] || p.priority, sourceFa: PLAN_SOURCE_FA[p.source] || p.source || '—', confFa: sm.confidence || '—',
+                    created_by: p.created_by || '—'
+                };
+            }), 'برنامه‌ریزی تولید');
+        });
+        const box = document.getElementById('planTableBox');
+        if (box) box.addEventListener('click', (e) => {
+            const act = e.target.closest('[data-plan-act]'); const ed = e.target.closest('[data-plan-edit]');
+            if (act) { const a = act.dataset.planAct; const id = act.dataset.planId; if (a === 'cancel' && !confirm('این برنامه لغو شود؟')) return; planAction(id, a); }
+            else if (ed) planEdit(ed.dataset.planEdit);
+        });
+        const sbox = document.getElementById('planSuggestBox');
+        if (sbox) sbox.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-plan-apply]'); if (!b || b.disabled) return;
+            const s = planCache.suggestions[Number(b.dataset.planApply)]; if (!s) return;
+            planOpenForm(Object.assign({}, s, { meta: { source: s.engine === 'ai' ? 'ai' : 'smart', confidence: s.confidence, engine: s.engine, based_on: s.based_on, reasons: s.reasons } }));
+        });
+        try { attachJalaliMasks(document.getElementById('tab-planning') || document); } catch (e) { /* بی‌ضرر */ }
+        window.addEventListener('san-theme', function () { try { planRenderChart(); } catch (e) { } }); /* بازسازی نمودار با تغییر تم */
+        loaders.planning = loadPlanning;
+    }
+    plan7Wire();
+})();
+// ===== FEAT-PLAN-7 (end) =====
 </script></body></html>
