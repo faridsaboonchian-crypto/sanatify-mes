@@ -709,11 +709,161 @@
 
             min-height: 82px;
         }
-    </style>
+            /* ===== FEAT-UX-1 (begin): منوی همبرگری صنعتی + کارت‌های KPI نسخهٔ ۲ ===== */
+        #navToggle {
+            background: #0e7490;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 17px;
+            padding: 7px 13px;
+            cursor: pointer;
+            font-family: inherit;
+            line-height: 1;
+            min-width: 44px;
+            min-height: 44px;
+        }
+        #navToggle:hover { background: #0c637c; }
+        #nav {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 264px;
+            margin: 0;
+            flex-direction: column;
+            flex-wrap: nowrap;
+            overflow-x: hidden;
+            overflow-y: auto;
+            z-index: 60;
+            background: linear-gradient(180deg, #0f2a43, #12385a);
+            border-bottom: none;
+            padding: 14px 10px 28px;
+            transition: transform .25s ease;
+            box-shadow: -4px 0 18px rgba(2, 8, 20, .28);
+        }
+        #nav .nav-group {
+            color: #7fb4d8;
+            font-size: 11px;
+            font-weight: bold;
+            margin: 14px 12px 6px;
+            border-bottom: 1px solid rgba(127, 180, 216, .25);
+            padding-bottom: 4px;
+        }
+        #nav button[data-tab] {
+            width: 100%;
+            text-align: right;
+            background: transparent;
+            color: #e6f1f9;
+            border: none;
+            border-radius: 8px;
+            padding: 11px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 44px;
+        }
+        #nav button[data-tab]:hover { background: rgba(127, 180, 216, .16); }
+        #nav button[data-tab].active {
+            background: #0e7490;
+            color: #fff;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+        }
+        #nav button[data-tab="summary"]::before { content: "📊"; }
+        #nav button[data-tab="analytics"]::before { content: "📈"; }
+        #nav button[data-tab="production"]::before { content: "🏭"; }
+        #nav button[data-tab="waste"]::before { content: "🗑️"; }
+        #nav button[data-tab="downtime"]::before { content: "⏱️"; }
+        #nav button[data-tab="quality"]::before { content: "🔬"; }
+        #nav button[data-tab="genealogy"]::before { content: "🧬"; }
+        #nav button[data-tab="balance"]::before { content: "⚖️"; }
+        #nav button[data-tab="warehouse"]::before { content: "📦"; }
+        #nav button[data-tab="maintenance"]::before { content: "🔧"; }
+        #nav button.nav-soon {
+            width: 100%;
+            text-align: right;
+            background: transparent;
+            color: #8aa6bd;
+            border: 1px dashed rgba(138, 166, 189, .55);
+            border-radius: 8px;
+            padding: 10px 12px;
+            cursor: not-allowed;
+            font-family: inherit;
+            font-size: 12px;
+            margin-top: 14px;
+        }
+        body.nav-closed #nav { transform: translateX(100%); }
+        .nav-backdrop {
+            display: none;
+            position: fixed;
+            top: 0; right: 0; left: 0; bottom: 0;
+            background: rgba(2, 8, 20, .5);
+            z-index: 55;
+        }
+        @media (min-width: 961px) {
+            body:not(.nav-closed) header { margin-right: 264px; }
+            body:not(.nav-closed) main { margin-right: 264px; }
+        }
+        @media (max-width: 960px) {
+            body:not(.nav-closed) .nav-backdrop { display: block; 
+            /* همبرگری همیشه در دسترس: هدر چسبان فقط در موبایل */
+            header { position: sticky; top: 0; z-index: 70; }
+            #navToggle { box-shadow: 0 2px 8px rgba(2,8,20,.35); }
+        }
+            #nav { width: 274px; }
+        }
+        .kpis { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .kpi2 {
+            text-align: right;
+            background: linear-gradient(180deg, #ffffff, #f2f7fb);
+            border-top: 4px solid #0f2a43;
+            display: flex;
+            flex-direction: column;
+            min-height: 128px;
+        }
+        .kpi2 .k { font-size: 11.5px; color: #475569; font-weight: bold; }
+        .kpi2 .v { font-size: 24px; font-weight: 800; color: #0f2a43; margin-top: 3px; }
+        .kpi2 .d { font-size: 10.5px; color: #64748b; margin-top: 2px; }
+        .kpi2 .sparkwrap { height: 34px; margin-top: auto; padding-top: 6px; }
+        .kpi2 .sparkwrap canvas { width: 100% !important; height: 34px !important; }
+        .kpi2.teal { border-top-color: #0e7490; }
+        .kpi2.teal .v { color: #0e7490; }
+        .kpi2.orange { border-top-color: #f97316; }
+        .kpi2.orange .v { color: #f97316; }
+        .kpi2.green .v { color: #059669; }
+        .kpi2.red .v { color: #dc2626; }
+        .kpi2.amber .v { color: #d97706; }
+        .kpi2.gray { border-top-color: #94a3b8; }
+        .kpi2.gray .v { color: #64748b; }
+        .sumrange {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .rngbtn {
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1e3d59;
+            padding: 7px 13px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: bold;
+            min-height: 36px;
+        }
+        .rngbtn.active { background: #0f2a43; color: #fff; border-color: #0f2a43; }
+        #sumRangeNote { font-size: 11.5px; color: #64748b; align-self: center; }
+        /* ===== FEAT-UX-1 (end) ===== */
+</style>
 </head>
 
 <body>
     <header>
+        <button id="navToggle" aria-controls="nav" aria-expanded="true" aria-label="باز و بسته کردن منو" title="منو">☰</button>
         <h1>🏭 سامانه یکپارچه Sanatify MES — پنل گزارش‌گیری و ردیابی</h1>
         <div class="userbar" id="userbar"></div>
         <div class="livebar">
@@ -723,16 +873,23 @@
         </div>
     </header>
     <nav id="nav">
+        <!-- ===== FEAT-UX-1: منوی کناری گروه‌بندی‌شده (دکمه‌ها و رفتار نقش‌ها دست‌نخورده) ===== -->
+        <div class="nav-group">پایش و شاخص‌ها</div>
         <button data-tab="summary" class="active">خلاصه و شاخص‌ها</button>
         <button data-tab="analytics">داشبورد تحلیلی</button>
+        <div class="nav-group">عملیات تولید</div>
         <button data-tab="production">ثبت تولید</button>
         <button data-tab="waste">ضایعات</button>
         <button data-tab="downtime">توقفات</button>
+        <div class="nav-group">کیفیت و ردیابی</div>
         <button data-tab="quality">کنترل کیفیت</button>
         <button data-tab="genealogy">ردیابی تولید</button>
         <button data-tab="balance">بالانس شمش</button>
-        <button data-tab="maintenance">تعمیرات و PM</button>
+        <div class="nav-group">پشتیبانی</div>
         <button data-tab="warehouse">انبار و موجودی</button>
+        <button data-tab="maintenance">تعمیرات و PM</button>
+        <div class="nav-group">برنامه‌ریزی</div>
+        <button class="nav-soon" disabled title="در فاز بعدی فعال می‌شود">🗓️ برنامه‌ریزی — به‌زودی</button>
     </nav>
     <main>
         <div class="filter-panel" id="filterPanel" style="display:none">
@@ -756,7 +913,18 @@
             </div>
         </div>
         <section id="tab-summary">
-            <div class="sumbar"><button class="act excel" id="expSummary">خروجی اکسل خلاصه 📊</button></div>
+            <div class="sumbar">
+                <button class="act excel" id="expSummary">خروجی اکسل خلاصه 📊</button>
+                <!-- ===== FEAT-UX-1: فیلتر بازهٔ کارت‌های شاخص ===== -->
+                <div class="sumrange" role="group" aria-label="بازهٔ شاخص‌ها">
+                    <button class="rngbtn active" data-rng="all">کل دوره</button>
+                    <button class="rngbtn" data-rng="shift">شیفت جاری</button>
+                    <button class="rngbtn" data-rng="today">امروز</button>
+                    <button class="rngbtn" data-rng="week">۷ روز</button>
+                    <button class="rngbtn" data-rng="month">۳۰ روز</button>
+                    <span id="sumRangeNote">بازه: کل دوره</span>
+                </div>
+            </div>
             <div class="kpis" id="kpiBox"></div>
         </section>
         <section id="tab-analytics" class="hidden">
@@ -1876,28 +2044,88 @@ function buildFilterBar(tab) {
             pg.querySelector('.pnext').onclick = () => { if (v.page < pages - 1) { v.page++; renderListTab(tab, true); } };
             if (!skipFilter) buildFilterBar(tab);
         }
+        /* ===== FEAT-UX-1 (begin): تب خلاصهٔ صنعتی — KPI کامل + اسپارک‌لاین + فیلتر بازه (منطق قبلی به‌صورت بازهٔ «کل» حفظ شده) ===== */
+        let sumRange = 'all';
+        let sumSpark = {};
+        const feux1Rng = () => {
+            const now = new Date();
+            if (sumRange === 'all') return { from: null, to: null, days: null, label: 'کل دوره' };
+            if (sumRange === 'shift') { const h = now.getHours(); const morn = h >= 6 && h < 18; const from = new Date(now); from.setHours(morn ? 6 : 18, 0, 0, 0); if (!morn && h < 6) from.setDate(from.getDate() - 1); return { from: from, to: now, days: 0.5, label: morn ? 'شیفت صبح (امروز)' : 'شیفت شب' }; }
+            if (sumRange === 'today') { const from = new Date(now); from.setHours(0, 0, 0, 0); return { from: from, to: now, days: 1, label: 'امروز' }; }
+            if (sumRange === 'week') return { from: new Date(now.getTime() - 7 * 86400000), to: now, days: 7, label: '۷ روز اخیر' };
+            return { from: new Date(now.getTime() - 30 * 86400000), to: now, days: 30, label: '۳۰ روز اخیر' };
+        };
+        const feux1In = (ts, rng) => { if (!rng.from) return true; if (!ts) return false; const d = new Date(ts); return !isNaN(d.getTime()) && d >= rng.from && d <= rng.to; };
+        const feux1Buckets = (rows, tf, valFn, n) => {
+            const now = new Date(); const arr = [];
+            for (let i = n - 1; i >= 0; i--) {
+                const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i); const d1 = new Date(d0.getTime() + 86399999);
+                let v = 0;
+                rows.forEach((r) => { const d = new Date(r[tf]); if (!isNaN(d.getTime()) && d >= d0 && d <= d1) { const x = valFn(r); if (x !== null) v += x; } });
+                arr.push({ lab: d0.toLocaleDateString('fa-IR', { month: '2-digit', day: '2-digit' }), v: Math.round(v * 100) / 100 });
+            }
+            return arr;
+        };
+        const feux1Spark = (key, series, color, fmt) => {
+            const cv = document.getElementById('spark-' + key); if (!cv || !window.Chart) return;
+            if (sumSpark[key]) { try { sumSpark[key].destroy(); } catch (e) { } }
+            sumSpark[key] = new Chart(cv, { type: 'line', data: { labels: series.map((x) => x.lab), datasets: [{ data: series.map((x) => x.v), borderColor: color, backgroundColor: 'rgba(14,116,144,.14)', borderWidth: 2, tension: .35, pointRadius: 0, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => groupFa(fmt ? fmt(c.parsed.y) : c.parsed.y) } } }, scales: { x: { display: false }, y: { display: false } } } });
+        };
         async function loadSummary() {
+            const box = document.getElementById('kpiBox'); if (!box) return;
             const s = await getJson('/api/summary'); cache.summary = s;
             if (!cache.production) { try { cache.production = await getJson('/api/production'); } catch (e) { } }
             if (!cache.waste) { try { cache.waste = await getJson('/api/waste'); } catch (e) { } }
             if (!cache.downtime) { try { cache.downtime = await getJson('/api/downtime'); } catch (e) { } }
-            const good = filterData(cache.production || [], 'production').reduce((sum, r) => sum + (Number(r.good_quantity) || 0), 0);
-            const waste = filterData(cache.waste || [], 'waste').reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
-            const downtime = filterData(cache.downtime || [], 'downtime').reduce((sum, r) => sum + (Number(r.duration_minutes) || 0), 0);
-            // ===== REVERT-STEEL-1: KPI فولادی — تناژ ۳ رقم اعشار + درصد پذیرش QC از وضعیت باندل‌ها =====
             if (!cache.bundles) { try { cache.bundles = await getJson('/api/bundles'); } catch (e) { /* بی‌ضرر */ } }
+            if (!cache.billets) { try { cache.billets = await getJson('/api/billets'); } catch (e) { /* بی‌ضرر */ } }
+            if (!cache.inventory) { try { cache.inventory = await getJson('/api/inventory'); } catch (e) { /* بی‌ضرر */ } }
+            const rng = feux1Rng();
             const ton3 = (kg) => (Math.round((Number(kg) || 0) / 1000 * 1000) / 1000).toFixed(3);
-            const scrapPct = (good + waste) > 0 ? Math.round(waste / (good + waste) * 1000) / 10 : null;
-            const dec = (cache.bundles || []).filter((x) => x.quality_status === 'APPROVED' || x.quality_status === 'REJECTED');
+            const pr = (cache.production || []).filter((r) => feux1In(r.timestamp, rng));
+            const ws = (cache.waste || []).filter((r) => feux1In(r.timestamp, rng));
+            const dt = (cache.downtime || []).filter((r) => feux1In(r.start_time, rng));
+            const bd = (cache.bundles || []).filter((r) => feux1In(r.produced_at, rng));
+            const bl = (cache.billets || []).filter((r) => feux1In(r.received_at, rng));
+            const good = pr.reduce((sum, r) => sum + (Number(r.good_quantity) || 0), 0);
+            const wasteKg = ws.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+            const downMin = dt.reduce((sum, r) => sum + (Number(r.duration_minutes) || 0), 0);
+            const downUrg = dt.filter((r) => Number(r.is_unplanned)).reduce((sum, r) => sum + (Number(r.duration_minutes) || 0), 0);
+            const bundleKg = bd.reduce((sum, r) => sum + (Number(r.net_weight_kg) || 0), 0);
+            const billetKg = bl.reduce((sum, r) => sum + (Number(r.initial_weight_kg) || 0), 0);
+            const dec = bd.filter((x) => x.quality_status === 'APPROVED' || x.quality_status === 'REJECTED');
             const qcAcc = dec.length ? Math.round(dec.filter((x) => x.quality_status === 'APPROVED').length / dec.length * 1000) / 10 : null;
+            const scrapPct = (bundleKg + wasteKg) > 0 ? Math.round(wasteKg / (bundleKg + wasteKg) * 1000) / 10 : null;
+            const yld = billetKg > 0 ? Math.round(bundleKg / billetKg * 1000) / 10 : null;
+            const tsArr = pr.map((r) => new Date(r.timestamp).getTime()).filter((x) => !isNaN(x)).concat(bd.map((r) => new Date(r.produced_at).getTime()).filter((x) => !isNaN(x)));
+            const spanDays = tsArr.length ? Math.max(1, Math.min(90, Math.ceil((Date.now() - Math.min.apply(null, tsArr)) / 86400000))) : 30;
+            const days = rng.days || spanDays;
+            const plannedMin = days * 720;
+            const avail = plannedMin > 0 ? Math.max(0, 1 - downMin / plannedMin) : null;
+            const oee = (avail !== null && qcAcc !== null) ? Math.round(avail * (qcAcc / 100) * 1000) / 10 : null;
+            const invSum = cache.inventory && cache.inventory.summary ? cache.inventory.summary : null;
+            const ropN = invSum ? (Number(invSum.low_stock_count) || 0) : null;
             const kpis = [
-                { l: 'تناژ تولید سالم (تن)', v: groupFa(ton3(s.bundle_weight_kg)), c: 'green' }, { l: 'تعداد شاخه سالم', v: groupFa(good), c: '' },
-                { l: 'درصد ضایعات', v: scrapPct === null ? '-' : fa(scrapPct) + '٪', c: 'red' }, { l: 'دقایق توقف', v: groupFa(downtime), c: 'amber' },
-                { l: 'درصد پذیرش QC', v: qcAcc === null ? '-' : fa(qcAcc) + '٪', c: qcAcc === null ? '' : (qcAcc >= 95 ? 'green' : (qcAcc >= 85 ? 'amber' : 'red')) }, { l: 'وزن شمش ورودی (تن)', v: groupFa(ton3(s.billet_weight_kg)), c: '' },
-                { l: 'راندمان مواد ٪', v: fa(s.yield_rate_percent), c: s.yield_rate_percent >= 96 ? 'green' : (s.yield_rate_percent >= 92 ? 'amber' : 'red') },
+                { key: 'tonGood', l: 'تناژ سالم (تن)', v: groupFa(ton3(bundleKg)), c: 'green', d: 'باندل‌های تأییدشده: ' + groupFa(bd.length), sp: 1 },
+                { key: 'tonIn', l: 'تناژ شمش ورودی (تن)', v: groupFa(ton3(billetKg)), c: '', d: 'شمش ورودی: ' + groupFa(bl.length) },
+                { key: 'yld', l: 'راندمان مواد ٪', v: yld === null ? '-' : fa(yld), c: yld === null ? '' : (yld >= 96 ? 'green' : (yld >= 92 ? 'amber' : 'red')), d: 'سالم ÷ ورودی' },
+                { key: 'scrap', l: 'درصد ضایعات', v: scrapPct === null ? '-' : fa(scrapPct) + '٪', c: 'red', d: 'ضایعات ' + groupFa(ton3(wasteKg)) + ' تن', sp: 1 },
+                { key: 'qc', l: 'درصد پذیرش QC', v: qcAcc === null ? '-' : fa(qcAcc) + '٪', c: qcAcc === null ? '' : (qcAcc >= 95 ? 'green' : (qcAcc >= 85 ? 'amber' : 'red')), d: 'مصرح‌ها: ' + groupFa(dec.length), sp: 1 },
+                { key: 'dt', l: 'دقایق توقف', v: groupFa(downMin), c: 'amber', d: 'اضطراری: ' + groupFa(downUrg) + ' دقیقه', sp: 1 },
+                { key: 'oee', l: 'OEE تخمینی ٪', v: oee === null ? '-' : fa(oee), c: 'teal', d: 'دسترسی × کیفیت' },
+                { key: 'good', l: 'تعداد شاخه سالم', v: groupFa(good), c: '', d: 'ثبت تولید: ' + groupFa(pr.length) },
+                { key: 'rop', l: 'اقلام زیر نقطه سفارش', v: ropN === null ? '-' : groupFa(ropN), c: ropN ? 'orange' : 'gray', d: invSum ? 'از ' + groupFa(invSum.item_count) + ' قلم فعال انبار' : 'دسترسی انبار محدود' },
+                { key: 'energy', l: 'میانگین انرژی/تن', v: '-', c: 'gray', d: 'در انتظار دادهٔ کنتور انرژی' },
             ];
-            document.getElementById('kpiBox').innerHTML = kpis.map((k) => '<div class="kpi ' + k.c + '"><div class="v">' + k.v + '</div><div class="l">' + esc(k.l) + '</div></div>').join('');
+            box.innerHTML = kpis.map((k) => '<div class="kpi kpi2 ' + k.c + '"><div class="k">' + esc(k.l) + '</div><div class="v">' + k.v + '</div>' + (k.d ? '<div class="d">' + esc(k.d) + '</div>' : '') + (k.sp ? '<div class="sparkwrap"><canvas id="spark-' + k.key + '"></canvas></div>' : '') + '</div>').join('');
+            const note = document.getElementById('sumRangeNote'); if (note) note.textContent = 'بازه: ' + rng.label;
+            const sparkDays = Math.min(14, Math.max(7, Math.round(days)));
+            feux1Spark('tonGood', feux1Buckets(bd, 'produced_at', (r) => Number(r.net_weight_kg) || 0, sparkDays), '#059669', (x) => ton3(x));
+            feux1Spark('dt', feux1Buckets(dt, 'start_time', (r) => Number(r.duration_minutes) || 0, sparkDays), '#d97706', null);
+            feux1Spark('scrap', (() => { const b = feux1Buckets(bd, 'produced_at', (r) => Number(r.net_weight_kg) || 0, sparkDays); const w = feux1Buckets(ws, 'timestamp', (r) => Number(r.quantity) || 0, sparkDays); return b.map((x, i) => ({ lab: x.lab, v: (x.v + w[i].v) > 0 ? Math.round(w[i].v / (x.v + w[i].v) * 1000) / 10 : 0 })); })(), '#dc2626', null);
+            feux1Spark('qc', (() => { const out = []; const now = new Date(); for (let i = sparkDays - 1; i >= 0; i--) { const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i); const d1 = new Date(d0.getTime() + 86399999); const dd = bd.filter((r) => { const d = new Date(r.produced_at); return !isNaN(d.getTime()) && d >= d0 && d <= d1 && (r.quality_status === 'APPROVED' || r.quality_status === 'REJECTED'); }); out.push({ lab: d0.toLocaleDateString('fa-IR', { month: '2-digit', day: '2-digit' }), v: dd.length ? Math.round(dd.filter((r) => r.quality_status === 'APPROVED').length / dd.length * 100) : 0 }); } return out; })(), '#0e7490', null);
         }
+        /* ===== FEAT-UX-1 (end) ===== */
         async function loadList(tab, path) { const rows = await getJson(path); cache[tab] = rows; renderListTab(tab, autoTick); }
         const loadProduction = () => loadList('production', '/api/production');
         const loadWaste = () => loadList('waste', '/api/waste');
@@ -2163,4 +2391,54 @@ showRes();
 // ===== FIX-TX-LABELS =====
 (function(){ var __ot = (typeof invTxLabel==='function') ? invTxLabel : null; invTxLabel = function(t){ if(t==='reserve') return 'رزرو موجودی'; if(t==='release') return 'آزادسازی رزرو'; if(t==='consume') return 'مصرف از رزرو'; return __ot ? __ot(t) : String(t||'-'); }; try { INV_TX_FA.reserve='رزرو موجودی'; INV_TX_FA.release='آزادسازی رزرو'; INV_TX_FA.consume='مصرف از رزرو'; } catch(e){} })();
 // ===== END FIX-TX-LABELS =====
+
+// ===== FEAT-UX-1 (begin): init منوی همبرگری + همگام‌سازی گروه‌ها با نقش‌ها =====
+(function () {
+    function feux1SyncGroups() {
+        const groups = document.querySelectorAll('#nav .nav-group');
+        groups.forEach((g) => {
+            let el = g.nextElementSibling, vis = false;
+            while (el && !el.classList.contains('nav-group')) {
+                if (el.tagName === 'BUTTON' && el.dataset.tab && el.style.display !== 'none') { vis = true; break; }
+                el = el.nextElementSibling;
+            }
+            g.style.display = vis ? '' : 'none';
+        });
+    }
+    window.feux1SyncGroups = feux1SyncGroups;
+    const KEY = 'feux1.nav';
+    const body = document.body;
+    const nav = document.getElementById('nav');
+    const tg = document.getElementById('navToggle');
+    if (nav && tg) {
+        const bd = document.createElement('div');
+        bd.className = 'nav-backdrop'; bd.id = 'navBackdrop';
+        document.body.appendChild(bd);
+        let closed = null;
+        try { closed = localStorage.getItem(KEY); } catch (e) { }
+        if (closed !== '0' && closed !== '1') closed = window.innerWidth <= 960 ? '1' : '0';
+        const applyState = () => {
+            body.classList.toggle('nav-closed', closed === '1');
+            tg.setAttribute('aria-expanded', closed === '1' ? 'false' : 'true');
+            try { localStorage.setItem(KEY, closed); } catch (e) { }
+            feux1SyncGroups();
+        };
+        tg.addEventListener('click', () => { closed = closed === '1' ? '0' : '1'; applyState(); });
+        bd.addEventListener('click', () => { if (window.innerWidth <= 960) { closed = '1'; applyState(); } });
+        nav.addEventListener('click', (e) => { const b = e.target.closest ? e.target.closest('button[data-tab]') : null; if (b && window.innerWidth <= 960) { closed = '1'; applyState(); } });
+        applyState();
+    }
+    // فیلتر بازهٔ تب خلاصه
+    document.querySelectorAll('.rngbtn[data-rng]').forEach((b) => {
+        b.addEventListener('click', () => {
+            document.querySelectorAll('.rngbtn[data-rng]').forEach((x) => x.classList.remove('active'));
+            b.classList.add('active');
+            if (typeof sumRange !== 'undefined') { sumRange = b.dataset.rng; loadSummary().catch(function () { }); }
+        });
+    });
+    // همگام‌سازی گروه‌های خالی پس از فیلتر نقش‌ها (رفتار applyRoleUI دست‌نخورده)
+    const __feux1OrigApply = applyRoleUI;
+    applyRoleUI = function () { __feux1OrigApply(); try { feux1SyncGroups(); } catch (e) { } };
+})();
+// ===== FEAT-UX-1 (end) =====
 </script></body></html>
