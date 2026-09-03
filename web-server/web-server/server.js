@@ -7,6 +7,8 @@
 const http = require('http');
 // ===== FEAT-HTTPS-11c: ماژول داخلی https — صفر وابستگی جدید =====
 const https = require('https');
+// ===== FEAT-HTTPS-11d: ماژول داخلی net برای peek اولین بایت پورت اصلی — صفر وابستگی جدید =====
+const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const auth = require('./auth');
@@ -3745,26 +3747,99 @@ try { migrateSteelWarehouses(readLive()); } catch (e) { console.warn('[STEEL-WH]
 // اگر گواهی/کلید موجود نبود، سرویس خودکار روی همان پورت با HTTP بالا می‌آید (سرور کارخانه هرگز نمی‌میرد).
 let tlsMode = 'HTTP';
 let mainServer = server; // حالت پیش‌فرض: HTTP (بدون گواهی)
+let httpsServerRef = null; // ===== FEAT-HTTPS-11d: ارجاع سرور https برای تحویل سوکت‌های TLS =====
 try {
     const tlsOpts = { key: fs.readFileSync(path.join(ROOT, 'key.pem')), cert: fs.readFileSync(path.join(ROOT, 'cert.pem')) };
     const httpsServer = https.createServer(tlsOpts, appRequestHandler);
     // کلاینت‌های TLS خراب/ناسازگار هرگز سرور را نمی‌اندازند
     httpsServer.on('tlsClientError', (err) => console.warn('[HTTPS] tlsClientError — سرور سالم ماند:', (err && err.code) || (err && err.message) || err));
     mainServer = httpsServer;
+    httpsServerRef = httpsServer;
     tlsMode = 'HTTPS';
 } catch (e) {
     console.warn('[HTTPS] cert.pem/key.pem در دسترس نیست — fallback خودکار به HTTP روی همان پورت:', (e && e.code) || (e && e.message) || e);
 }
-mainServer.listen(PORT, '0.0.0.0', () => {
+
+// ===== FEAT-HTTPS-11d (begin): تک‌پورت‌سازی 3001 — HTTP برهنهٔ خودکار به HTTPS =====
+// مشکل: کاربران آدرس را برهنه تایپ می‌کنند (IP:3001) و مرورگر پیش‌فرض http می‌رود → 503/SSL +
+// ERR_SSL_HTTP_REQUEST و لاگین «خطا در ارتباط با سرور»؛ صفحه از کش می‌آید ولی API از شبکه.
+// راهکار (Port unification با ماژول‌های داخلی net/tls — صفر وابستگی): در حالت HTTPS به‌جای listen
+// مستقیم httpsServer روی پورت اصلی، یک سرور خام net روی همان پورت گوش می‌دهد و اولین بایت هر اتصال
+// را peek می‌کند: 0x16 (ClientHello) → سوکت به httpsServer فعلی؛ HTTP ساده → 301 به
+// https://<همان Host>:PORT<مسیر+کوئری> و بستن اتصال. در حالت fallback (بدون گواهی) peek غیرفعال
+// است و HTTP ساده مثل قبل مستقیم روی همان پورت می‌نشیند (سرور کارخانه هرگز نمی‌میرد).
+// هندلر ریدایرکت دمولتی‌پلکسر — هم‌منطق با ریدایرکت پورت 3000 (استخراج هاست از سرآیند، حفظ مسیر+کوئری)؛
+// اصلاح 11d: استخراج درست هاست برای IPv6 literal (مثل «[fe80::1]:3001» → «[fe80::1]»)
+function hostNoPort11d(rawHost) {
+    const h = String(rawHost || '').trim();
+    if (h.startsWith('[')) {
+        const end = h.indexOf(']');
+        return end !== -1 ? h.slice(0, end + 1) : h; // خودِ literal، بدون پورت
+    }
+    return h.split(':')[0] || 'localhost';
+}
+function demuxRedirectHandler11d(req, res) {
+    try {
+        const hostName = hostNoPort11d(req.headers.host);
+        res.writeHead(301, { Location: `https://${hostName}:${PORT}${req.url || '/'}`, Connection: 'close' });
+        res.end();
+    } catch (e) {
+        try { res.writeHead(500); res.end('Redirect error'); } catch (e2) { /* noop */ }
+    }
+}
+const demuxHttpRedirector = http.createServer(demuxRedirectHandler11d);
+// درخواست‌های HTTP خراب (garbage) هرگز سرور را نمی‌اندازند — سوکت بسته می‌شود
+demuxHttpRedirector.on('clientError', (err, socket) => { try { socket.destroy(); } catch (e) { /* noop */ } });
+// سرور خام پورت اصلی — فقط در حالت HTTPS استفاده می‌شود
+const demuxServer = net.createServer(function demuxConnection11d(socket) {
+    // کلاینت‌های خراب/قطع‌شده در فاز peek هرگز پروسه را نمی‌اندازند
+    socket.on('error', () => { try { socket.destroy(); } catch (e) { /* noop */ } });
+    // سکوت طولانی در فاز peek (کلاینتِ بدون ارسال) → آزاد شدن سوکت (unref = مانع خروج پروسه نیست)
+    const peekTimer = setTimeout(() => { try { socket.destroy(); } catch (e) { /* noop */ } }, 15000);
+    if (peekTimer.unref) peekTimer.unref();
+    socket.once('close', () => clearTimeout(peekTimer));
+    // peek اولین بایت: تصمیم TLS یا HTTP — سپس بایت‌ها عیناً به ابتدای جریان برگردانده می‌شوند
+    socket.once('data', function demuxPeek11d(chunk) {
+        clearTimeout(peekTimer);
+        socket.pause();
+        try {
+            socket.unshift(chunk);
+            if (chunk && chunk.length > 0 && chunk[0] === 0x16) {
+                // TLS ClientHello → تحویل به سرور https فعلی (گارد tlsClientError دست‌نخورده می‌ماند)
+                httpsServerRef.emit('connection', socket);
+            } else {
+                // HTTP برهنه → ریدایرکتور داخلی: 301 به https همان هاست + بستن اتصال
+                demuxHttpRedirector.emit('connection', socket);
+            }
+        } catch (e) {
+            try { socket.destroy(); } catch (e2) { /* noop */ }
+            return;
+        }
+        process.nextTick(() => { try { socket.resume(); } catch (e) { /* noop */ } });
+    });
+});
+// ===== FEAT-HTTPS-11d (end) =====
+
+function onMainListening11d() {
     const scheme11c = tlsMode === 'HTTPS' ? 'https' : 'http';
     console.log('========================================================');
     console.log('  Sanatify MES — سرور مقاوم (ابر=پشتیبان، داخلی=قلب) ✅');
     console.log(`  حالت سرویس : ${tlsMode} روی پورت ${PORT}`);
+    if (tlsMode === 'HTTPS') {
+        console.log(`  تک‌پورت (11d) : آدرس برهنهٔ http://<host>:${PORT} → 301 → https://<host>:${PORT} (peek TLS فعال)`);
+    }
     console.log(`  وب اپ :  ${scheme11c}://localhost:${PORT}  (با لاگین)`);
     console.log(`  منبع داده : ${isSupabaseConfigured() ? 'Supabase + آینهٔ زندهٔ داخلی (live.json)' : 'live.json / data.json (Supabase تنظیم نشده)'}`);
     console.log('  endpoint دریافت از اپ : POST /api/ingest (بدون لاگین)');
     console.log('========================================================');
-});
+}
+if (tlsMode === 'HTTPS') {
+    // 11d: دمولتی‌پلکسر خام روی پورت اصلی می‌نشیند؛ httpsServer دیگر مستقیم listen نمی‌کند
+    demuxServer.listen(PORT, '0.0.0.0', onMainListening11d);
+} else {
+    // fallback بدون گواهی — رفتار سابق دست‌نخورده (بدون peek)
+    mainServer.listen(PORT, '0.0.0.0', onMainListening11d);
+}
 
 // ===== FEAT-HTTPS-11c: لیستنر سبک HTTP روی پورت قدیمی کارخانه — 301 به همان هاست با سرویس اصلی (لینک‌های قدیمی کار کنند) =====
 // در حالت HTTPS مقصد https://<همان هاست>:PORT است؛ در حالت fallback (بدون گواهی) مقصد http://<همان هاست>:PORT — هیچ حالتی لینک قدیمی را نمی‌شکند.
