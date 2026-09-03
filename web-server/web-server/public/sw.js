@@ -1,15 +1,18 @@
 /* ===== FEAT-PWA-8b: سرویس‌ورکر صنعتی فای =====
-   ===== FIX-PWA-10b: باز شدن فوری با اولین کلیک — ناوبری network-first با timeout کوتاه (۳.۵s)
-   + زنجیرهٔ fallback سالم (کش → شل → صفحهٔ آفلاین inline)؛ هرگز صفحهٔ سفید؛
-   manifest/آیکون‌ها cache-first نسخه‌دار؛ دادهٔ حساس (/api/*) هرگز کش نمی‌شود ===== */
+   ===== FIX-PWA-10b: fallback سالم (کش → شل → صفحهٔ آفلاین inline)؛ هرگز صفحهٔ سفید؛
+   manifest/آیکون‌ها cache-first نسخه‌دار؛ دادهٔ حساس (/api/*) هرگز کش نمی‌شود =====
+   ===== FIX-PWA-11a: ناوبری cache-first + بروزرسانی پس‌زمینه — شل با اولین کلیک فوری رندر می‌شود
+   (≤~۱ ثانیه حتی cold start روی LAN کند)؛ واکشی تازه در پس‌زمینه؛ پاسخ‌های redirect (جلسهٔ منقضی)
+   هرگز کش نمی‌شوند؛ ارتقای نسخهٔ کش تا نصب‌های قدیمی خودبه‌خود مهاجرت کنند ===== */
 'use strict';
-var SHELL_CACHE = 'sanatify-shell-v10c1'; /* FIX-PWA-10c: آیکون‌های جدید */
+var SHELL_CACHE = 'sanatify-shell-v11a1'; /* FIX-PWA-11a: ناوبری cache-first — نصب‌های قدیمی خودبه‌خود مهاجرت می‌کنند */
 var SHELL_ASSETS = [
     '/manifest.webmanifest',
     '/icon-192.png',
     '/icon-512.png',
     '/favicon.ico',
-    '/login'
+    '/login',
+    '/index.html' /* FIX-PWA-11a: پیش‌بارگذاری شل — cold start فوری از همان نصب اول */
 ];
 var BRAND_FA = ['\u0635\u0646\u0639\u062a\u06cc \u0641\u0627\u06cc', 'SANATIFY'].join(' ');
 
@@ -20,7 +23,10 @@ self.addEventListener('install', function (e) {
                 /* شل: مانیفست/آیکون‌ها + صفحهٔ لاگین — هر کدام جدا تا خطای یکی بقیه را نکشد */
                 return Promise.all(SHELL_ASSETS.map(function (u) {
                     return fetch(new Request(u, { credentials: 'same-origin', cache: 'no-store' }))
-                        .then(function (r) { if (r && (r.ok || r.type === 'opaque')) return c.put(u, r.clone()); })
+                        .then(function (r) {
+                            /* FIX-PWA-11a: پاسخ redirect (مثل 302 به /login هنگام جلسهٔ منقضی) هرگز زیر کلید شل ذخیره نمی‌شود */
+                            if (r && r.ok && !r.redirected) return c.put(u, r.clone());
+                        })
                         .catch(function () { });
                 }));
             })
@@ -101,26 +107,32 @@ self.addEventListener('fetch', function (event) {
     }
 
     if (req.mode === 'navigate' || req.headers.get('accept') === 'text/html') {
-        /* ناوبری: شبکه با مهلت ۳.۵ ثانیه → کش شل → صفحهٔ آفلاین برنددار (هرگز سفید نه) */
+        /* FIX-PWA-11a: ناوبری cache-first + بروزرسانی پس‌زمینه (stale-while-revalidate):
+           پاسخ فوری از کش شل — حتی cold start روی LAN کند یا قطع (≤~۱ ثانیه، بدون blank)؛
+           همزمان واکشی تازه در پس‌زمینه (event.waitUntil) و ذخیره برای بازدید بعدی؛
+           /api/* همچنان فقط شبکه؛ پاسخ‌های redirect (جلسهٔ منقضی → /login) هرگز کش نمی‌شوند */
+        var shellKey = url.pathname === '/login' ? '/login' : '/index.html';
+        var netP = fetchWithTimeout(req, 4000).then(function (r) {
+            if (r && r.ok && r.type === 'basic' && !r.redirected) {
+                caches.open(SHELL_CACHE).then(function (c) {
+                    try { c.put(shellKey, r.clone()).catch(function () { }); } catch (e) { }
+                }).catch(function () { });
+            }
+            return r;
+        }).catch(function () { return null; });
+        try { event.waitUntil(netP.then(function () { }).catch(function () { })); } catch (e) { }
         event.respondWith(
-            fetchWithTimeout(req, 3500).then(function (r) {
-                if (r && r.ok && r.type === 'basic') {
-                    caches.open(SHELL_CACHE).then(function (c) {
-                        try { c.put(url.pathname === '/' ? '/index.html' : url.pathname, r.clone()).catch(function () { }); } catch (e) { }
-                    }).catch(function () { });
-                }
-                return r;
-            }).catch(function () {
-                return caches.match(req).then(function (h1) {
-                    if (h1) return h1;
-                    return caches.match('/index.html').then(function (h2) {
-                        if (h2) return h2;
-                        return caches.match('/login').then(function (h3) {
-                            return h3 || offlineHtml();
+            caches.open(SHELL_CACHE).then(function (c) {
+                return c.match(shellKey).then(function (hit) {
+                    if (hit) return hit; /* پاسخ فوری از کش */
+                    return netP.then(function (r) {
+                        if (r && r.ok) return r; /* اولین بازدید بدون کش */
+                        return c.match(req).then(function (h1) {
+                            return h1 || offlineHtml(); /* هرگز صفحهٔ سفید */
                         });
                     });
                 });
-            })
+            }).catch(function () { return offlineHtml(); })
         );
         return;
     }

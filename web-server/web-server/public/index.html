@@ -1158,6 +1158,13 @@
         .pwa-banner .pwa-steps { font-size: 11.5px; color: #dbe7f3; line-height: 2.1; margin-top: 4px; }
         .pwa-banner .pwa-steps b { color: #7fd4e8; }
         body.theme-dark .pwa-banner .pwa-steps { color: #c8d9e8; }
+        /* ===== FIX-PWA-11a (begin): نوار اعلام نسخهٔ جدید سرویس‌ورکر + راهنمای نصب تمیز ===== */
+        .sw-upd { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #0f2a43, #12385a); color: #e6f1f9; border: 1px solid #1d3a55; border-radius: 12px; padding: 8px 14px; display: flex; gap: 10px; align-items: center; z-index: 120; box-shadow: 0 10px 30px rgba(2, 8, 20, .45); font-size: 12.5px; max-width: calc(100vw - 24px); }
+        .sw-upd button { background: #0e7490; color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-family: inherit; font-weight: bold; font-size: 12px; cursor: pointer; min-height: 44px; }
+        .sw-upd button.sw-x { background: transparent; color: #7fb4d8; min-width: 44px; padding: 10px 6px; }
+        body.theme-dark .sw-upd { background: linear-gradient(135deg, #0d2233, #10293c); border-color: #2a4a66; }
+        .pwa-banner .pwa-steps.pwa-clean { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(127, 212, 232, .4); }
+        /* ===== FIX-PWA-11a (end) ===== */
         /* ===== FIX-PWA-9a (end) ===== */
         /* ===== FEAT-BI-2 (end) ===== */</style>
 </head>
@@ -3675,17 +3682,31 @@ showRes();
     function pwaSetDismissed() { try { localStorage.setItem('san.pwa.bannerDismissed', '1'); } catch (e) { } }
     var pwaBanner = null;
     function pwaRemoveBanner() { if (pwaBanner) { pwaBanner.remove(); pwaBanner = null; } }
+    /* FIX-PWA-11a: راهنمای نصب تمیز — اگر برنامهٔ نصب‌شدهٔ قدیمی باز نمی‌شود (WebAPK کهنه / سرویس‌ورکر کهنه):
+       حذف آیکون کهنه + پاک‌کردن Site data + نصب مجدد → شل تازه با کش جدید */
+    function pwaCleanHTML() {
+        if (pwaIsIOS()) {
+            return '<div class="pwa-steps pwa-clean">نصب تمیز (اگر برنامهٔ نصب‌شده باز نشد):<br />' +
+                '۱) انگشت را روی آیکون نگه دارید ← <b>حذف برنامه</b><br />' +
+                '۲) تنظیمات ← Safari ← پیشرفته ← داده‌های وب‌سایت ← حذف دادهٔ این سایت<br />' +
+                '۳) دوباره وارد شوید: Share ← Add to Home Screen.</div>';
+        }
+        return '<div class="pwa-steps pwa-clean">نصب تمیز (اگر برنامهٔ نصب‌شده باز نشد):<br />' +
+            '۱) انگشت را روی آیکون نگه دارید ← <b>حذف/Uninstall</b> (WebAPK کهنه پاک می‌شود)<br />' +
+            '۲) در کروم: ⋮ ← تنظیمات ← تنظیمات سایت ← داده‌های سایت ← پاک کردن دادهٔ این سایت<br />' +
+            '۳) دوباره وارد شوید: ⋮ ← Add to Home Screen.</div>';
+    }
     function pwaGuideHTML() {
         if (pwaIsIOS()) {
             return '<div class="pwa-steps">نصب روی آیفون/آیپد:<br />' +
                 '۱) دکمهٔ <b>اشتراک‌گذاری (Share)</b> نوار پایین را بزنید<br />' +
                 '۲) گزینهٔ <b>«Add to Home Screen»</b> را انتخاب کنید<br />' +
-                '۳) <b>«Add»</b> را بزنید — آیکون صنعتی فای روی صفحهٔ اصلی ساخته می‌شود.</div>';
+                '۳) <b>«Add»</b> را بزنید — آیکون صنعتی فای روی صفحهٔ اصلی ساخته می‌شود.</div>' + pwaCleanHTML();
         }
         return '<div class="pwa-steps">نصب روی اندروید:<br />' +
             '۱) منوی <b>⋮</b> (سه‌نقطهٔ بالای مرورگر) را باز کنید<br />' +
             '۲) گزینهٔ <b>«Add to Home Screen»</b> یا <b>«افزودن به صفحهٔ اصلی»</b> را بزنید<br />' +
-            '۳) <b>«Install»</b> یا <b>«افزودن»</b> را تأیید کنید.</div>';
+            '۳) <b>«Install»</b> یا <b>«افزودن»</b> را تأیید کنید.</div>' + pwaCleanHTML();
     }
     /* FIX-PWA-9a: بنر بالای صفحه — در ابتدای main (in-flow)، مستقل از Secure Context */
     function pwaShowBanner(scrollTo) {
@@ -3742,6 +3763,33 @@ showRes();
         try {
             if ('serviceWorker' in navigator && window.isSecureContext) {
                 navigator.serviceWorker.register('/sw.js').catch(function () { });
+                /* FIX-PWA-11a: بروزرسانی خودکار SW — نمونه‌های نصب‌شدهٔ قدیمی (SW کهنه) با اولین باز شدن به نسخهٔ جدید مهاجرت می‌کنند */
+                var swLastUpd = 0;
+                var swCheckUpdate = function () {
+                    var now = Date.now(); if (now - swLastUpd < 300000) return; swLastUpd = now;
+                    navigator.serviceWorker.ready.then(function (reg) {
+                        try { if (reg.update) reg.update().catch(function () { }); } catch (e) { }
+                    }).catch(function () { });
+                };
+                swCheckUpdate();
+                document.addEventListener('visibilitychange', function () {
+                    if (document.visibilityState === 'visible') swCheckUpdate();
+                });
+                /* FIX-PWA-11a: اعلام نسخهٔ جدید — وقتی سرویس‌ورکر جدید کنترل را می‌گیرد، نوار کوچک غیرمسدودکننده */
+                var swHadCtrl = !!navigator.serviceWorker.controller;
+                navigator.serviceWorker.addEventListener('controllerchange', function () {
+                    if (!swHadCtrl) { swHadCtrl = true; return; } /* اولین claim — اعلام لازم نیست */
+                    if (document.getElementById('swUpdBar')) return;
+                    var bar = document.createElement('div');
+                    bar.id = 'swUpdBar'; bar.className = 'sw-upd';
+                    bar.setAttribute('role', 'status');
+                    bar.innerHTML = '<span>نسخهٔ جدید سامانه آماده است.</span>'
+                        + '<button type="button" class="sw-go">بارگذاری نسخهٔ جدید</button>'
+                        + '<button type="button" class="sw-x" aria-label="بستن">✕</button>';
+                    document.body.appendChild(bar);
+                    bar.querySelector('.sw-go').addEventListener('click', function () { location.reload(); });
+                    bar.querySelector('.sw-x').addEventListener('click', function () { bar.remove(); });
+                });
             }
         } catch (e) { }
         var b = document.getElementById('navInstall');
