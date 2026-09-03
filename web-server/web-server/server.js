@@ -250,6 +250,26 @@ function appRequestHandler(req, res) {
     // ✅ ADDITIVE — health سریع، قبل از هر fetch ابری
     if (pathname === '/api/health') return handleHealthFast(req, res);
 
+    /* ===== SEC-AUDIT-13c (begin): گاردهای خواندن ماتریس دسترسی — admin همیشه مجاز ===== */
+    const R13C_PROD = ['manager', 'planner', 'operator', 'supervisor', 'finance', 'viewer']; /* تولید/ضایعات/باندل/شمش — خواندن تولید برای برنامه‌ریزی/مالی(خلاصه)/مدیریت */
+    const R13C_DOWN = R13C_PROD.concat(['engineering']);
+    const R13C_INV = ['manager', 'planner', 'finance', 'warehouse', 'viewer']; /* مالی/مدیریت/برنامه‌ریز خواندن انبار؛ اپراتور/qc/مهندسی خیر */
+    const R13C_MNT = ['engineering', 'supervisor'];
+    const deny13c = () => sendJson(res, { error: 'دسترسی غیرمجاز: خواندن این داده برای نقش شما مجاز نیست (ماتریس دسترسی).' }, 403);
+    if (pathname === '/api/production' || pathname === '/api/waste' || pathname === '/api/bundles' || pathname === '/api/billets') {
+        if (!auth.requireRole(req, R13C_PROD)) return deny13c();
+    } else if (pathname === '/api/downtime') {
+        if (!auth.requireRole(req, R13C_DOWN)) return deny13c();
+    } else if (pathname === '/api/inventory') {
+        if (!auth.requireRole(req, R13C_INV)) return deny13c();
+    } else if (pathname === '/api/quality') {
+        if (!auth.requireRole(req, ['quality', 'qc'])) return deny13c();
+    } else if (pathname === '/api/maintenance' || pathname === '/api/maintenance-extra') {
+        if (!auth.requireRole(req, R13C_MNT)) return deny13c();
+    }
+    if (/^\/api\/(genealogy|balance)\//.test(pathname) && !auth.requireRole(req, [])) return deny13c(); /* فقط admin */
+    /* ===== SEC-AUDIT-13c (end) ===== */
+
     // ===== POST /api/ingest : دریافت داده از اپ (بدون نیاز به ابر) =====
     if (req.method === 'POST' && pathname === '/api/ingest') {
         readBody(req).then((body) => {
@@ -327,7 +347,7 @@ function appRequestHandler(req, res) {
     // ===== FEAT-PLAN-7 (begin): ماژول برنامه‌ریزی تولید + مشاور AI =====
     // مدل داده: live.production_plans[] + live.power_outages[] (افزاینده، سازگار با live.json قدیمی)
     // ================================================================
-    const PLAN_READ_ROLES = ['admin', 'planner', 'manager', 'supervisor', 'operator'];
+    const PLAN_READ_ROLES = ['admin', 'planner', 'manager', 'supervisor']; /* SEC-AUDIT-13c: اپراتور حذف شد — فقط ثبت تولید/توقف/ضایعات */
     const PLAN_WRITE_ROLES = ['admin', 'planner'];
     function planAudit(req, action, payload) { try { auditLog(req, 'plan.' + action, payload); } catch (e) { /* بی‌ضرر */ } }
 
@@ -1683,7 +1703,7 @@ function appRequestHandler(req, res) {
     // ================================================================
     if (req.method === 'POST' && pathname === '/api/entry/maintenance') {
 
-        if (!auth.requireRole(req, ['engineering', 'supervisor'])) {
+        if (!auth.requireRole(req, ['engineering'])) { /* SEC-AUDIT-13c: سرپرست حذف شد — خواندن تولید + شروع اجرا */
             return sendJson(res, {
                 error: 'دسترسی غیرمجاز: نقش شما اجازهٔ ثبت تعمیرات ندارد.'
             }, 403);
@@ -1932,7 +1952,7 @@ function appRequestHandler(req, res) {
     // ================================================================
     if (req.method === 'POST' && pathname === '/api/pm/plan') {
 
-        if (!auth.requireRole(req, ['engineering', 'supervisor'])) {
+        if (!auth.requireRole(req, ['engineering'])) { /* SEC-AUDIT-13c: سرپرست حذف شد — خواندن تولید + شروع اجرا */
             return sendJson(res, {
                 error:
                     'دسترسی غیرمجاز: نقش شما اجازهٔ تعریف برنامهٔ PM ندارد.'
@@ -3667,7 +3687,7 @@ live.inventory_reservations.splice(idx, 1);
         return;
     }
 
-    if (pathname.startsWith('/api/')) {
+   if (pathname.startsWith('/api/')) {
         loadData().then((d) => {
             try {
                 // ===== FIX-INV-0-HARDENING: حذف شاخهٔ مردهٔ /api/health (مسیر سریع ابتدای فایل پاسخ می‌دهد) =====
