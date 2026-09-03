@@ -204,6 +204,21 @@ const server = http.createServer((req, res) => {
 
     // ===== S1 AUTH: public auth routes (login page + /api/auth/*) =====
     if (auth.handlePublic(req, res, pathname)) return;
+    // ===== FEAT-PWA-8b (begin): دارایی‌های عمومی PWA بدون احراز هویت — فقط مانیفست/سرویس‌ورکر/آیکون برند (بدون هیچ دادهٔ حساس) =====
+    if (req.method === 'GET' && (pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/icon-192.png' || pathname === '/icon-512.png')) {
+        const rel2 = pathname === '/manifest.webmanifest' ? 'manifest.webmanifest' : pathname.slice(1);
+        const fp2 = path.join(PUBLIC_DIR, rel2);
+        const h2 = { 'Cache-Control': 'no-cache' };
+        if (pathname === '/manifest.webmanifest') h2['Content-Type'] = 'application/manifest+json; charset=utf-8';
+        else if (pathname === '/sw.js') { h2['Content-Type'] = 'text/javascript; charset=utf-8'; h2['Service-Worker-Allowed'] = '/'; }
+        else h2['Content-Type'] = 'image/png';
+        fs.readFile(fp2, (err2, data2) => {
+            if (err2) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 Not Found'); return; }
+            res.writeHead(200, h2); res.end(data2);
+        });
+        return;
+    }
+    // ===== FEAT-PWA-8b (end) =====
     // ===== S1 AUTH: guard — block unauthenticated access to /api/* and pages =====
     // (NOTE: /api/ingest and /api/health are whitelisted INSIDE auth.enforce, so the
     //  mobile app sync and monitoring keep working without a web session.)

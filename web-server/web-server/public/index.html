@@ -8,6 +8,16 @@
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
     </script>
+    <!-- ===== FEAT-PWA-8b (begin): PWA SANATIFY ===== -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0f2a43" />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="صنعتی فای" />
+    <!-- ===== FEAT-PWA-8b (end) ===== -->
     <style>
         * {
             box-sizing: border-box;
@@ -1079,6 +1089,21 @@
             .bi-toolbar { padding: 9px 10px; gap: 8px; }
         }
         /* ===== FIX-UX-8a (end) ===== */
+        /* ===== FEAT-PWA-8b (begin): بنر نصب + دکمهٔ منو ===== */
+        .pwa-banner { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 90; background: linear-gradient(135deg, #0f2a43, #12385a); color: #e6f1f9; border: 1px solid #1d3a55; border-radius: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 10px 30px rgba(2, 8, 20, .45); }
+        .pwa-banner .pwa-ico { width: 44px; height: 44px; border-radius: 10px; flex: 0 0 auto; background: #0b1622; }
+        .pwa-banner .pwa-txt { min-width: 0; }
+        .pwa-banner .pwa-t { font-weight: bold; font-size: 13px; }
+        .pwa-banner .pwa-d { font-size: 11.5px; color: #9fb3c8; margin-top: 3px; line-height: 1.8; }
+        .pwa-banner .pwa-btns { display: flex; flex-direction: column; gap: 6px; margin-right: auto; flex: 0 0 auto; }
+        .pwa-banner button { border: none; border-radius: 8px; padding: 9px 14px; min-height: 44px; min-width: 84px; font-family: inherit; font-weight: bold; cursor: pointer; font-size: 12.5px; }
+        .pwa-banner .pwa-install { background: #0e7490; color: #fff; }
+        .pwa-banner .pwa-later { background: rgba(255, 255, 255, .12); color: #cbd5e1; }
+        body.theme-dark .pwa-banner { background: linear-gradient(135deg, #0d2233, #10293c); border-color: #2a4a66; }
+        .nav-install { width: calc(100% - 8px); margin: 14px 4px 0; background: rgba(14, 116, 144, .18); color: #7fd4e8; border: 1px solid rgba(14, 116, 144, .55); border-radius: 8px; padding: 10px 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: bold; min-height: 44px; text-align: right; }
+        .nav-install:hover { background: rgba(14, 116, 144, .32); }
+        .nav-install[hidden] { display: none; }
+        /* ===== FEAT-PWA-8b (end) ===== */
         /* ===== FEAT-BI-2 (end) ===== */</style>
 </head>
 
@@ -1117,6 +1142,8 @@
         <button data-tab="maintenance">تعمیرات و PM</button>
         <div class="nav-group">برنامه‌ریزی</div>
         <button data-tab="planning">🗓️ برنامه‌ریزی تولید</button>
+        <!-- ===== FEAT-PWA-8b: دکمهٔ کوچک «نصب اپ» برای نمایش دوبارهٔ بنر (در حالت نصب‌شده پنهان می‌شود) ===== -->
+        <button type="button" id="navInstall" class="nav-install" hidden>📲 نصب وب‌اپ صنعتی فای</button>
     </nav>
     <main>
         <div class="filter-panel" id="filterPanel" style="display:none">
@@ -3395,4 +3422,69 @@ showRes();
     plan7Wire();
 })();
 // ===== FEAT-PLAN-7 (end) =====
+// ===== FEAT-PWA-8b (begin): ثبت سرویس‌ورکر + بنر نصب دوستانه (Android: beforeinstallprompt — iOS: راهنمای Share → Add to Home Screen) =====
+(function () {
+    var pwaDeferred = null;
+    function pwaStandalone() { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
+    function pwaIsIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+    function pwaIsMobile() { return (window.matchMedia && window.matchMedia('(max-width: 960px)').matches) || ('ontouchstart' in window); }
+    function pwaDismissed() { try { return localStorage.getItem('san.pwa.bannerDismissed') === '1'; } catch (e) { return false; } }
+    function pwaSetDismissed() { try { localStorage.setItem('san.pwa.bannerDismissed', '1'); } catch (e) { } }
+    var pwaBanner = null;
+    function pwaRemoveBanner() { if (pwaBanner) { pwaBanner.remove(); pwaBanner = null; } }
+    function pwaShowBanner() {
+        if (pwaStandalone()) return;
+        pwaRemoveBanner();
+        var el = document.createElement('div');
+        el.className = 'pwa-banner';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-label', 'نصب وب‌اپ صنعتی فای');
+        var ios = pwaIsIOS() && !pwaDeferred;
+        el.innerHTML =
+            '<img class="pwa-ico" src="/icon-192.png" alt="آیکون نصب وب‌اپ صنعتی فای" width="44" height="44" />' +
+            '<div class="pwa-txt">' +
+            '<div class="pwa-t">نصب وب‌اپ صنعتی فای</div>' +
+            (ios
+                ? '<div class="pwa-d">روی آیفون/آیپد: دکمهٔ <b>اشتراک‌گذاری</b> (Share) را بزنید و سپس <b>«Add to Home Screen»</b> را انتخاب کنید.</div>'
+                : '<div class="pwa-d">دسترسی سریع و تمام‌صفحه از صفحهٔ اصلی گوشی — سبک و بدون فروشگاه اپ.</div>') +
+            '</div>' +
+            '<div class="pwa-btns">' +
+            (ios ? '' : '<button type="button" class="pwa-install">نصب</button>') +
+            '<button type="button" class="pwa-later">بعداً</button>' +
+            '</div>';
+        document.body.appendChild(el);
+        pwaBanner = el;
+        var bInst = el.querySelector('.pwa-install');
+        if (bInst) bInst.addEventListener('click', function () {
+            if (!pwaDeferred) {
+                el.querySelector('.pwa-d').innerHTML = 'برای نصب، از منوی مرورگر گزینهٔ <b>«Add to Home Screen»</b> را انتخاب کنید.';
+                return;
+            }
+            pwaDeferred.prompt();
+            pwaDeferred.userChoice.then(function () { pwaDeferred = null; pwaRemoveBanner(); }).catch(function () { });
+        });
+        el.querySelector('.pwa-later').addEventListener('click', function () { pwaSetDismissed(); pwaRemoveBanner(); });
+    }
+    function pwaSyncNavBtn() {
+        var b = document.getElementById('navInstall');
+        if (b) b.hidden = pwaStandalone();
+    }
+    window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        pwaDeferred = e;
+        pwaSyncNavBtn();
+        if (pwaIsMobile() && !pwaDismissed()) pwaShowBanner();
+    });
+    window.addEventListener('appinstalled', function () {
+        pwaDeferred = null; pwaRemoveBanner(); pwaSyncNavBtn();
+        var b = document.getElementById('navInstall'); if (b) b.hidden = true;
+    });
+    window.addEventListener('load', function () {
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function () { }); }
+        var b = document.getElementById('navInstall');
+        if (b) b.addEventListener('click', function () { pwaShowBanner(); });
+        pwaSyncNavBtn();
+    });
+})();
+// ===== FEAT-PWA-8b (end) =====
 </script></body></html>
