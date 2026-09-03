@@ -6,3 +6,6 @@ build/
 .gradle/
 .idea/
 *.log
+
+# FEAT-HTTPS-11c - mkcert TLS material (private keys are never committed)
+*.pem

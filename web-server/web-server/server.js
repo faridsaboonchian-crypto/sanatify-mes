@@ -5,11 +5,15 @@
 //  S1: احراز هویت وب (login + session) — /api/ingest و /api/health باز می‌مانند
 // =====================================================================
 const http = require('http');
+// ===== FEAT-HTTPS-11c: ماژول داخلی https — صفر وابستگی جدید =====
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const auth = require('./auth');
 
 const PORT = process.env.PORT || 3001;
+// ===== FEAT-HTTPS-11c: پورت قدیمی کارخانه (HTTP) — همهٔ درخواست‌ها 301 می‌شوند به سرویس اصلی =====
+const REDIRECT_PORT = process.env.REDIRECT_PORT || 3000;
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_FILE = path.join(ROOT, 'data.json');  // نمونهٔ اولیه (fallback نهایی)
@@ -193,7 +197,8 @@ function handleHealthFast(req, res) {
 }
 
 // ---------- سرور ----------
-const server = http.createServer((req, res) => {
+// ===== FEAT-HTTPS-11c (begin): هندلر به تابع نام‌دار استخراج شد تا بین HTTP و HTTPS مشترک باشد =====
+function appRequestHandler(req, res) {
     if (req.method === 'OPTIONS') {
         res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' });
         res.end(); return;
@@ -3086,18 +3091,56 @@ live.inventory_reservations.splice(idx, 1);
     const safePath = path.normalize(path.join(PUBLIC_DIR, rel));
     if (!safePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end('Forbidden'); return; }
     sendFile(res, safePath);
-});
+}
+// ===== FEAT-HTTPS-11c (end): هندلر مشترک — نمونهٔ HTTP (حالت fallback بدون گواهی) =====
+const server = http.createServer(appRequestHandler);
 
 // ===== REVERT-STEEL-4: اجرای یک‌بارهٔ مهاجرت انبار هنگام راه‌اندازی =====
 try { migrateSteelWarehouses(readLive()); } catch (e) { console.warn('[STEEL-WH] startup migration failed:', e.message); }
-server.listen(PORT, '0.0.0.0', () => {
+// ===== FEAT-HTTPS-11c (begin): سرویس HTTPS روی پورت اصلی با گواهی mkcert (cert.pem/key.pem در همین پوشه) =====
+// اگر گواهی/کلید موجود نبود، سرویس خودکار روی همان پورت با HTTP بالا می‌آید (سرور کارخانه هرگز نمی‌میرد).
+let tlsMode = 'HTTP';
+let mainServer = server; // حالت پیش‌فرض: HTTP (بدون گواهی)
+try {
+    const tlsOpts = { key: fs.readFileSync(path.join(ROOT, 'key.pem')), cert: fs.readFileSync(path.join(ROOT, 'cert.pem')) };
+    const httpsServer = https.createServer(tlsOpts, appRequestHandler);
+    // کلاینت‌های TLS خراب/ناسازگار هرگز سرور را نمی‌اندازند
+    httpsServer.on('tlsClientError', (err) => console.warn('[HTTPS] tlsClientError — سرور سالم ماند:', (err && err.code) || (err && err.message) || err));
+    mainServer = httpsServer;
+    tlsMode = 'HTTPS';
+} catch (e) {
+    console.warn('[HTTPS] cert.pem/key.pem در دسترس نیست — fallback خودکار به HTTP روی همان پورت:', (e && e.code) || (e && e.message) || e);
+}
+mainServer.listen(PORT, '0.0.0.0', () => {
+    const scheme11c = tlsMode === 'HTTPS' ? 'https' : 'http';
     console.log('========================================================');
     console.log('  Sanatify MES — سرور مقاوم (ابر=پشتیبان، داخلی=قلب) ✅');
-    console.log(`  وب اپ :  http://localhost:${PORT}  (با لاگین)`);
-    console.log(`  منبع داده : ${isSupabaseConfigured() ? 'Supabase + آینهٔ زنده داخلی (live.json)' : 'live.json / data.json (Supabase تنظیم نشده)'}`);
+    console.log(`  حالت سرویس : ${tlsMode} روی پورت ${PORT}`);
+    console.log(`  وب اپ :  ${scheme11c}://localhost:${PORT}  (با لاگین)`);
+    console.log(`  منبع داده : ${isSupabaseConfigured() ? 'Supabase + آینهٔ زندهٔ داخلی (live.json)' : 'live.json / data.json (Supabase تنظیم نشده)'}`);
     console.log('  endpoint دریافت از اپ : POST /api/ingest (بدون لاگین)');
     console.log('========================================================');
 });
+
+// ===== FEAT-HTTPS-11c: لیستنر سبک HTTP روی پورت قدیمی کارخانه — 301 به همان هاست با سرویس اصلی (لینک‌های قدیمی کار کنند) =====
+// در حالت HTTPS مقصد https://<همان هاست>:PORT است؛ در حالت fallback (بدون گواهی) مقصد http://<همان هاست>:PORT — هیچ حالتی لینک قدیمی را نمی‌شکند.
+const redirectServer = http.createServer((req, res) => {
+    try {
+        let hostName = String(req.headers.host || '').split(':')[0] || 'localhost';
+        if (hostName.startsWith('[') && hostName.includes(']')) hostName = hostName.slice(0, hostName.indexOf(']') + 1); // IPv6 literal
+        const scheme11c = tlsMode === 'HTTPS' ? 'https' : 'http';
+        res.writeHead(301, { Location: `${scheme11c}://${hostName}:${PORT}${req.url || '/'}` });
+        res.end();
+    } catch (e) {
+        try { res.writeHead(500); res.end('Redirect error'); } catch (e2) { /* noop */ }
+    }
+});
+redirectServer.on('error', (e) => console.warn(`[Redirect] پورت ${REDIRECT_PORT} در دسترس نیست — ریدایرکت غیرفعال (سرور اصلی سالم ماند):`, (e && e.code) || (e && e.message) || e));
+redirectServer.listen(REDIRECT_PORT, '0.0.0.0', () => {
+    const scheme11c = tlsMode === 'HTTPS' ? 'https' : 'http';
+    console.log(`  ریدایرکت :  http://localhost:${REDIRECT_PORT}  ->  ${scheme11c}://localhost:${PORT}  (301)`);
+});
+// ===== FEAT-HTTPS-11c (end) =====
 
 // ===== R4: heartbeat keeps Supabase free tier from pausing after idle days =====
 function supabaseHeartbeat() {
