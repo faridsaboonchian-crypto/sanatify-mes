@@ -684,6 +684,284 @@ const server = http.createServer((req, res) => {
         }).catch(() => sendJson(res, { ok: true, generated_at: new Date().toISOString(), ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), engine: 'internal', suggestions: internal.suggestions, meta: internal.meta }));
         return;
     }
+    /* ===== FEAT-PLAN-9c (begin): موتور APS سناریو-محور — افزاینده، مستقل از موتور قبلی ===== */
+    function planApsStats(live) {
+        const now = Date.now();
+        const dAgo = (n) => new Date(now - n * 86400000).toISOString();
+        const d90 = dAgo(90), d30 = dAgo(30);
+        const rounds = (x) => Math.round((Number(x) || 0) * 100) / 100;
+        const RE_MIN = 6, RE_MAX = 50;
+        /* نرخ واقعی ۹۰ روزه per سایز */
+        const sizes = {};
+        const bump = (k) => (sizes[k] = sizes[k] || { kg: 0, bars: 0, daysMap: {} });
+        const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
+            const t = Date.parse(b.produced_at || ''); if (isNaN(t) || t < d90) return;
+            const nn = Number(b.rebar_size); const g = String(b.rebar_grade || '');
+            let k = null;
+            if (nn >= RE_MIN && nn <= RE_MAX) k = 'RB-' + nn; else if (g === '5SP') k = '5SP';
+            if (!k) return;
+            const s = bump(k); s.kg += Number(b.net_weight_kg) || 0; s.daysMap[dayOf(t)] = 1;
+        });
+        (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
+            const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < d90) return;
+            const pid = String(p.product_id || ''); if (!pid) return;
+            const m = /^RB-(\d+)$/.exec(pid); const nn = m ? Number(m[1]) : NaN;
+            if (Number.isFinite(nn) && nn >= RE_MIN && nn <= RE_MAX) {
+                const s = bump('RB-' + nn); const q = Number(p.good_quantity) || 0;
+                s.bars += q; s.kg += q * 0.0061654 * nn * nn * 12; s.daysMap[dayOf(t)] = 1;
+            } else if (pid === '5SP') { const s = bump('5SP'); s.bars += Number(p.good_quantity) || 0; s.daysMap[dayOf(t)] = 1; }
+        });
+        Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.kgPerDay = s.kg / s.days; delete s.daysMap; });
+        /* ضایعات ۳۰ روزه */
+        let wasteKg = 0;
+        (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => { const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return; wasteKg += Number(w.quantity) || 0; });
+        let prodKg = 0; Object.keys(sizes).forEach((k) => { prodKg += sizes[k].kg; });
+        const wastePct = (prodKg + wasteKg) > 0 ? Math.min(20, wasteKg / (prodKg + wasteKg) * 100) : 3;
+        /* پذیرش QC (آستانه‌های A3: ReH≥400 / Rm≥600 / A≥14) */
+        let qcPass = 0, qcAll = 0;
+        (Array.isArray(live.quality_inspections) ? live.quality_inspections : []).forEach((q) => {
+            const t = Date.parse(q.timestamp || ''); if (isNaN(t) || t < d90) return;
+            qcAll++;
+            const reh = Number(q.yield_strength) || 0, rm = Number(q.tensile_strength) || 0, a = Number(q.elongation_percent) || 0;
+            if (reh >= 400 && rm >= 600 && a >= 14) qcPass++;
+        });
+        const qcPassPct = qcAll ? qcPass / qcAll : 0.95;
+        /* الگوی اختلال برق */
+        let elecMin = 0; const daysSeen = {};
+        (Array.isArray(live.downtime_logs) ? live.downtime_logs : []).forEach((r) => {
+            const t = Date.parse(r.start_time || ''); if (isNaN(t) || t < d90) return;
+            daysSeen[dayOf(t)] = 1;
+            const rid = String(r.reason_id || '').toLowerCase();
+            if (rid.indexOf('electr') !== -1 || rid.indexOf('power') !== -1) elecMin += Number(r.duration_minutes) || 0;
+        });
+        const elecPctDay = Math.min(25, (elecMin / Math.max(1, Object.keys(daysSeen).length)) / 720 * 100);
+        /* قطعی برق ثبت‌شدهٔ ۷ روز آینده per شیفت */
+        const outageByShift = { any: 0, 'shift-morning-301': 0, 'shift-night-302': 0 };
+        const outageNotes = [];
+        (Array.isArray(live.power_outages) ? live.power_outages : []).forEach((o) => {
+            const t = Date.parse(o.start_ts || ''); if (isNaN(t) || t < now || t > now + 7 * 86400000) return;
+            const h = Number(o.duration_hours) || 0;
+            const k = outageByShift[o.shift_id] !== undefined ? o.shift_id : 'any';
+            outageByShift[k] += h; if (k === 'any') { outageByShift['shift-morning-301'] += h; outageByShift['shift-night-302'] += h; }
+            outageNotes.push((o.shift_id === 'shift-night-302' ? 'شیفت شب' : 'شیفت صبح') + ' — ' + fa(h) + ' ساعت' + (o.note ? ' (' + String(o.note).slice(0, 24) + ')' : ''));
+        });
+        /* PM هفتهٔ پیش‌رو */
+        let pmCut = 0; const pmSeen = {}; const pmNotes = [];
+        (Array.isArray(live.pm_plans) ? live.pm_plans : []).forEach((p) => {
+            const last = p.last_done ? planJalaliToTs(p.last_done, 6) : null; if (!last) return;
+            const due = Date.parse(last) + (Number(p.interval_days) || 30) * 86400000;
+            const key = String(p.title || p.machine_id || '');
+            if (due >= now && due <= now + 7 * 86400000 && !pmSeen[key]) { pmSeen[key] = 1; pmCut = Math.min(15, pmCut + 4); pmNotes.push(key); }
+        });
+        /* موجودی شمش انبار */
+        let rawAvailKg = 0;
+        const items = Array.isArray(live.inventory_items) ? live.inventory_items : [];
+        const rawIds = {};
+        items.forEach((it) => {
+            const hay = String((it.name || '') + ' ' + (it.code || '') + ' ' + (it.category || '')).toLowerCase();
+            if (hay.indexOf('شمش') !== -1 || hay.indexOf('بیلت') !== -1 || hay.indexOf('billet') !== -1) rawIds[it.id] = 1;
+        });
+        if (Object.keys(rawIds).length) {
+            const sm = (arr, f) => (Array.isArray(arr) ? arr : []).reduce((s, r) => s + (rawIds[r.item_id] ? (Number(f(r)) || 0) : 0), 0);
+            rawAvailKg = Math.max(0, sm(live.inventory_receipts, (r) => r.quantity) - sm(live.inventory_issues, (r) => r.quantity) + sm(live.inventory_adjustments, (r) => r.delta_quantity));
+        }
+        let bAvg = 0, bN = 0;
+        (Array.isArray(live.billets) ? live.billets : []).forEach((b) => { const w = Number(b.initial_weight_kg) || 0; if (w > 0) { bAvg += w; bN++; } });
+        const billetAvgKg = bN ? Math.round(bAvg / bN) : 0;
+        /* نیروی انسانی شیفت (اپراتورهای متمایز ۳۰ روز اخیر) */
+        const opsByShift = { 'shift-morning-301': {}, 'shift-night-302': {} };
+        (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
+            const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < d30) return;
+            const sh = String(p.shift_id || ''); if (!opsByShift[sh]) return;
+            const op = String(p.operator_id || '').trim(); if (op) opsByShift[sh][op] = 1;
+        });
+        const opsMorning = Object.keys(opsByShift['shift-morning-301']).length;
+        const opsNight = Object.keys(opsByShift['shift-night-302']).length;
+        const opsMax = Math.max(opsMorning, opsNight, 1);
+        const manpower = {
+            'shift-morning-301': { n: opsMorning, factor: opsMorning ? Math.min(1, 0.7 + 0.3 * opsMorning / opsMax) : 0.85 },
+            'shift-night-302': { n: opsNight, factor: opsNight ? Math.min(1, 0.7 + 0.3 * opsNight / opsMax) : 0.85 }
+        };
+        /* تقاضای باز (برنامه‌های فعال) per سایز */
+        const demandKg = {};
+        let demandTotalKg = 0;
+        (Array.isArray(live.production_plans) ? live.production_plans : []).forEach((p) => {
+            if (p.status !== 'approved' && p.status !== 'in_progress') return;
+            const k = String(p.product_size || ''); if (!k) return;
+            const tg = (Number(p.target_tonnage) || 0) * 1000;
+            const ac = (Number(p.actual_tonnage) || 0) * 1000;
+            demandKg[k] = (demandKg[k] || 0) + Math.max(0, tg - ac);
+            demandTotalKg += Math.max(0, tg - ac);
+        });
+        return { sizes, wastePct: rounds(wastePct), qcPassPct: rounds(qcPassPct * 100) / 100, elecPctDay: rounds(elecPctDay), outageByShift, outageNotes, pmCut, pmNotes, rawAvailKg: rounds(rawAvailKg), billetAvgKg, manpower, demandKg, demandTotalKg: rounds(demandTotalKg), obsDays: Math.max(1, Object.keys(daysSeen).length) };
+    }
+
+    function planApsMulberry32(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a |= 0; a = (a + 0x6D2B79F5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+    function planApsGauss(rnd) { /* Box–Muller ساده */
+        let u = 0, v = 0;
+        while (u === 0) u = rnd(); while (v === 0) v = rnd();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    }
+
+    function planApsScenarios(live) {
+        const st = planApsStats(live);
+        const rounds = (x) => Math.round((Number(x) || 0) * 100) / 100;
+        const keyFa = (k) => (String(k).indexOf('RB-') === 0 ? 'میلگرد سایز ' + k.slice(3) : (k === '5SP' ? 'میلگرد گرید 5SP' : k));
+        const sizeKeys = Object.keys(st.sizes).filter((k) => st.sizes[k].kg > 0);
+        const totalKg = sizeKeys.reduce((s, k) => s + st.sizes[k].kg, 0);
+        if (!sizeKeys.length) {
+            return { engine: 'internal-aps', generated_at: new Date().toISOString(), horizon_days: 7, scenarios: [], meta: Object.assign({ empty: true }, st), ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), ai_note: null, reasons_hint: ['تا امروز تولیدی با سایز استاندارد میلگرد (۶ تا ۵۰) یا گرید 5SP ثبت نشده است؛ با ثبت تولید، سناریوها ساخته می‌شوند.'] };
+        }
+        /* ظرفیت per شیفت */
+        const shiftCap = {};
+        ['shift-morning-301', 'shift-night-302'].forEach((sh) => {
+            const oc = Math.min(50, (st.outageByShift[sh] || 0) / 12 * 100);
+            const mp = st.manpower[sh] || { factor: 0.85, n: 0 };
+            const cap = Math.max(0.35, 1 - st.elecPctDay / 100 - oc / 100 - st.pmCut / 100) * mp.factor;
+            shiftCap[sh] = { cap, outagePct: rounds(oc), manpowerN: mp.n };
+        });
+        const capAvg = (shiftCap['shift-morning-301'].cap + shiftCap['shift-night-302'].cap) / 2;
+        /* سهم ترکیب per سناریو */
+        const shareProp = {}; sizeKeys.forEach((k) => { shareProp[k] = st.sizes[k].kg / totalKg; });
+        const demandKeys = Object.keys(st.demandKg).filter((k) => st.demandKg[k] > 0);
+        const demandTotal = demandKeys.reduce((s, k) => s + st.demandKg[k], 0);
+        const shareDemand = {}; if (demandTotal > 0) demandKeys.forEach((k) => { shareDemand[k] = st.demandKg[k] / demandTotal; });
+        const shareDiverse = {}; sizeKeys.slice().sort((a, b) => st.sizes[b].kg - st.sizes[a].kg).slice(0, 3).forEach((k) => { shareDiverse[k] = 1 / Math.min(3, sizeKeys.length); });
+        const SCEN = [
+            { id: 'aps-conservative', kind: 'conservative', title: 'سناریو محافظه‌کار', util: 0.75, share: shareProp, nightShare: 0.3, riskBase: 15, note: '۷۵٪ ظرفیت عملی — اولویت تحقق مطمئن' },
+            { id: 'aps-balanced', kind: 'balanced', title: 'سناریو متعادل', util: 0.9, share: shareProp, nightShare: 0.5, riskBase: 30, note: '۹۰٪ ظرفیت عملی — توازن تناژ و ریسک' },
+            { id: 'aps-aggressive', kind: 'aggressive', title: 'سناریو تهاجمی', util: 1.08, share: shareProp, nightShare: 0.55, riskBase: 55, note: '۱۰۸٪ ظرفیت عملی — حداکثر تناژ با ریسک بیشتر' },
+            { id: 'aps-demand', kind: 'demand', title: 'سناریو تمرکز بر تقاضا', util: 0.9, share: demandTotal > 0 ? shareDemand : shareProp, nightShare: 0.45, riskBase: 35, note: 'ترکیب سایزها هم‌تراز برنامه‌های فعال/تقاضای باز' },
+            { id: 'aps-diversified', kind: 'diversified', title: 'سناریو ترکیب متنوع', util: 0.85, share: shareDiverse, nightShare: 0.5, riskBase: 25, note: 'پراکندگی سایزها برای کاهش ریسک بازار' }
+        ];
+        const MC_N = 220;
+        const scenarios = SCEN.map((sc, idx) => {
+            const wCap = (1 - sc.nightShare) * shiftCap['shift-morning-301'].cap + sc.nightShare * shiftCap['shift-night-302'].cap; /* FEAT-PLAN-9c: Ø³ÙÙ Ø´ÛÙØª per Ø³ÙØ§Ø±ÛÙ */
+            const shareSum = Object.keys(sc.share).reduce((s, k) => s + sc.share[k], 0) || 1;
+            const mix = sizeKeys.map((k) => {
+                const share = (sc.share[k] || 0) / shareSum;
+                const dailyKg = st.sizes[k].kgPerDay * sc.util * wCap * share;
+                return { size: k, share: rounds(share * 100) / 100, daily_tonnage: rounds(dailyKg / 1000) };
+            }).filter((m) => m.daily_tonnage > 0.01).sort((a, b) => b.daily_tonnage - a.daily_tonnage);
+            const baseDailyKg = mix.reduce((s, m) => s + m.daily_tonnage * 1000, 0);
+            const healthyFactor = (1 - st.wastePct / 100) * st.qcPassPct;
+            const baseHealthyTon = baseDailyKg * healthyFactor * 7 / 1000;
+            /* مونت‌کارلو ۲۲۰ تکرار */
+            const rnd = planApsMulberry32(1405 + idx * 977);
+            const iters = [];
+            for (let i = 0; i < MC_N; i++) {
+                const nRate = Math.max(0.55, 1 + planApsGauss(rnd) * 0.08);
+                const nWaste = Math.max(0.4, 1 + planApsGauss(rnd) * 0.2);
+                const nOut = Math.max(0.6, 1 + planApsGauss(rnd) * 0.3);
+                const nQc = Math.max(0.75, 1 + planApsGauss(rnd) * 0.04);
+                const outPen = 1 - (Math.min(50, (st.outageByShift['shift-morning-301'] + st.outageByShift['shift-night-302']) / 12 * 100) / 100) * nOut;
+                const h = baseDailyKg * nRate * Math.max(0.3, outPen) * (1 - Math.min(20, st.wastePct * nWaste) / 100) * st.qcPassPct * nQc * 7 / 1000;
+                iters.push(h);
+            }
+            iters.sort((a, b) => a - b);
+            const q = (p) => iters[Math.min(MC_N - 1, Math.max(0, Math.round(p * (MC_N - 1))))];
+            const p10 = q(0.1), p50 = q(0.5), p90 = q(0.9);
+            const commit = Math.max(0.1, rounds(baseHealthyTon));
+            const conf = Math.round(iters.filter((h) => h >= commit).length / MC_N * 100);
+            /* شمش */
+            const healthyKg = baseHealthyTon * 1000;
+            const reqBillets = st.billetAvgKg > 50 ? Math.ceil(healthyKg / st.billetAvgKg) : null;
+            const availBillets = (st.billetAvgKg > 50 && st.rawAvailKg > 0) ? Math.floor(st.rawAvailKg / st.billetAvgKg) : null;
+            const shortage = reqBillets != null && availBillets != null && reqBillets > availBillets;
+            let healthyCapped = baseHealthyTon;
+            if (shortage && availBillets != null) healthyCapped = Math.min(baseHealthyTon, availBillets * st.billetAvgKg / 1000);
+            /* KPIها */
+            const wasteKg = healthyCapped > 0 ? healthyCapped * 1000 * (st.wastePct / 100) / (1 - st.wastePct / 100) : 0;
+            const oee = Math.round(capAvg * Math.min(1, sc.util) * st.qcPassPct * 1000) / 10;
+            const risk = Math.max(5, Math.min(95, Math.round(sc.riskBase + (shiftCap['shift-night-302'].outagePct * sc.nightShare + shiftCap['shift-morning-301'].outagePct * (1 - sc.nightShare)) * 1.2 + st.pmCut * 1.5 + st.elecPctDay + (shortage ? 20 : 0) + ((shiftCap['shift-morning-301'].manpowerN < 2 || shiftCap['shift-night-302'].manpowerN < 2) ? 10 : 0))));
+            const fulfill = st.demandTotalKg > 0 ? Math.round(Math.min(250, healthyCapped * 1000 / st.demandTotalKg * 1000) / 10) : null;
+            /* دلایل فارسی قالبی */
+            const reasons = [];
+            reasons.push('پایه: نرخ واقعی ۹۰ روزهٔ ' + mix.slice(0, 2).map((m) => keyFa(m.size) + ' (' + fa(m.daily_tonnage) + ' تن/روز)').join(' + '));
+            reasons.push('ظرفیت شیفت با احتساب اختلال برق (' + fa(st.elecPctDay) + '٪)، قطعی ثبت‌شده و PM: ' + fa(Math.round(capAvg * 100)) + '٪');
+            if (st.outageNotes.length) reasons.push('قطعی برنامه‌ریزی‌شدهٔ ۷ روز آینده: ' + st.outageNotes.slice(0, 2).join('، '));
+            if (st.pmNotes.length) reasons.push('PM سررسیدی هفتهٔ پیش‌رو: ' + st.pmNotes.slice(0, 2).join('، '));
+            reasons.push('ضایعات ۳۰ روزهٔ ' + fa(st.wastePct) + '٪ و پذیرش QC ' + fa(Math.round(st.qcPassPct * 100)) + '٪ در تناژ سالم لحاظ شد');
+            if (st.manpower['shift-morning-301'].n || st.manpower['shift-night-302'].n) reasons.push('نیروی انسانی شیفت‌ها: ' + fa(shiftCap['shift-morning-301'].manpowerN) + ' صبح / ' + fa(shiftCap['shift-night-302'].manpowerN) + ' شب');
+            if (shortage) reasons.push('پرچم کمبود: شمش لازم ' + fa(reqBillets) + ' در برابر موجودی ' + fa(availBillets) + ' — تناژ به سقف موجودی کپ شد');
+            else if (st.rawAvailKg > 0) reasons.push('موجودی شمش قابل‌مصرف: ' + fa(rounds(st.rawAvailKg / 1000)) + ' تن — محدودیتی نیست');
+            else reasons.push('موجودی شمش در انبار ثبت نشده؛ محدودیت شمش اعمال نشد');
+            reasons.push('مونت‌کارلو ' + fa(MC_N) + ' تکرار: اطمینان ' + fa(conf) + '٪ برای تعهد ' + fa(commit) + ' تن — بازهٔ ' + fa(rounds(p10)) + ' تا ' + fa(rounds(p90)) + ' تن');
+            reasons.push(sc.note);
+            /* پیش‌نمایش اعمال (دو سایز برتر ترکیب) */
+            const apply = mix.slice(0, 2).map((m, i) => ({
+                title: sc.title + ' — ' + keyFa(m.size),
+                period: 'day', product_size: m.size,
+                target_tonnage: Math.max(0.1, rounds(m.daily_tonnage * healthyFactor * (7 / (i === 0 ? 7 : 7)))),
+                required_billets: st.billetAvgKg > 50 ? Math.ceil(m.daily_tonnage * 1000 * 7 / st.billetAvgKg) : null,
+                machine: 'st-form', shift_id: i === 0 ? 'shift-morning-301' : 'shift-night-302',
+                priority: sc.kind === 'aggressive' ? 'high' : (sc.kind === 'conservative' ? 'low' : 'medium'),
+                confidence: conf, reasons: reasons.slice(0, 6),
+                engine: 'internal', based_on: 'APS: نرخ ۹۰روزه + قطعی برق + PM + شمش + نیروی انسانی + مونت‌کارلو ' + MC_N
+            }));
+            return {
+                id: sc.id, kind: sc.kind, title: sc.title, horizon_days: 7,
+                mix: mix, kpis: {
+                    healthy_tonnage_p50: rounds(p50), healthy_tonnage_p10: rounds(p10), healthy_tonnage_p90: rounds(p90),
+                    committed_tonnage: commit, expected_waste_kg: Math.round(wasteKg), oee_pct: oee,
+                    risk: risk, shortage: shortage, required_billets: reqBillets, available_billets: availBillets,
+                    fulfillment_pct: fulfill, confidence_mc_pct: conf
+                },
+                reasons: reasons.slice(0, 8), apply: apply,
+                engine: 'internal', based_on: 'APS ۷روزه — مونت‌کارلو ' + MC_N + ' تکرار'
+            };
+        });
+        return { engine: 'internal-aps', generated_at: new Date().toISOString(), horizon_days: 7, scenarios: scenarios, meta: st, ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), ai_note: null };
+    }
+
+    /* توضیح اختیاری AI (غیرمسدودکننده) — کش per هش داده */
+    let apsAiCache = { hash: '', note: null };
+    function planApsDataHash(live) {
+        const n = (a) => (Array.isArray(a) ? a.length : 0);
+        return [n(live.production_logs), n(live.rebar_bundles), n(live.power_outages), n(live.production_plans), n(live.pm_plans), n(live.waste_logs), Math.round((live.generated_at ? String(live.generated_at).length : 0) / 7)].join(':');
+    }
+    function planApsAiNoteAsync(live, scenarios) {
+        const url = process.env.AI_PLANNING_URL;
+        const key = process.env.AI_PLANNING_KEY || '';
+        if (!url || typeof fetch !== 'function' || !scenarios.length) return;
+        const hash = planApsDataHash(live);
+        if (apsAiCache.hash === hash) return;
+        const prompt = 'برنامه‌ریز تولید فولاد. خلاصهٔ کوتاه فارسی (حداکثر ۳ جمله) از این سناریوهای APS برای مدیر تولید بنویس: ' + JSON.stringify(scenarios.map((s) => ({ title: s.title, p50: s.kpis.healthy_tonnage_p50, risk: s.kpis.risk, oee: s.kpis.oee_pct, conf: s.kpis.confidence_mc_pct })));
+        const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch (e) { } }, 8000);
+        fetch(url, {
+            method: 'POST', signal: ctrl ? ctrl.signal : undefined,
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+            body: JSON.stringify({ model: process.env.AI_PLANNING_MODEL || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.3 })
+        }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+            clearTimeout(timer);
+            const txt = j && j.choices && j.choices[0] && j.choices[0].message ? String(j.choices[0].message.content || '').slice(0, 600) : null;
+            apsAiCache = { hash: hash, note: txt };
+        }).catch(() => { clearTimeout(timer); apsAiCache = { hash: hash, note: null }; });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/planning/scenarios') {
+        if (!auth.requireRole(req, PLAN_READ_ROLES)) return sendJson(res, { error: 'دسترسی مجاز نیست.' }, 403);
+        const live = readLive();
+        const aps = planApsScenarios(live);
+        if (aps.ai_configured && aps.scenarios.length) {
+            if (apsAiCache.hash === planApsDataHash(live) && apsAiCache.note) aps.ai_note = apsAiCache.note;
+            else planApsAiNoteAsync(live, aps.scenarios);
+        }
+        planAudit(req, 'scenarios', { count: aps.scenarios.length });
+        return sendJson(res, aps);
+    }
+    /* ===== FEAT-PLAN-9c (end) ===== */
+
     if (req.method === 'GET' && pathname === '/api/planning/outage') {
         if (!auth.requireRole(req, PLAN_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
         const live = readLive();

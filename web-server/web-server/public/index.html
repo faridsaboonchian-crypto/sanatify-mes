@@ -1105,6 +1105,18 @@
             body { overflow-x: clip; }
         }
         /* ===== FIX-UX-9b (end) ===== */
+        /* ===== FEAT-PLAN-9c (begin): استایل سناریوهای APS ===== */
+        .aps-weights { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: 12px; }
+        .aps-weights label { display: flex; align-items: center; gap: 6px; color: #475569; font-weight: bold; }
+        .aps-weights input[type=range] { width: 120px; accent-color: #0e7490; min-height: 44px; }
+        .aps-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 6px; margin: 8px 0; }
+        .aps-kv > div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; font-size: 10.5px; color: #64748b; text-align: center; }
+        .aps-kv b { display: block; font-size: 12.5px; color: #0f2a43; }
+        body.theme-dark .aps-kv > div { background: #0e2233; border-color: #1d3a55; color: #8aa6bd; }
+        body.theme-dark .aps-kv b { color: #7fb4d8; }
+        .aps-rank1 { border-right-color: #059669 !important; }
+        .aps-rank-badge { background: #059669; color: #fff; border-radius: 8px; padding: 1px 8px; font-size: 10.5px; font-weight: bold; }
+        /* ===== FEAT-PLAN-9c (end) ===== */
         /* ===== FEAT-PWA-8b (begin): بنر نصب + دکمهٔ منو ===== */
         .pwa-banner { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 90; background: linear-gradient(135deg, #0f2a43, #12385a); color: #e6f1f9; border: 1px solid #1d3a55; border-radius: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 10px 30px rgba(2, 8, 20, .45); }
         .pwa-banner .pwa-ico { width: 44px; height: 44px; border-radius: 10px; flex: 0 0 auto; background: #0b1622; }
@@ -1792,6 +1804,22 @@
                 <div class="plan-suggest-grid" id="planSuggestBox"></div>
                 <p class="note">پیشنهادها بر پایهٔ نرخ واقعی تولید، ضایعات، الگوی توقفات و برق، پنجره‌های PM و موجودی مواد اولیه انبار محاسبه می‌شوند. «اعمال در فرم» فقط فرم را پیش‌پر می‌کند؛ ثبت نهایی با شماست.</p>
             </div>
+            <!-- ===== FEAT-PLAN-9c (begin): سناریوهای APS ===== -->
+            <div class="panel hidden" id="planApsPanel">
+                <h2>سناریوهای APS — مقایسه و رتبه‌بندی <span class="plan-engine" id="planApsEngine">در حال بارگذاری…</span></h2>
+                <div class="aps-weights">
+                    <label>وزن تناژ <input type="range" id="apsW1" min="0" max="10" step="1" value="5"></label>
+                    <label>وزن ریسک <input type="range" id="apsW2" min="0" max="10" step="1" value="3"></label>
+                    <label>وزن ضایعات <input type="range" id="apsW3" min="0" max="10" step="1" value="2"></label>
+                    <button class="act" id="apsRefresh">🔄 بروزرسانی سناریوها</button>
+                    <span class="note" id="apsGenAt"></span>
+                </div>
+                <div class="note hidden" id="apsAiNote"></div>
+                <div class="plan-suggest-grid" id="apsCards"></div>
+                <div class="tablewrap" id="apsTableBox" style="max-height:420px;overflow-y:auto"></div>
+                <p class="note">سناریوها با شبیه‌سازی ۷ روزه در برابر قطعی برق، پنجره‌های PM، موجودی شمش، نیروی انسانی شیفت، نرخ واقعی ۹۰روزه، ضایعات و پذیرش QC ساخته و با مونت‌کارلو ۲۲۰ تکراری رتبه‌بندی می‌شوند. اسلایدرها فقط ترتیب رتبه‌بندی را عوض می‌کنند؛ «اعمال» فرم برنامه را پیش‌پر می‌کند.</p>
+            </div>
+            <!-- ===== FEAT-PLAN-9c (end) ===== -->
             <div class="panel hidden" id="planFormPanel">
                 <h2 id="planFormTitle">ثبت برنامهٔ تولید</h2>
                 <div class="filters" id="planForm">
@@ -3397,6 +3425,7 @@ showRes();
         planRenderTable();
         const bn = document.getElementById('btnPlanNew'); /* FEAT-PLAN-7: فقط برنامه‌ریز/مدیر ثبت می‌کند */
         if (bn) bn.style.display = planCanWrite() ? '' : 'none';
+        try { window.dispatchEvent(new Event('aps-refresh')); } catch (e) { } /* FEAT-PLAN-9c: بازمحاسبهٔ debounced سناریوها با تغییر داده */
     }
 
     /* ===== سیم‌کشی (یک‌بار) ===== */
@@ -3464,7 +3493,141 @@ showRes();
         loaders.planning = loadPlanning;
     }
     plan7Wire();
+    window.__plan7OpenForm = planOpenForm; /* FEAT-PLAN-9c: قلاب اعمال سناریوها در فرم */
 })();
+// ===== FEAT-PLAN-9c (begin): سناریوهای APS — رتبه‌بندی چندمعیارهٔ اسلایدر‌دار + مونت‌کارلو =====
+(function planAps() {
+    const WKEY = 'san.aps.weights';
+    const st = { scenarios: [], genAt: null, aiNote: null, aiCfg: false, emptyHint: null, loaded: false, w: { ton: 5, risk: 3, waste: 2 } };
+    try { const w = JSON.parse(localStorage.getItem(WKEY) || 'null'); if (w && typeof w.ton === 'number') st.w = w; } catch (e) { }
+    const apsCanWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'planner'; /* ناقل از plan7 نیست */
+    const $ = (id) => document.getElementById(id);
+    const n10 = (x) => Math.round((Number(x) || 0) * 10) / 10;
+    const faN = (x, dash) => (x == null || isNaN(Number(x))) ? (dash || '—') : groupFa(n10(x));
+    function saveW() { try { localStorage.setItem(WKEY, JSON.stringify(st.w)); } catch (e) { } }
+    function rankAll() {
+        const list = st.scenarios.slice();
+        if (list.length < 2) { list.forEach((s) => { s._score = 100; s._rank = 1; }); return list; }
+        const tmin = Math.min.apply(null, list.map((s) => s.kpis.healthy_tonnage_p50));
+        const tmax = Math.max.apply(null, list.map((s) => s.kpis.healthy_tonnage_p50));
+        const rmin = Math.min.apply(null, list.map((s) => s.kpis.risk));
+        const rmax = Math.max.apply(null, list.map((s) => s.kpis.risk));
+        const wmin = Math.min.apply(null, list.map((s) => s.kpis.expected_waste_kg));
+        const wmax = Math.max.apply(null, list.map((s) => s.kpis.expected_waste_kg));
+        const nz = (v, a, b) => (b > a ? (v - a) / (b - a) : 0.5);
+        const W = st.w, Wsum = (W.ton + W.risk + W.waste) || 1;
+        list.forEach((s) => {
+            s._score = Math.round(((W.ton * nz(s.kpis.healthy_tonnage_p50, tmin, tmax) + W.risk * (1 - nz(s.kpis.risk, rmin, rmax)) + W.waste * (1 - nz(s.kpis.expected_waste_kg, wmin, wmax))) / Wsum) * 1000) / 10;
+        });
+        list.sort((a, b) => b._score - a._score);
+        list.forEach((s, i) => { s._rank = i + 1; });
+        return list;
+    }
+    function renderChip() {
+        const el = $('planApsEngine'); if (!el) return;
+        el.textContent = st.aiCfg ? '⚙️ موتور APS داخلی + توضیح AI' : '⚙️ موتور APS داخلی';
+        const gen = $('apsGenAt'); if (gen) gen.textContent = st.genAt ? ('محاسبه: ' + fmtDate(st.genAt)) : '';
+        const an = $('apsAiNote');
+        if (an) { if (st.aiNote) { an.classList.remove('hidden'); an.innerHTML = '🤖 <b>توضیح اختیاری AI:</b> ' + esc(st.aiNote); } else an.classList.add('hidden'); }
+    }
+    function renderCards(list) {
+        const box = $('apsCards'); if (!box) return;
+        if (st.emptyHint) { box.innerHTML = '<div class="empty">' + esc(st.emptyHint) + '</div>'; return; }
+        if (!list.length) { box.innerHTML = '<div class="empty">سناریویی ساخته نشد.</div>'; return; }
+        box.innerHTML = list.map((s, i) => {
+            const k = s.kpis;
+            const conf = Math.max(0, Math.min(100, Number(k.confidence_mc_pct) || 0));
+            const riskChip = k.risk >= 60 ? 'no' : k.risk >= 35 ? 'wait' : 'ok';
+            const canApply = apsCanWrite() && (s.apply || []).length > 0;
+            return '<div class="plan-card' + (s._rank === 1 ? ' aps-rank1' : '') + '">'
+                + '<div class="plan-card-head"><strong>' + esc(s.title) + '</strong>'
+                + (s._rank === 1 ? '<span class="aps-rank-badge">رتبهٔ ۱</span>' : '<span class="chip none">رتبهٔ ' + toFaDigits(s._rank) + '</span>')
+                + '<span class="chip ' + (s._score >= 60 ? 'ok' : s._score >= 40 ? 'wait' : 'no') + '">امتیاز ' + toFaDigits(s._score) + '</span>'
+                + '<span class="chip ' + (conf >= 70 ? 'ok' : conf >= 45 ? 'wait' : 'no') + '">' + toFaDigits(conf) + '٪ اطمینان</span></div>'
+                + '<div class="plan-conf"><div style="width:' + conf + '%"></div></div>'
+                + '<div class="aps-kv">'
+                + '<div>تناژ سالم (p50)<b>' + faN(k.healthy_tonnage_p50) + ' تن</b></div>'
+                + '<div>بازه (p10–p90)<b>' + faN(k.healthy_tonnage_p10) + '–' + faN(k.healthy_tonnage_p90) + '</b></div>'
+                + '<div>ضایعات مورد انتظار<b>' + groupFa(k.expected_waste_kg) + ' kg</b></div>'
+                + '<div>OEE تخمینی<b>' + toFaDigits(k.oee_pct) + '٪</b></div>'
+                + '<div>ریسک<b><span class="chip ' + riskChip + '">' + toFaDigits(k.risk) + '</span></b></div>'
+                + '<div>تحقق تقاضا<b>' + (k.fulfillment_pct == null ? '—' : toFaDigits(k.fulfillment_pct) + '٪') + '</b></div>'
+                + '<div>شمش لازم<b>' + (k.required_billets == null ? '—' : groupFa(k.required_billets)) + '</b></div>'
+                + '</div>'
+                + (k.shortage ? '<div class="chip no">⚑ پرچم کمبود شمش: لازم ' + groupFa(k.required_billets) + ' / موجود ' + (k.available_billets == null ? '—' : groupFa(k.available_billets)) + '</div>' : '')
+                + '<ul class="plan-reasons">' + (s.reasons || []).map((r) => '<li>' + esc(r) + '</li>').join('') + '</ul>'
+                + (canApply
+                    ? '<div class="plan-actions">' + (s.apply || []).map((a, ai) => '<button class="act" data-aps-apply="' + i + ':' + ai + '">اعمال «' + esc((a.title || '').replace(/^.* — /, '')) + '»</button>').join('') + '</div>'
+                    : '<button class="act" disabled title="فقط برنامه‌ریز/مدیر">اعمال در فرم</button>')
+                + '</div>';
+        }).join('');
+    }
+    function renderTable(list) {
+        const box = $('apsTableBox'); if (!box) return;
+        if (!list.length) { box.innerHTML = ''; return; }
+        let html = '<table><thead><tr><th>رتبه</th><th>سناریو</th><th>تناژ سالم p50 (تن)</th><th>بازه p10–p90</th><th>ضایعات (kg)</th><th>OEE ٪</th><th>ریسک</th><th>اطمینان MC ٪</th><th>تحقق ٪</th><th>امتیاز</th></tr></thead><tbody>';
+        list.forEach((s) => {
+            const k = s.kpis;
+            html += '<tr><td>' + (s._rank === 1 ? '<span class="chip ok">۱ 🏆</span>' : toFaDigits(s._rank)) + '</td>'
+                + '<td>' + esc(s.title) + '</td>'
+                + '<td>' + faN(k.healthy_tonnage_p50) + '</td>'
+                + '<td>' + faN(k.healthy_tonnage_p10) + '–' + faN(k.healthy_tonnage_p90) + '</td>'
+                + '<td>' + groupFa(k.expected_waste_kg) + '</td>'
+                + '<td>' + toFaDigits(k.oee_pct) + '</td>'
+                + '<td><span class="chip ' + (k.risk >= 60 ? 'no' : k.risk >= 35 ? 'wait' : 'ok') + '">' + toFaDigits(k.risk) + '</span></td>'
+                + '<td>' + toFaDigits(k.confidence_mc_pct) + '</td>'
+                + '<td>' + (k.fulfillment_pct == null ? '—' : toFaDigits(k.fulfillment_pct)) + '</td>'
+                + '<td><b>' + toFaDigits(s._score) + '</b></td></tr>';
+        });
+        box.innerHTML = html + '</tbody></table>';
+    }
+    function render() {
+        const panel = $('planApsPanel'); if (!panel) return;
+        if (st.loaded) panel.classList.remove('hidden');
+        renderChip();
+        const list = rankAll();
+        renderCards(list);
+        renderTable(list);
+    }
+    async function load() {
+        try {
+            const r = await fetch('/api/planning/scenarios', { cache: 'no-store' });
+            if (!r.ok) { const p = $('planApsPanel'); if (p && (r.status === 403 || r.status === 401)) p.classList.add('hidden'); return; }
+            const j = await r.json();
+            st.scenarios = j.scenarios || [];
+            st.genAt = j.generated_at; st.aiCfg = !!j.ai_configured; st.aiNote = j.ai_note || null;
+            st.emptyHint = (j.reasons_hint || [])[0] || null;
+            st.loaded = true;
+            render();
+        } catch (e) { /* بی‌ضرر */ }
+    }
+    let debT = null;
+    function debounced() { clearTimeout(debT); debT = setTimeout(load, 800); } /* بازمحاسبهٔ debounced <۲ ثانیه */
+    function wire() {
+        const keys = ['ton', 'risk', 'waste'];
+        ['apsW1', 'apsW2', 'apsW3'].forEach((id, i) => {
+            const el = $(id); if (!el) return;
+            el.value = st.w[keys[i]];
+            el.addEventListener('input', () => { st.w[keys[i]] = Number(el.value) || 0; saveW(); render(); }); /* تغییر اسلایدر → تغییر ترتیب فوری */
+        });
+        const rb = $('apsRefresh'); if (rb) rb.addEventListener('click', load);
+        window.addEventListener('aps-refresh', debounced);
+        const cbox = $('apsCards');
+        if (cbox) cbox.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-aps-apply]'); if (!b || b.disabled) return;
+            const parts = String(b.dataset.apsApply || '').split(':');
+            const s = st.scenarios[Number(parts[0])]; if (!s) return;
+            const a = (s.apply || [])[Number(parts[1])]; if (!a) return;
+            if (typeof window.__plan7OpenForm !== 'function') return;
+            window.__plan7OpenForm(Object.assign({}, a, { meta: { source: a.engine === 'ai' ? 'ai' : 'smart', confidence: a.confidence, engine: a.engine, based_on: a.based_on, reasons: a.reasons } }));
+        });
+        const prev = loaders.planning; /* ورود به تب برنامه‌ریزی → بارگذاری سناریوها همزمان */
+        loaders.planning = async function () { const r = prev ? await prev() : undefined; debounced(); return r; };
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+    load();
+})();
+// ===== FEAT-PLAN-9c (end) =====
 // ===== FEAT-PLAN-7 (end) =====
 // ===== FEAT-PWA-8b (begin): ثبت سرویس‌ورکر + بنر نصب دوستانه (Android: beforeinstallprompt — iOS: راهنمای Share → Add to Home Screen) =====
 // ===== FIX-PWA-9a (begin): بنر نصب در اولین ورود موبایل مستقل از Secure Context (HTTP LAN) =====
