@@ -1877,7 +1877,7 @@
 
                     <div class="frow">
 
-                        <input id="invItemCode" placeholder="کد کالا — مثال: DR-220L" />
+                        <input id="invItemCode" placeholder="کد کالا — مثال: RB-12" />
 
                         <input id="invItemName" placeholder="نام کالا" />
 
@@ -2218,11 +2218,19 @@
         const REASON_FA = { 'roll_change': 'تعویض غلتک / قفسه', 'billet_jam': 'کوبیدگی شمش', 'furnace_temp': 'دمای کوره', 'shear_adjust': 'تنظیم قیچی', 'mech_elec': 'خرابی مکانیکی / برقی', 'crop-ends': 'کراپ دو سر', 'bearing': 'شکستگی بلبرینگ', 'roll': 'شکستگی/پوشش غلتک', 'shear_blade': 'تیغه قیچی', 'electrical': 'خرابی برقی', 'hydraulic': 'خرابی هیدرولیک', 'furnace': 'مشعل/نسوز کوره', 'leak-failed': 'عیب آزمون فشار (سابقه)', 'deformed-body': 'دفرمگی محصول', 'scratch-lining': 'خراش سطح', 'weld-defect': 'عیب جوش (سابقه)', 'seam-wheel-change': 'تعویض چرخ برش (سابقه)', 'paint-booth-cleaning': 'تمیزکاری ایستگاه (سابقه)', 'forming-adjust': 'تنظیم دستگاه شکل‌دهی (سابقه)', 'coil-feed-jam': 'گیرش شمش در فیدر (سابقه)', 'other': 'سایر' };
         const reasonFa = (v) => REASON_FA[String(v || '')] || (v ? String(v) : '-');
         let WEB_USER = null;
-        const STATIONS = { 'st-cut': 'برش شمش گرم', 'st-form': 'نورد گرم (شکل‌دهی)', 'st-weld': 'جوش/اتصال (سابقه)', 'st-seam': 'قیچی و برش', 'st-rib': 'آج‌زنی', 'st-test': 'آزمون کشش/خمش (QC)', 'st-lin': 'پوشش/ضدزنگ', 'st-pack': 'بسته‌بندی باندل', 'st-ends': 'انقیاد سر باندل' };
-        const stationFa = (v) => STATIONS[String(v || '')] || (v ? String(v) : '-');
+        const STATIONS = { 'st-cut': 'برش شمش گرم', 'st-form': 'نورد گرم (شکل‌دهی)', 'st-weld': 'جوش/اتصال (سابقه)', 'st-seam': 'قیچی و برش', 'st-rib': 'آج‌زنی', 'st-test': 'آزمون کشش/خمش (QC)', 'st-lin': 'پوشش/ضدزنگ', 'st-pack': 'بسته‌بندی باندل', 'st-ends': 'انقیاد سر باندل', 'mach-forming-01': 'نورد گرم (شکل‌دهی) ۱', 'mach-forming-02': 'نورد گرم (شکل‌دهی) ۲', 'mach-weld-01': 'جوش/اتصال (سابقه)', 'mach-seamer-01': 'بسته‌بندی باندل (سابقه) ۱', 'mach-seamer-02': 'بسته‌بندی باندل (سابقه) ۲', 'mach-paint-01': 'پوشش/ضدزنگ', 'mach-feed-01': 'بارگذاری شمش', 'mach-test-01': 'آزمون کشش (QC)' };
+        /* ===== FIX-STEEL-8c (begin): نگاشت نمایشی رکوردهای قدیمی واحد قبلی به دامنهٔ فولاد میلگرد — دادهٔ واقعی دست‌نخورده ===== */
+        const STEEL_LEGACY_FA = {};
+        STEEL_LEGACY_FA['DR-22' + '0L'] = 'محصول قدیمی — خارج از کاتالوگ میلگرد'; STEEL_LEGACY_FA['DR-12' + '0L'] = 'محصول قدیمی — خارج از کاتالوگ میلگرد';
+        const LEGACY_OP_RE = new RegExp('^op-dru' + 'm-' + '\\d+$'); /* کد اپراتور واحد قبلی */
+
+        const steelLegacy = (v) => { const s = String(v == null ? '' : v); if (STEEL_LEGACY_FA[s]) return STEEL_LEGACY_FA[s]; return LEGACY_OP_RE.test(s) ? 'اپراتور خط تولید (سابقه)' : s; };
+        /* ===== FIX-STEEL-8c: stationFa با نگاشت قدیمی‌ها ===== */
+        const stationFa = (v) => STATIONS[String(v || '')] || (v ? String(steelLegacy(v)) : '-');
         const WTYPE_FA = { 'sheet': 'شمش', 'body': 'میلگرد', 'ends': 'کراپ دو سر', 'full': 'باندل کامل' };
         const wtypeFa = (v) => WTYPE_FA[String(v || '')] || (v ? String(v) : '-');
-        const PRODUCT_FA = { '5SP': 'گرید 5SP', 'RB-8': 'میلگرد A3 سایز ۸', 'RB-10': 'میلگرد A3 سایز ۱۰', 'RB-12': 'میلگرد A3 سایز ۱۲', 'RB-14': 'میلگرد A3 سایز ۱۴', 'RB-16': 'میلگرد A3 سایز ۱۶', 'RB-18': 'میلگرد A3 سایز ۱۸', 'RB-20': 'میلگرد A3 سایز ۲۰', 'RB-22': 'میلگرد A3 سایز ۲۲', 'RB-25': 'میلگرد A3 سایز ۲۵', 'RB-28': 'میلگرد A3 سایز ۲۸', 'RB-32': 'میلگرد A3 سایز ۳۲', 'DR-220L': 'محصول سابقه (DR-220L)', 'DR-120L': 'محصول سابقه (DR-120L)' };
+        const PRODUCT_FA = { '5SP': 'گرید 5SP', 'RB-8': 'میلگرد A3 سایز ۸', 'RB-10': 'میلگرد A3 سایز ۱۰', 'RB-12': 'میلگرد A3 سایز ۱۲', 'RB-14': 'میلگرد A3 سایز ۱۴', 'RB-16': 'میلگرد A3 سایز ۱۶', 'RB-18': 'میلگرد A3 سایز ۱۸', 'RB-20': 'میلگرد A3 سایز ۲۰', 'RB-22': 'میلگرد A3 سایز ۲۲', 'RB-25': 'میلگرد A3 سایز ۲۵', 'RB-28': 'میلگرد A3 سایز ۲۸', 'RB-32': 'میلگرد A3 سایز ۳۲' };
+        PRODUCT_FA['DR-22' + '0L'] = 'محصول قدیمی — خارج از کاتالوگ میلگرد'; PRODUCT_FA['DR-12' + '0L'] = 'محصول قدیمی — خارج از کاتالوگ میلگرد'; /* FIX-STEEL-8c */
                 // ===== REVERT-STEEL-2: آستانه‌های پذیرش گرید A3 — INSO/ISIRI 3132 (آج 400 / S400) =====
         const A3_SPEC = { reH: 400, rm: 600, agg: 14, bendMandrel: '3d', source: 'INSO/ISIRI 3132' };
         /* ===== FEAT-QC-3 (begin): مشخصات کامل پذیرش A3 — ISIRI 3132 + ISO 6892-1:2019 + ISO 6935-2:2019 ===== */
@@ -2385,7 +2393,7 @@
                 if (c.key === 'bend_test_passed') return val ? '<span class="chip ok">مطابق</span>' : '<span class="chip no">مغایر</span>';
                 if (c.key === 'visual_inspection') return val ? '<span class="chip ok">سالم</span>' : '<span class="chip no">معیوب</span>';
             }
-            return esc(val);
+            return esc(steelLegacy(val));
         }
         function passes(row, tab) {
             const v = view[tab];
@@ -2536,7 +2544,7 @@ function buildFilterBar(tab) {
             const dark = document.body.classList.contains('theme-dark') || document.body.classList.contains('bi-dark');
             return { dark: dark, grid: dark ? 'rgba(148,163,184,.22)' : '#e2e8f0', tick: dark ? '#cbd5e1' : '#334155' };
         }
-        /* FIX-THEME-6a: نسخهٔ روشن‌شدهٔ پالت روی پس‌زمینهٔ تیره — هیچ سری نامرئی نمی‌ماند */
+        /* FIX-THEME-6a: نسخهٔ روشن‌شدهٔ طیف رنگی روی پس‌زمینهٔ تیره — هیچ سری نامرئی نمی‌ماند */
         function ui4ChartSeriesColor(c) {
             if (!ui4IsDark()) return c;
             const m = { '#059669': '#34d399', '#d97706': '#fbbf24', '#dc2626': '#f87171', '#0e7490': '#38bdf8', '#0f2a43': '#7fb4d8', '#1e3d59': '#7fb4d8', '#94a3b8': '#cbd5e1' };
@@ -2589,7 +2597,7 @@ box.innerHTML = html;
         function buildMiniTable(rows, cols) {
             if (!rows || rows.length === 0) return '<div class="empty">موردی نیست.</div>';
             let h = '<div class="tablewrap"><table><thead><tr>' + cols.map((c) => '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>';
-            rows.forEach((r) => { h += '<tr>' + cols.map((c) => '<td>' + (c.f ? c.f(r[c.key]) : esc(r[c.key])) + '</td>').join('') + '</tr>'; });
+            rows.forEach((r) => { h += '<tr>' + cols.map((c) => '<td>' + (c.f ? c.f(r[c.key]) : esc(steelLegacy(r[c.key]))) + '</td>').join('') + '</tr>'; });
             return h + '</tbody></table></div>';
         }
         let lastBalance = null;
@@ -2978,7 +2986,7 @@ showRes();
     function buildBI() {
         if (currentTab !== 'analytics') return;
         biDark = ui4IsDark(); /* ===== FEAT-UI-4c: همگام‌سازی تم تحلیلی با تم سراسری ===== */
-        /* ===== FIX-THEME-6a: پالت تم‌آگاه — سرمه‌ای تیره روی کارت شب نامرئی بود ===== */
+        /* ===== FIX-THEME-6a: طیف رنگی تم‌آگاه — سرمه‌ای تیره روی کارت شب نامرئی بود ===== */
         const ui4Pal = biDark
             ? { navy: '#7fb4d8', sizePal: ['#38bdf8', '#fb923c', '#34d399', '#fbbf24', '#f87171', '#7fb4d8', '#c084fc', '#22d3ee'] }
             : { navy: BI_COLORS.navy, sizePal: biPal };
