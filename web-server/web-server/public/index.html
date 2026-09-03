@@ -1118,6 +1118,17 @@
         .aps-rank1 { border-right-color: #059669 !important; }
         .aps-rank-badge { background: #059669; color: #fff; border-radius: 8px; padding: 1px 8px; font-size: 10.5px; font-weight: bold; }
         /* ===== FEAT-PLAN-9c (end) ===== */
+        /* ===== FIX-PLAN-10d (begin): راهنمای ماژول ===== */
+
+        .plan-guide { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
+        .plan-guide summary { cursor: pointer; font-weight: bold; font-size: 13px; color: #0f2a43; min-height: 44px; display: flex; align-items: center; }
+        .plan-guide-steps { margin: 8px 18px 4px 0; padding: 0; font-size: 12.5px; color: #475569; line-height: 2.1; }
+        .plan-guide-steps li { margin-bottom: 4px; }
+        .plan-guide-steps b { color: #0e7490; }
+        body.theme-dark .plan-guide { background: #0e2233; border-color: #1d3a55; }
+        body.theme-dark .plan-guide summary { color: #7fb4d8; }
+        body.theme-dark .plan-guide-steps { color: #9fb3c8; }
+        /* ===== FIX-PLAN-10d (end) ===== */
         /* ===== FEAT-PWA-8b (begin): بنر نصب + دکمهٔ منو ===== */
         .pwa-banner { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 90; background: linear-gradient(135deg, #0f2a43, #12385a); color: #e6f1f9; border: 1px solid #1d3a55; border-radius: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 10px 30px rgba(2, 8, 20, .45); }
         .pwa-banner .pwa-ico { width: 44px; height: 44px; border-radius: 10px; flex: 0 0 auto; background: #0b1622; }
@@ -1791,6 +1802,19 @@
         </section>
 <section id="tab-planning" class="hidden">
             <!-- ===== FEAT-PLAN-7 (begin): ماژول برنامه‌ریزی تولید متصل به AI ===== -->
+            <!-- ===== FIX-PLAN-10d (begin): راهنمای جمع‌شوندهٔ ماژول برنامه‌ریزی ===== -->
+
+            <details class="plan-guide">
+                <summary>📖 راهنمای ماژول برنامه‌ریزی — ۵ گام ساده</summary>
+                <ol class="plan-guide-steps">
+                    <li><b>داده‌ها:</b> سامانه به‌صورت خودکار نرخ واقعی تولید ۹۰ روز اخیر، ضایعات ۳۰ روزه، پذیرش کیفیت (A3)، الگوی توقفات برقی، قطعی‌های برق ثبت‌شده، پنجره‌های PM، موجودی شمش انبار و نیروی انسانی شیفت‌ها را جمع می‌کند.</li>
+                    <li><b>سناریوها:</b> موتور APS برای هفتهٔ پیش‌رو ۵ سناریو می‌سازد: محافظه‌کار، متعادل، تهاجمی، تمرکز بر تقاضا و ترکیب متنوع سایزها.</li>
+                    <li><b>شبیه‌سازی:</b> هر سناریو در برابر همهٔ محدودیت‌ها شبیه‌سازی می‌شود؛ کمبود شمش یا قطعی برق به‌صورت خودکار تناژ را کپ می‌کند و پرچم می‌زند.</li>
+                    <li><b>رتبه‌بندی:</b> با مونت‌کارلو ۲۲۰ تکرار ٪ اطمینان هر سناریو حساب می‌شود؛ با اسلایدرهای «تناژ / ریسک / ضایعات» ترتیب را سلیقهٔ خودتان عوض کنید.</li>
+                    <li><b>اعمال و ردیابی:</b> «اعمال» فرم برنامه را پیش‌پر می‌کند؛ با «ذخیرهٔ برنامه» به‌صورت پیش‌نویس ثبت و در جدول قابل تأیید/اجرا/پیگیری است. برنامه در برابر واقعی هم نمودار دارد.</li>
+                </ol>
+            </details>
+            <!-- ===== FIX-PLAN-10d (end) ===== -->
             <div class="panel">
                 <h2>🗓️ برنامه‌ریزی تولید <span class="plan-engine" id="planEngineChip">در حال بارگذاری…</span></h2>
                 <div class="toolbar">
@@ -1839,7 +1863,7 @@
                             <option value="shift-morning-301">شیفت صبح</option>
                             <option value="shift-night-302">شیفت شب</option>
                         </select></label>
-                        <label>اولویت: <select id="plPriority" class="fsel">
+                        <label>اولویت: <select id="planPriority" class="fsel">
                             <option value="low">کم</option>
                             <option value="medium" selected>متوسط</option>
                             <option value="high">زیاد</option>
@@ -1847,9 +1871,9 @@
                     </div>
                     <div class="frow"><span class="note" id="plMeta"></span></div>
                     <div class="frow">
-                        <button class="act" id="plSave">ذخیرهٔ برنامه</button>
+                        <button class="act" id="planSaveBtn">ذخیرهٔ برنامه</button>
                         <button class="fclear" id="plCancel">انصراف</button>
-                        <span class="note" id="plMsg"></span>
+                        <span class="note" id="planMsg"></span>
                     </div>
                 </div>
             </div>
@@ -3331,7 +3355,7 @@ showRes();
             document.getElementById('plBillets').value = prefill.required_billets || '';
             document.getElementById('plMachine').value = STATIONS[prefill.machine] ? prefill.machine : 'st-form';
             document.getElementById('plShift').value = prefill.shift_id || 'shift-morning-301';
-            document.getElementById('plPriority').value = prefill.priority || 'medium';
+            document.getElementById('planPriority').value = prefill.priority || 'medium'; /* FIX-PLAN-10d: id یکتا */
             const meta = prefill.meta || {};
             document.getElementById('plMeta').textContent = 'منبع: ' + (PLAN_SOURCE_FA[meta.source] || 'هوشمند') + (meta.confidence ? ' — اطمینان ' + toFaDigits(meta.confidence) + '٪' : '') + (meta.engine ? ' — موتور: ' + meta.engine : '');
         } else {
@@ -3344,15 +3368,15 @@ showRes();
             document.getElementById('plBillets').value = '';
             document.getElementById('plMachine').value = 'st-form';
             document.getElementById('plShift').value = 'shift-morning-301';
-            document.getElementById('plPriority').value = 'medium';
+            document.getElementById('planPriority').value = 'medium';
             document.getElementById('plMeta').textContent = '';
         }
-        const msg = document.getElementById('plMsg'); if (msg) msg.textContent = '';
+        const msg = document.getElementById('planMsg'); if (msg) msg.textContent = '';
         panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async function planSave() {
-        const msg = document.getElementById('plMsg'); msg.textContent = '';
+        const msg = document.getElementById('planMsg'); msg.textContent = '';
         const dj = readJalaliValue(document, 'plDate');
         if (!dj) { msg.textContent = 'تاریخ شمسی معتبر وارد کنید (مثال: ۱۴۰۵/۰۶/۱۲).'; return; }
         const target = Number(document.getElementById('plTarget').value);
@@ -3365,7 +3389,7 @@ showRes();
             required_billets: Number(document.getElementById('plBillets').value) || null,
             machine: document.getElementById('plMachine').value,
             shift_id: document.getElementById('plShift').value,
-            priority: document.getElementById('plPriority').value,
+            priority: document.getElementById('planPriority').value,
             start_date_j: dj,
             start_ts: startTs ? startTs.toISOString() : '',
             notes: '',
@@ -3405,7 +3429,7 @@ showRes();
         document.getElementById('plBillets').value = p.required_billets || '';
         document.getElementById('plMachine').value = STATIONS[p.machine] ? p.machine : 'st-form';
         document.getElementById('plShift').value = p.shift_id || 'shift-morning-301';
-        document.getElementById('plPriority').value = p.priority || 'medium';
+        document.getElementById('planPriority').value = p.priority || 'medium';
     }
 
     async function loadPlanning() {
@@ -3419,7 +3443,7 @@ showRes();
             planCache.outages = ro.manual || [];
             planCache.pattern = ro.pattern || null;
         } catch (e) {
-            const m = document.getElementById('plMsg');
+            const m = document.getElementById('planMsg');
             if (m) m.textContent = 'خطا در دریافت داده‌های برنامه‌ریزی: ' + (e && e.message ? e.message : e);
         }
         planFillProduct();
@@ -3442,7 +3466,7 @@ showRes();
         if (bn) bn.addEventListener('click', () => planOpenForm(null));
         const bc = document.getElementById('plCancel');
         if (bc) bc.addEventListener('click', () => { document.getElementById('planFormPanel').classList.add('hidden'); planEditingId = null; planPrefillMeta = null; });
-        const sv = document.getElementById('plSave');
+        const sv = document.getElementById('planSaveBtn');
         if (sv) sv.addEventListener('click', planSave);
         const os = document.getElementById('plOutSave');
         if (os) os.addEventListener('click', async () => {
