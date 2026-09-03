@@ -70,5 +70,11 @@
     "password": "Sanatify@1405",
     "role": "warehouse",
     "name": "انباردار"
+  },
+  {
+    "username": "finance1",
+    "password": "Fin@1405",
+    "role": "finance",
+    "name": "حسابدار واحد مالی"
   }
 ]

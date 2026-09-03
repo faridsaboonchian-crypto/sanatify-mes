@@ -692,6 +692,525 @@ function appRequestHandler(req, res) {
         });
     }
     // ===== FEAT-EM-12b (end) =====
+    // ===== FEAT-FIN-13b (begin): ماژول مالی/حسابداری/بهای تمام‌شده — دفتر کل دوطرفهٔ واقعی (accounts/doc-lines/cost-centers/periods) + موتور سند واحد با متادیتای منبع =====
+    const FIN_W = ['finance']; /* ثبت: فقط حسابدار/مدیرمالی — admin همیشه مجاز */
+    const FIN_R = ['finance', 'manager']; /* مشاهده: مالی + مدیریت (مدیریت فقط‌خواندن) */
+    const FIN_LEVEL_FA = { 1: 'گروه', 2: 'کل', 3: 'معین', 4: 'تفضیلی' };
+    const FIN_TYPE_FA = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };
+    const FIN_MONTH_FA = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+    const finR2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
+    const finDigitsEn = (s) => String(s || '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)).trim();
+
+    /* میلادی→جلالی (معکوس planJalaliToTs — برای تاریخ اسناد خودکار از ISO) */
+    function finG2J(gy, gm, gd) {
+        const gdm = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        let gy2 = (gm > 2) ? (gy + 1) : gy;
+        let days = 355666 + (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) + gd + gdm[gm - 1];
+        let jy = -1595 + (33 * Math.floor(days / 12053)); days %= 12053;
+        jy += 4 * Math.floor(days / 1461); days %= 1461;
+        if (days > 365) { jy += Math.floor((days - 1) / 365); days = (days - 1) % 365; }
+        let jm, jd;
+        if (days < 186) { jm = 1 + Math.floor(days / 31); jd = 1 + (days % 31); }
+        else { jm = 7 + Math.floor((days - 186) / 30); jd = 1 + ((days - 186) % 30); }
+        return { jy: jy, jm: jm, jd: jd };
+    }
+    function finIsoToJalali(iso) {
+        const t = Date.parse(iso || ''); if (isNaN(t)) return null;
+        const d = new Date(t + 4.5 * 3600000); /* +03:30 تهران — تاریخ تقویمی تهران از UTC */
+        const j = finG2J(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+        return j.jy + '/' + String(j.jm).padStart(2, '0') + '/' + String(j.jd).padStart(2, '0');
+    }
+    function finPeriodIdOfJalali(jDate) {
+        const m = /^(\d{4})\/(\d{1,2})\//.exec(String(jDate || '')); if (!m) return null;
+        return m[1] + '-' + String(Number(m[2])).padStart(2, '0');
+    }
+
+    /* دادهٔ اولیهٔ ماژول مالی — کدینگ ۴سطحی گروه/کل/معین/تفضیلی با کدینگ پیش‌فرض صنعت فولاد (الگوی ERPهای ایرانی) */
+    function finSeed(live) {
+        if (live._fin_v1) return false;
+        const A = [];
+        const acc = (code, title, type, level) => A.push({ id: 'facc-' + code, code: code, title: title, type: type, level: level, parent_id: 'facc-' + (level === 1 ? '' : (level === 2 ? code[0] : code.slice(0, level === 3 ? 3 : 6))), active: true });
+        acc('1', 'دارایی‌ها', 'asset', 1); acc('2', 'بدهی‌ها', 'liability', 1); acc('3', 'سرمایه', 'equity', 1); acc('4', 'درآمدها', 'income', 1); acc('5', 'هزینه‌ها', 'expense', 1);
+        acc('110', 'موجودی مواد و کالا', 'asset', 2); acc('120', 'دارایی‌های ثابت', 'asset', 2);
+        acc('110001', 'موجودی شمش', 'asset', 3); acc('110002', 'کالای در جریان ساخت', 'asset', 3); acc('110003', 'موجودی میلگرد ساخته‌شده', 'asset', 3); acc('110004', 'موجودی ضایعات', 'asset', 3); acc('120001', 'ماشین‌آلات و تجهیزات نورد', 'asset', 3);
+        acc('210', 'مالیات و عوارض پرداختنی', 'liability', 2); acc('220', 'حق بیمه پرداختنی', 'liability', 2); acc('230', 'سایر پرداختنی‌ها', 'liability', 2);
+        acc('210001', 'مالیات ارزش افزوده خرید', 'liability', 3); acc('210002', 'مالیات ارزش افزوده فروش', 'liability', 3); acc('220001', 'حق بیمه سهم کارفرما ۲۳٪', 'liability', 3); acc('230001', 'پرداختنی انرژی (برق)', 'liability', 3);
+        acc('310', 'سرمایه', 'equity', 2); acc('310001', 'سرمایه اولیه', 'equity', 3);
+        acc('410', 'فروش', 'income', 2); acc('410001', 'فروش میلگرد', 'income', 3); acc('410002', 'فروش ضایعات', 'income', 3);
+        acc('510', 'بهای تمام‌شده تولید', 'expense', 2); acc('520', 'سایر هزینه‌ها', 'expense', 2);
+        acc('510001', 'مصرف شمش', 'expense', 3); acc('510002', 'انرژی برق تولید', 'expense', 3); acc('510003', 'دستمزد مستقیم', 'expense', 3); acc('510004', 'سربار تولید', 'expense', 3); acc('510005', 'ریفرکتوری و غلظک', 'expense', 3); acc('520001', 'ضایعات غیرعادی و اسقاط', 'expense', 3);
+        live.fin_accounts = A;
+        live.fin_cost_centers = [
+            { id: 'cc-mill', code: 'CC-01', title: 'خط نورد گرم', kind: 'mill_line', active: true },
+            { id: 'cc-furnace', code: 'CC-02', title: 'کوره / ذوب', kind: 'furnace', active: true },
+            { id: 'cc-pm', code: 'CC-03', title: 'تعمیرات و نگهداری (PM)', kind: 'pm', active: true },
+            { id: 'cc-energy', code: 'CC-04', title: 'انرژی و تاسیسات', kind: 'energy', active: true },
+            { id: 'cc-pack', code: 'CC-05', title: 'بسته‌بندی و بارگیری', kind: 'pack', active: true },
+            { id: 'cc-admin', code: 'CC-06', title: 'اداری و ستاد', kind: 'admin', active: true }
+        ];
+        const jNow = finIsoToJalali(new Date().toISOString()) || '1405/01/01';
+        const yNow = Number(jNow.slice(0, 4));
+        live.fin_periods = [];
+        for (let m = 1; m <= 12; m++) {
+            const pid = yNow + '-' + String(m).padStart(2, '0');
+            live.fin_periods.push({ id: pid, year: yNow, month: m, label: FIN_MONTH_FA[m - 1] + ' ' + yNow, closed: false, closed_at: null, closed_by: null });
+        }
+        live.fin_config = {
+            vat_rate: 10, /* نرخ عمومی ۱۴۰۴/۱۴۰۵ — قابل‌ویرایش (تلفیق ۱۴۰۵: همان ۱۰٪ ماند) */
+            corporate_tax_rate: 25, /* ماده ۱۰۵ */
+            employer_insurance_rate: 23, /* ماده ۲۸ تأمین اجتماعی: ۲۰٪ کارفرما + ۳٪ بیمه بیکاری */
+            quarterly_report_deadline_days: 45, /* ماده ۱۶۹ */
+            billet_rial_per_kg: 250000, energy_tariff_rial_per_kwh: 4000, scrap_rial_per_kg: 180000,
+            currency: 'ریال', updated_at: null, updated_by: null
+        };
+        const sizes = [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32];
+        live.fin_bom = sizes.map((s) => ({ id: 'fbom-' + s, size: String(s), billet_t_per_t: 1.035, kwh_per_t: 110, labor_rial_per_t: 2500000, overhead_rial_per_t: 4000000, other_rial_per_t: 350000, sale_price_rial_per_t: 315000000, updated_at: null, updated_by: null }));
+        live.fin_docs = []; live.fin_seq = { doc: 0 };
+        live._fin_v1 = { at: new Date().toISOString(), note: 'بذر اولیهٔ ماژول مالی — حساب‌ها/مراکز هزینه/دوره‌ها/BOM پیش‌فرض؛ قابل ویرایش از تب مالی' };
+        return true;
+    }
+
+    /* بهای استاندارد هر تن از BOM مالی (ریال/تن) */
+    function finStdCostPerTon(bom, cfg) {
+        return Math.round((Number(bom.billet_t_per_t) || 0) * (Number(cfg.billet_rial_per_kg) || 0) * 1000
+            + (Number(bom.kwh_per_t) || 0) * (Number(cfg.energy_tariff_rial_per_kwh) || 0)
+            + (Number(bom.labor_rial_per_t) || 0) + (Number(bom.overhead_rial_per_t) || 0) + (Number(bom.other_rial_per_t) || 0));
+    }
+
+    /* ---- موتور سند واحد: همهٔ ثبت‌ها (خودکار/دستی) فقط از این مسیر عبور می‌کنند ---- */
+    function finPostDoc(live, spec) {
+        const dJ = finDigitsEn(String(spec.date_jalali || '')).trim();
+        if (!/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.test(dJ)) throw new Error('تاریخ شمسی سند نامعتبر است (نمونه: ۱۴۰۵/۰۶/۱۲).');
+        const tsIso = planJalaliToTs(dJ, 12); if (!tsIso) throw new Error('تاریخ شمسی سند نامعتبر است.');
+        const periodId = finPeriodIdOfJalali(dJ);
+        const period = (live.fin_periods || []).find((p) => p.id === periodId);
+        if (period && period.closed) throw new Error('دورهٔ «' + period.label + '» بسته شده است؛ ثبت سند در آن مجاز نیست.');
+        const linesIn = Array.isArray(spec.lines) ? spec.lines : [];
+        if (linesIn.length < 2) throw new Error('سند باید حداقل دو ردیف بدهکار/بستانکار داشته باشد.');
+        const accById = {};
+        (live.fin_accounts || []).forEach((a) => { accById[a.id] = a; });
+        let dSum = 0, cSum = 0;
+        const lines = linesIn.map((ln, i) => {
+            const a = accById[ln.account_id];
+            if (!a) throw new Error('ردیف ' + (i + 1) + ': حساب انتخابی یافت نشد.');
+            if (a.active === false) throw new Error('ردیف ' + (i + 1) + ': حساب «' + a.title + '» غیرفعال است.');
+            if (Number(a.level) < 3) throw new Error('ردیف ' + (i + 1) + ': ثبت فقط در سطح معین/تفضیلی مجاز است؛ «' + a.title + '» سطح ' + (FIN_LEVEL_FA[a.level] || a.level) + ' است.');
+            const d = Math.round(Number(finDigitsEn(ln.debit)) || 0), c = Math.round(Number(finDigitsEn(ln.credit)) || 0);
+            if (d < 0 || c < 0 || (d > 0 && c > 0) || (d === 0 && c === 0)) throw new Error('ردیف ' + (i + 1) + ' (' + a.title + '): دقیقاً یکی از بدهکار/بستانکار باید بزرگ‌تر از صفر باشد.');
+            dSum += d; cSum += c;
+            return { account_id: a.id, account_code: a.code, account_title: a.title, debit: d, credit: c, cost_center_id: ln.cost_center_id || null, ref_module: ln.ref_module || spec.ref_module || null, ref_id: ln.ref_id || spec.ref_id || null, note: String(ln.note || '').slice(0, 140) };
+        });
+        dSum = Math.round(dSum); cSum = Math.round(cSum);
+        if (dSum <= 0 || dSum !== cSum) throw new Error('سند تراز نیست: جمع بدهکار ' + dSum.toLocaleString('fa-IR') + ' و جمع بستانکار ' + cSum.toLocaleString('fa-IR') + ' ریال باید برابر و بزرگ‌تر از صفر باشند.');
+        if (spec.ref_id != null) {
+            const dup = (live.fin_docs || []).find((x) => x.source === spec.source && String(x.ref_id) === String(spec.ref_id));
+            if (dup) return { dup: true, doc: dup };
+        }
+        live.fin_docs = Array.isArray(live.fin_docs) ? live.fin_docs : [];
+        live.fin_seq = live.fin_seq || { doc: 0 };
+        live.fin_seq.doc = (Number(live.fin_seq.doc) || 0) + 1;
+        const doc = {
+            id: 'findoc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            doc_no: live.fin_seq.doc, doc_no_fa: 'F-' + String(live.fin_seq.doc).padStart(5, '0'),
+            date_jalali: dJ, iso_date: String(tsIso).slice(0, 10), period_id: periodId,
+            desc: String(spec.desc || '').slice(0, 220),
+            source: spec.source || 'manual', ref_module: spec.ref_module || null, ref_id: spec.ref_id == null ? null : String(spec.ref_id),
+            lines: lines, total: dSum,
+            created_by: spec.created_by || ((req.user && (req.user.name || req.user.username)) || '?'),
+            created_at: new Date().toISOString(), posted: true
+        };
+        live.fin_docs.push(doc);
+        return { dup: false, doc: doc };
+    }
+
+    /* اسناد خودکار از ماژول‌های عملیاتی — همیشه از موتور سند با متادیتای منبع (idempotent per ref_id) */
+    function finSyncAuto(live) {
+        const cfg = live.fin_config || {};
+        const acc = {};
+        (live.fin_accounts || []).forEach((a) => { acc[a.code] = a; });
+        const out = { created: 0, dup: 0, closed: 0, failed: 0, by_source: {}, errors: [] };
+        const bump = (k) => { out.by_source[k] = (out.by_source[k] || 0) + 1; };
+        const tryPost = (src, refId, dateJ, desc, lines) => {
+            try {
+                const r = finPostDoc(live, { source: src, ref_module: src.replace('auto_', ''), ref_id: refId, date_jalali: dateJ, desc: desc, lines: lines, created_by: 'موتور مالی' });
+                if (r.dup) { out.dup++; } else { out.created++; bump(src); }
+            } catch (e) {
+                if (String(e.message || '').indexOf('بسته شده') !== -1) out.closed++;
+                else { out.failed++; if (out.errors.length < 6) out.errors.push(src + ' [' + refId + ']: ' + e.message); }
+            }
+        };
+        const A = (code) => acc[code] ? acc[code].id : null;
+        if (!A('510001') || !A('110001') || !A('110002') || !A('110003') || !A('110004') || !A('510002') || !A('230001')) {
+            out.errors.push('حساب‌های پیش‌فرض ماژول مالی یافت نشدند — کدینگ را بازبینی کنید.');
+            return out;
+        }
+        (Array.isArray(live.billets) ? live.billets : []).forEach((b) => {
+            if (!b || !b.id) return; const w = Number(b.initial_weight_kg) || 0; if (w <= 0) return;
+            const amount = Math.round(w * (Number(cfg.billet_rial_per_kg) || 0)); if (amount <= 0) return;
+            tryPost('auto_billet', b.id, finIsoToJalali(b.received_at) || jDateFallback, 'مصرف شمش بچ ' + (b.heat_number || b.id) + ' — ' + Math.round(w).toLocaleString('fa-IR') + ' kg × بهای شمش (انتقال به کالای در جریان ساخت)', [
+                { account_id: A('110002'), debit: amount, cost_center_id: 'cc-furnace' },
+                { account_id: A('110001'), credit: amount }
+            ]);
+        });
+        (Array.isArray(live.energy_logs) ? live.energy_logs : []).forEach((l) => {
+            if (!l || !l.id) return; const kwh = Number(l.kwh) || 0; if (kwh <= 0) return;
+            const amount = Math.round(kwh * (Number(cfg.energy_tariff_rial_per_kwh) || 0)); if (amount <= 0) return;
+            tryPost('auto_energy', l.id, l.date_jalali || finIsoToJalali(l.created_at), 'هزینهٔ انرژی برق ' + (l.line_fa || '') + ' — ' + kwh.toLocaleString('fa-IR') + ' kWh × تعرفه', [
+                { account_id: A('510002'), debit: amount, cost_center_id: 'cc-energy' },
+                { account_id: A('230001'), credit: amount }
+            ]);
+        });
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
+            if (!b || !b.id) return;
+            if (String(b.quality_status || '').toUpperCase() !== 'APPROVED') return;
+            const nn = Number(b.rebar_size); if (!(nn >= 6 && nn <= 50)) return;
+            const kg = Number(b.net_weight_kg) || 0; if (kg <= 0) return;
+            const ton = kg / 1000;
+            const bom = (live.fin_bom || []).find((x) => String(x.size) === String(nn));
+            const std = bom ? finStdCostPerTon(bom, cfg) : Math.round((Number(cfg.billet_rial_per_kg) || 0) * 1.035 * 1000 + 110 * (Number(cfg.energy_tariff_rial_per_kwh) || 0) + 2500000 + 4000000 + 350000);
+            const amount = Math.round(ton * std); if (amount <= 0) return;
+            tryPost('auto_production', b.id, finIsoToJalali(b.produced_at), 'بهره‌برداری میلگرد سایز ' + nn + ' — ' + Math.round(kg).toLocaleString('fa-IR') + ' kg × بهای استاندارد (BOM)', [
+                { account_id: A('110003'), debit: amount, cost_center_id: 'cc-mill' },
+                { account_id: A('110002'), credit: amount }
+            ]);
+        });
+        (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => {
+            if (!w || !w.id) return; const kg = Number(w.quantity) || 0; if (kg <= 0) return;
+            const amount = Math.round(kg * (Number(cfg.scrap_rial_per_kg) || 0)); if (amount <= 0) return;
+            tryPost('auto_waste', w.id, finIsoToJalali(w.timestamp), 'ارزش بازیافتی ضایعات خط — ' + Math.round(kg).toLocaleString('fa-IR') + ' kg × بهای اسقاط', [
+                { account_id: A('110004'), debit: amount, cost_center_id: 'cc-mill' },
+                { account_id: A('110002'), credit: amount }
+            ]);
+        });
+        return out;
+    }
+    var jDateFallback = finIsoToJalali(new Date().toISOString());
+
+    function finPendingCounts(live) {
+        const posted = new Set((live.fin_docs || []).map((d) => d.source + '|' + String(d.ref_id)));
+        const cnt = (arr, src, filter) => (Array.isArray(arr) ? arr : []).filter((r) => r && r.id && (!filter || filter(r)) && !posted.has(src + '|' + String(r.id))).length;
+        return {
+            billets: cnt(live.billets, 'auto_billet', (b) => (Number(b.initial_weight_kg) || 0) > 0),
+            energy: cnt(live.energy_logs, 'auto_energy', (l) => (Number(l.kwh) || 0) > 0),
+            bundles: cnt(live.rebar_bundles, 'auto_production', (b) => String(b.quality_status || '').toUpperCase() === 'APPROVED' && Number(b.rebar_size) >= 6 && Number(b.rebar_size) <= 50),
+            waste: cnt(live.waste_logs, 'auto_waste', (w) => (Number(w.quantity) || 0) > 0)
+        };
+    }
+
+    function finAccBalance(docs, accId) { /* مانده: بدهکار−بستانکار (علامت بر اساس نوع حساب در گزارش‌ها تفسیر می‌شود) */
+        let d = 0, c = 0;
+        docs.forEach((doc) => (doc.lines || []).forEach((ln) => { if (ln.account_id === accId) { d += Number(ln.debit) || 0; c += Number(ln.credit) || 0; } }));
+        return { debit: Math.round(d), credit: Math.round(c), balance: Math.round(d - c) };
+    }
+    function finDocsInRange(live, fromPid, toPid) {
+        return (live.fin_docs || []).filter((d) => (!fromPid || String(d.period_id) >= fromPid) && (!toPid || String(d.period_id) <= toPid));
+    }
+
+    if (req.method === 'GET' && pathname === '/api/fin/overview') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز: ماژول مالی برای نقش شما فعال نیست.' }, 403);
+        const live = readLive();
+        if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const jNow = finIsoToJalali(new Date().toISOString());
+        return sendJson(res, {
+            ok: true, config: live.fin_config, periods: live.fin_periods, cost_centers: live.fin_cost_centers,
+            bom: live.fin_bom || [],
+            counts: { docs: (live.fin_docs || []).length, accounts: (live.fin_accounts || []).length },
+            pending: finPendingCounts(live),
+            month_now: String(jNow || '').slice(0, 7).replace('/', '-'),
+            today_jalali: jNow, roles: { read: FIN_R, write: FIN_W },
+            generated_at: new Date().toISOString()
+        });
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/accounts') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const accounts = (live.fin_accounts || []).slice().sort((a, b) => String(a.code).localeCompare(String(b.code)));
+        return sendJson(res, { ok: true, accounts: accounts, cost_centers: live.fin_cost_centers || [], level_fa: FIN_LEVEL_FA, type_fa: FIN_TYPE_FA });
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/accounts') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز به تغییر کدینگ است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const code = finDigitsEn(String(b.code || '')).trim();
+            const title = String(b.title || '').trim().slice(0, 80);
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            if (!/^\d{1,9}$/.test(code)) return sendJson(res, { error: 'کد حساب باید عددی و تا ۹ رقم باشد (گروه ۱ رقم، کل ۳ رقم، معین ۶ رقم، تفضیلی ۹ رقم).' }, 400);
+            if (!title) return sendJson(res, { error: 'عنوان حساب الزامی است.' }, 400);
+            if ((live.fin_accounts || []).some((a) => a.code === code)) return sendJson(res, { error: 'این کد قبلاً استفاده شده است.' }, 400);
+            const level = code.length === 1 ? 1 : (code.length === 3 ? 2 : (code.length === 6 ? 3 : 4));
+            const pCode = level === 2 ? code.slice(0, 1) : (level === 3 ? code.slice(0, 3) : code.slice(0, 6));
+            const parent = (live.fin_accounts || []).find((a) => a.code === pCode);
+            if (level > 1 && !parent) return sendJson(res, { error: 'حساب والد با کد ' + pCode + ' یافت نشد — ابتدا والد را تعریف کنید.' }, 400);
+            let type = String(b.type || '');
+            if (parent) type = parent.type; else if (FIN_TYPE_FA.indexOf && ['asset', 'liability', 'equity', 'income', 'expense'].indexOf(type) === -1) return sendJson(res, { error: 'نوع حساب برای گروه باید یکی از دارایی/بدهی/سرمایه/درآمد/هزینه باشد.' }, 400);
+            const rec = { id: 'facc-' + code + '-' + Date.now().toString(36), code: code, title: title, type: type, level: level, parent_id: parent ? parent.id : null, active: true };
+            live.fin_accounts.push(rec);
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.account.add', { code: code, title: title, level: level }); return sendJson(res, { ok: true, account: rec }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/fin/accounts') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive();
+            const a = (live.fin_accounts || []).find((x) => x.id === String(b.id || ''));
+            if (!a) return sendJson(res, { error: 'حساب یافت نشد.' }, 404);
+            if (b.title != null) a.title = String(b.title).trim().slice(0, 80) || a.title;
+            if (b.active != null) a.active = !!b.active;
+            a.updated_at = new Date().toISOString();
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.account.edit', { id: a.id, title: a.title, active: a.active }); return sendJson(res, { ok: true, account: a }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/cost-centers') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const title = String(b.title || '').trim().slice(0, 80);
+            if (!title) return sendJson(res, { error: 'عنوان مرکز هزینه الزامی است.' }, 400);
+            const live = readLive();
+            live.fin_cost_centers = Array.isArray(live.fin_cost_centers) ? live.fin_cost_centers : [];
+            const code = String(b.code || '').trim().slice(0, 16) || ('CC-' + String(live.fin_cost_centers.length + 1).padStart(2, '0'));
+            const rec = { id: 'cc-' + Date.now().toString(36), code: code, title: title, kind: String(b.kind || 'admin'), active: true };
+            live.fin_cost_centers.push(rec);
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.costcenter.add', { code: code, title: title }); return sendJson(res, { ok: true, cost_center: rec }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/fin/config') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            const c = live.fin_config;
+            const num = (v, lo, hi) => { const x = Number(finDigitsEn(v)); return isFinite(x) && x >= lo && x <= hi ? x : null; };
+            const vat = num(b.vat_rate, 0, 50); if (vat == null) return sendJson(res, { error: 'نرخ مالیات بر ارزش افزوده باید عددی ۰ تا ۵۰ باشد.' }, 400);
+            const tax = num(b.corporate_tax_rate, 0, 60); if (tax == null) return sendJson(res, { error: 'نرخ مالیات بر درآمد باید عددی ۰ تا ۶۰ باشد.' }, 400);
+            const ins = num(b.employer_insurance_rate, 0, 40); if (ins == null) return sendJson(res, { error: 'نرخ بیمه سهم کارفرما باید عددی ۰ تا ۴۰ باشد.' }, 400);
+            const bp = num(b.billet_rial_per_kg, 0, 1e9); const et = num(b.energy_tariff_rial_per_kwh, 0, 1e7);
+            const sp = num(b.scrap_rial_per_kg, 0, 1e9); const dl = num(b.quarterly_report_deadline_days, 1, 120);
+            if (bp == null || et == null || sp == null || dl == null) return sendJson(res, { error: 'بهای شمش/تعرفهٔ برق/بهای اسقاط/مهلت گزارش فصلی نامعتبر است.' }, 400);
+            c.vat_rate = vat; c.corporate_tax_rate = tax; c.employer_insurance_rate = ins;
+            c.billet_rial_per_kg = bp; c.energy_tariff_rial_per_kwh = et; c.scrap_rial_per_kg = sp; c.quarterly_report_deadline_days = Math.round(dl);
+            c.updated_at = new Date().toISOString(); c.updated_by = (req.user && (req.user.name || req.user.username)) || '?';
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.config.update', { vat: vat, tax: tax, ins: ins }); return sendJson(res, { ok: true, config: c }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/fin/bom') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const rows = Array.isArray(b.rows) ? b.rows : null;
+            if (!rows || !rows.length) return sendJson(res, { error: 'هیچ ردیف BOM ارسال نشده است.' }, 400);
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            live.fin_bom = Array.isArray(live.fin_bom) ? live.fin_bom : [];
+            const by = {}; live.fin_bom.forEach((r) => { by[String(r.size)] = r; });
+            const num = (v, lo, hi) => { const x = Number(finDigitsEn(v)); return isFinite(x) && x >= lo && x <= hi ? x : null; };
+            for (const r of rows) {
+                const size = finDigitsEn(String(r.size || '')).trim();
+                if (!(size === '5SP' || (Number(size) >= 6 && Number(size) <= 50))) return sendJson(res, { error: 'سایز ' + size + ' نامعتبر است (۶ تا ۵۰ یا 5SP).' }, 400);
+                const vals = { billet_t_per_t: num(r.billet_t_per_t, 0.5, 3), kwh_per_t: num(r.kwh_per_t, 0, 5000), labor_rial_per_t: num(r.labor_rial_per_t, 0, 1e10), overhead_rial_per_t: num(r.overhead_rial_per_t, 0, 1e10), other_rial_per_t: num(r.other_rial_per_t, 0, 1e10), sale_price_rial_per_t: num(r.sale_price_rial_per_t, 0, 1e11) };
+                for (const k of Object.keys(vals)) if (vals[k] == null) return sendJson(res, { error: 'مقدار «' + k + '» سایز ' + size + ' نامعتبر است.' }, 400);
+                const cur = by[size];
+                if (cur) { Object.keys(vals).forEach((k) => { cur[k] = vals[k]; }); cur.updated_at = new Date().toISOString(); cur.updated_by = (req.user && (req.user.name || req.user.username)) || '?'; }
+                else { const rec = Object.assign({ id: 'fbom-' + size + '-' + Date.now().toString(36), size: size, updated_at: new Date().toISOString(), updated_by: (req.user && (req.user.name || req.user.username)) || '?' }, vals); live.fin_bom.push(rec); by[size] = rec; }
+            }
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.bom.update', { sizes: rows.map((r) => String(r.size)) }); return sendJson(res, { ok: true, bom: live.fin_bom }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/bom/calibrate') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const d90 = new Date(Date.now() - 90 * 86400000).toISOString();
+        let billetKg = 0, bundleKg = 0;
+        (Array.isArray(live.billets) ? live.billets : []).forEach((b) => { const t = Date.parse(b.received_at || ''); if (!isNaN(t) && t >= d90) billetKg += Number(b.initial_weight_kg) || 0; });
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => { const t = Date.parse(b.produced_at || ''); const nn = Number(b.rebar_size); if (!isNaN(t) && t >= d90 && String(b.quality_status || '').toUpperCase() === 'APPROVED' && nn >= 6 && nn <= 50) bundleKg += Number(b.net_weight_kg) || 0; });
+        const ratio = bundleKg > 0 ? Math.round((billetKg / bundleKg) * 1000) / 1000 : null;
+        /* میانگین kWh/تن از ماژول انرژی (۹۰روزه از کنتور واقعی) */
+        let kwh90 = 0;
+        (Array.isArray(live.energy_logs) ? live.energy_logs : []).forEach((l) => { const t = Date.parse(l.created_at || ''); if (!isNaN(t) && t >= d90) kwh90 += Number(l.kwh) || 0; });
+        const kwhPerT = bundleKg > 0 && kwh90 > 0 ? Math.round(kwh90 / (bundleKg / 1000) * 10) / 10 : null;
+        let updated = 0;
+        if (ratio != null) (live.fin_bom || []).forEach((r) => { r.billet_t_per_t = ratio; updated++; });
+        if (kwhPerT != null) (live.fin_bom || []).forEach((r) => { r.kwh_per_t = kwhPerT; });
+        if (updated && writeJson(LIVE_FILE, live)) auditLog(req, 'fin.bom.calibrate', { ratio: ratio, kwh_per_t: kwhPerT });
+        return sendJson(res, { ok: true, ratio: ratio, kwh_per_t: kwhPerT, updated: updated, basis: { billet_kg_90d: Math.round(billetKg), approved_kg_90d: Math.round(bundleKg), kwh_90d: Math.round(kwh90) }, note: (ratio == null ? 'دادهٔ شمش/تولید ۹۰روزه کافی نیست؛ ضریب شمش تغییر نکرد.' : 'ضریب شمش per تن از نسبت واقعی ۹۰روزه کالیبره شد.') + (kwhPerT == null ? ' میانگین انرژی از EM موجود نیست.' : ' kWh/تن از میانگین کنتور EM به‌روز شد.') });
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/docs') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const lim = Math.min(200, Math.max(5, Number(new URL(req.url, 'http://x').searchParams.get('limit')) || 50));
+        const docs = (live.fin_docs || []).slice().sort((a, b) => (b.doc_no || 0) - (a.doc_no || 0)).slice(0, lim);
+        const totalD = (live.fin_docs || []).reduce((s, d) => s + (Number(d.total) || 0), 0);
+        return sendJson(res, { ok: true, docs: docs, total_docs: (live.fin_docs || []).length, total_debit_all: totalD, pending: finPendingCounts(live) });
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/docs') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت سند فقط برای واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            try {
+                const r = finPostDoc(live, { source: 'manual', date_jalali: b.date_jalali, desc: b.desc, lines: b.lines });
+                if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.doc.manual', { doc_no: r.doc.doc_no, total: r.doc.total }); return sendJson(res, { ok: true, doc: r.doc }); }
+                return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+            } catch (e) { return sendJson(res, { error: e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/docs/sync') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const out = finSyncAuto(live);
+        if (out.created > 0 && !writeJson(LIVE_FILE, live)) return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        auditLog(req, 'fin.doc.sync', { created: out.created, dup: out.dup, closed: out.closed, failed: out.failed });
+        return sendJson(res, Object.assign({ ok: true }, out, { pending: finPendingCounts(live) }));
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/costing') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const cfg = live.fin_config;
+        let per = finDigitsEn(new URL(req.url, 'http://x').searchParams.get('month') || '').trim();
+        if (!/^\d{4}-\d{2}$/.test(per)) per = String(finIsoToJalali(new Date().toISOString())).slice(0, 7).replace('/', '-');
+        const mm = per.split('-'); const jy = Number(mm[0]), jm = Number(mm[1]);
+        if (jm < 1 || jm > 12) return sendJson(res, { error: 'ماه نامعتبر است.' }, 400);
+        const t0 = Date.parse(planJalaliToTs(jy + '/' + jm + '/1', 0) || '') || 0; /* FIX-13b: planJalaliToTs خروجی ISO رشته‌ای دارد — به ms تبدیل شود */
+        let ny = jy, nm = jm + 1; if (nm > 12) { nm = 1; ny++; }
+        const t1 = Date.parse(planJalaliToTs(ny + '/' + nm + '/1', 0) || '') || 0;
+        const inRange = (iso) => { const t = Date.parse(iso || ''); return !isNaN(t) && t >= t0 && t < t1; };
+        const bySize = {}; let totalKg = 0;
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
+            if (!b || !inRange(b.produced_at) || String(b.quality_status || '').toUpperCase() !== 'APPROVED') return;
+            const nn = Number(b.rebar_size); if (!(nn >= 6 && nn <= 50)) return;
+            const k = String(nn); bySize[k] = (bySize[k] || 0) + (Number(b.net_weight_kg) || 0);
+        });
+        Object.keys(bySize).forEach((k) => { totalKg += bySize[k]; });
+        let matKg = 0;
+        (Array.isArray(live.billets) ? live.billets : []).forEach((b) => { if (inRange(b.received_at)) matKg += Number(b.initial_weight_kg) || 0; });
+        const matCost = matKg * (Number(cfg.billet_rial_per_kg) || 0);
+        let kwh = 0;
+        (Array.isArray(live.energy_logs) ? live.energy_logs : []).forEach((l) => { if (l && l.iso_date && inRange(l.iso_date + 'T12:00:00Z')) kwh += Number(l.kwh) || 0; });
+        const energyCost = kwh * (Number(cfg.energy_tariff_rial_per_kwh) || 0);
+        const rows = Object.keys(bySize).sort((a, b) => Number(a) - Number(b)).map((k) => {
+            const kg = bySize[k], ton = kg / 1000, share = totalKg > 0 ? kg / totalKg : 0;
+            const bom = (live.fin_bom || []).find((x) => String(x.size) === k) || { size: k, billet_t_per_t: 1.035, kwh_per_t: 110, labor_rial_per_t: 2500000, overhead_rial_per_t: 4000000, other_rial_per_t: 350000, sale_price_rial_per_t: 315000000 };
+            const mat = matCost * share, en = energyCost * share;
+            const lab = (Number(bom.labor_rial_per_t) || 0) * ton, ovh = (Number(bom.overhead_rial_per_t) || 0) * ton, oth = (Number(bom.other_rial_per_t) || 0) * ton;
+            const total = mat + en + lab + ovh + oth;
+            const perT = ton > 0 ? Math.round(total / ton) : 0;
+            const std = finStdCostPerTon(bom, cfg);
+            const variancePerT = perT - std;
+            const sale = Number(bom.sale_price_rial_per_t) || 0;
+            const margin = sale - perT;
+            return { size: k, tonnage: Math.round(ton * 1000) / 1000, elements: { material: Math.round(mat), energy: Math.round(en), labor: Math.round(lab), overhead: Math.round(ovh), other: Math.round(oth) }, per_t: { material: ton > 0 ? Math.round(mat / ton) : 0, energy: ton > 0 ? Math.round(en / ton) : 0, labor: ton > 0 ? Math.round(lab / ton) : 0, overhead: ton > 0 ? Math.round(ovh / ton) : 0, other: ton > 0 ? Math.round(oth / ton) : 0, total: perT }, std_per_t: std, variance_per_t: variancePerT, variance_pct: std > 0 ? Math.round(variancePerT / std * 1000) / 10 : null, sale_price_per_t: sale, margin_per_t: margin, margin_pct: perT > 0 ? Math.round(margin / perT * 1000) / 10 : null };
+        });
+        const totT = rows.reduce((s, r) => s + r.tonnage, 0);
+        const totCost = rows.reduce((s, r) => s + (r.elements.material + r.elements.energy + r.elements.labor + r.elements.overhead + r.elements.other), 0);
+        return sendJson(res, {
+            ok: true, month: per, label: FIN_MONTH_FA[jm - 1] + ' ' + jy,
+            basis: { billet_kg: Math.round(matKg), kwh: Math.round(kwh), total_tonnage: Math.round(totT * 1000) / 1000, total_cost: Math.round(totCost) },
+            rows: rows, empty: rows.length === 0,
+            hint_empty: 'در این ماه تولید تأییدشدهٔ سایز استاندارد (۶..۵۰) ثبت نشده است.',
+            generated_at: new Date().toISOString()
+        });
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/reports/pnl') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const cfg = live.fin_config;
+        const q = new URL(req.url, 'http://x').searchParams;
+        const from = finDigitsEn(q.get('from') || '').trim() || null, to = finDigitsEn(q.get('to') || '').trim() || null;
+        const docs = finDocsInRange(live, from, to);
+        const accs = live.fin_accounts || [];
+        const inc = [], exp = [];
+        accs.forEach((a) => {
+            if (Number(a.level) < 3) return;
+            const b = finAccBalance(docs, a.id);
+            if (!b.debit && !b.credit) return;
+            if (a.type === 'income') inc.push({ code: a.code, title: a.title, amount: Math.max(0, b.credit - b.debit) });
+            if (a.type === 'expense') exp.push({ code: a.code, title: a.title, amount: Math.max(0, b.debit - b.credit) });
+        });
+        const totInc = inc.reduce((s, r) => s + r.amount, 0), totExp = exp.reduce((s, r) => s + r.amount, 0);
+        const profit = totInc - totExp;
+        const tax = profit > 0 ? Math.round(profit * (Number(cfg.corporate_tax_rate) || 0) / 100) : 0;
+        return sendJson(res, { ok: true, from: from, to: to, incomes: inc, expenses: exp, total_income: totInc, total_expense: totExp, profit: profit, tax_rate: cfg.corporate_tax_rate, tax: tax, net_profit: profit - tax, doc_count: docs.length, generated_at: new Date().toISOString() });
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/reports/balance') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const docs = live.fin_docs || [];
+        const accs = live.fin_accounts || [];
+        const assets = [], liabs = [], eqs = [];
+        let incTot = 0, expTot = 0;
+        accs.forEach((a) => {
+            if (Number(a.level) < 3) return;
+            const b = finAccBalance(docs, a.id);
+            if (!b.debit && !b.credit) return;
+            if (a.type === 'asset') assets.push({ code: a.code, title: a.title, amount: b.balance });
+            else if (a.type === 'liability') liabs.push({ code: a.code, title: a.title, amount: -b.balance });
+            else if (a.type === 'equity') eqs.push({ code: a.code, title: a.title, amount: -b.balance });
+            else if (a.type === 'income') incTot += b.credit - b.debit;
+            else if (a.type === 'expense') expTot += b.debit - b.credit;
+        });
+        const profit = incTot - expTot;
+        const totA = assets.reduce((s, r) => s + r.amount, 0), totL = liabs.reduce((s, r) => s + r.amount, 0), totE = eqs.reduce((s, r) => s + r.amount, 0);
+        return sendJson(res, { ok: true, assets: assets, liabilities: liabs, equity: eqs, total_assets: totA, total_liabilities: totL, total_equity: totE, period_profit: profit, balanced: totA === totL + totE + profit, generated_at: new Date().toISOString() });
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/reports/vat') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const cfg = live.fin_config;
+        const q = new URL(req.url, 'http://x').searchParams;
+        const year = Number(finDigitsEn(q.get('year'))) || Number(String(finIsoToJalali(new Date().toISOString())).slice(0, 4));
+        const quarter = Math.min(4, Math.max(1, Number(finDigitsEn(q.get('quarter'))) || Math.ceil(Number(String(finIsoToJalali(new Date().toISOString())).slice(5, 7)) / 3)));
+        const m0 = (quarter - 1) * 3 + 1;
+        const from = year + '-' + String(m0).padStart(2, '0');
+        const to = year + '-' + String(m0 + 2).padStart(2, '0');
+        const docs = finDocsInRange(live, from, to);
+        const accs = live.fin_accounts || [];
+        const find = (code) => accs.find((a) => a.code === code);
+        let salesBase = 0, purchaseBase = 0, vatBuyPosted = 0, vatSalePosted = 0;
+        docs.forEach((d) => (d.lines || []).forEach((ln) => {
+            const a = accs.find((x) => x.id === ln.account_id); if (!a) return;
+            if (a.type === 'income') salesBase += Number(ln.credit) || 0;
+            if (a.type === 'expense' || a.code === '110001') purchaseBase += Number(ln.debit) || 0;
+            if (a.code === '210001') vatBuyPosted += Number(ln.debit) || 0;
+            if (a.code === '210002') vatSalePosted += Number(ln.credit) || 0;
+        }));
+        const rate = Number(cfg.vat_rate) || 0;
+        const vatSales = Math.round(salesBase * rate / 100), vatBuy = Math.round(purchaseBase * rate / 100);
+        const endTs = Date.parse(planJalaliToTs(year + '/' + (m0 + 2) + '/30', 12) || '') || Date.now(); /* FIX-13b: تبدیل به ms */
+        const deadline = finIsoToJalali(new Date(endTs + (Number(cfg.quarterly_report_deadline_days) || 45) * 86400000));
+        return sendJson(res, {
+            ok: true, year: year, quarter: quarter, label: 'فصل ' + ['بهار', 'تابستان', 'پاییز', 'زمستان'][quarter - 1] + ' ' + year,
+            vat_rate: rate, sales_base: salesBase, purchase_base: purchaseBase,
+            vat_sales_est: vatSales, vat_purchase_est: vatBuy, vat_net_est: vatSales - vatBuy,
+            vat_buy_posted: vatBuyPosted, vat_sale_posted: vatSalePosted,
+            quarterly169: { doc_count: docs.length, purchase_total: purchaseBase, sales_total: salesBase, deadline_days: cfg.quarterly_report_deadline_days, deadline_jalali: deadline, note: 'گزارش معاملات فصلی مادهٔ ۱۶۹ — ارسال الکترونیکی حداکثر ' + (cfg.quarterly_report_deadline_days) + ' روز پس از پایان فصل (تا ' + deadline + ')' },
+            generated_at: new Date().toISOString()
+        });
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/periods') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: فقط واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive();
+            const p = (live.fin_periods || []).find((x) => x.id === finDigitsEn(String(b.period_id || '')));
+            if (!p) return sendJson(res, { error: 'دوره یافت نشد.' }, 404);
+            p.closed = !!b.closed; p.closed_at = p.closed ? new Date().toISOString() : null; p.closed_by = p.closed ? ((req.user && (req.user.name || req.user.username)) || '?') : null;
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.period.' + (p.closed ? 'close' : 'open'), { period: p.id }); return sendJson(res, { ok: true, period: p }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    // ===== FEAT-FIN-13b (end) =====
 
     /* ===== endpointهای برنامه‌ریزی ===== */
     if (req.method === 'GET' && pathname === '/api/planning/plans') {

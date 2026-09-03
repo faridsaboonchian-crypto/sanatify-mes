@@ -841,6 +841,7 @@
         #nav button[data-tab="maintenance"]::before { content: "🔧"; }
         /* FEAT-PLAN-7 */
         #nav button[data-tab="planning"]::before { content: "🗓️"; }
+        #nav button[data-tab="finance"]::before { content: "💰"; } /* FEAT-FIN-13b */
         #nav button.nav-soon {
             width: 100%;
             text-align: right;
@@ -1147,6 +1148,36 @@
         body.theme-dark .aps-toast { background: #071b2e; border-color: #164e63; }
         body.theme-dark .aps-toast.err { background: #450a0a; border-color: #b91c1c; }
         /* ===== FIX-PLAN-13a (end) ===== */
+        /* ===== FEAT-FIN-13b (begin): استایل ماژول مالی — تم‌آوار ===== */
+        .fin-tree-l1 { font-weight: 800; }
+        .fin-tree-l2 { padding-inline-start: 18px; font-weight: 700; }
+        .fin-tree-l3 { padding-inline-start: 36px; }
+        .fin-tree-l4 { padding-inline-start: 54px; color: #475569; }
+        body.theme-dark .fin-tree-l4 { color: #8fa8bf; }
+        .fin-bal-ok { color: #047857; font-weight: 700; }
+        .fin-bal-no { color: #b91c1c; font-weight: 700; }
+        body.theme-dark .fin-bal-ok { color: #4ade80; }
+        body.theme-dark .fin-bal-no { color: #f87171; }
+        .fin-badge { background: #b45309; color: #fff; border-radius: 9px; padding: 1px 8px; font-size: 11px; font-weight: 700; margin-inline-start: 4px; }
+        .fin-doc { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: #fff; }
+        body.theme-dark .fin-doc { border-color: #1e3a5f; background: #0b2239; }
+        .fin-doc summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: #0f2a43; }
+        body.theme-dark .fin-doc summary { color: #bcd7ea; }
+        .fin-doc .src { display: inline-block; font-size: 10.5px; border-radius: 8px; padding: 1px 8px; margin-inline-start: 6px; background: #e0f2f1; color: #0f766e; }
+        body.theme-dark .fin-doc .src { background: #134e4a; color: #7fd7e8; }
+        .fin-lines { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+        .fin-lines th, .fin-lines td { border: 1px solid #e2e8f0; padding: 3px 8px; text-align: right; }
+        body.theme-dark .fin-lines th, body.theme-dark .fin-lines td { border-color: #1e3a5f; }
+        .fin-lines th { background: #f1f5f9; }
+        body.theme-dark .fin-lines th { background: #10293c; }
+        .fin-inp { width: 92px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 7px; font-family: inherit; font-size: 12px; background: #f8fafc; }
+        body.theme-dark .fin-inp { background: #0b2239; border-color: #2a4a6b; color: #dbeafe; }
+        .fin-wcell { text-align: left; direction: ltr; }
+        .fin-var-ok { background: #dcfce7; color: #166534; }
+        .fin-var-no { background: #fee2e2; color: #991b1b; }
+        body.theme-dark .fin-var-ok { background: #14532d; color: #bbf7d0; }
+        body.theme-dark .fin-var-no { background: #7f1d1d; color: #fecaca; }
+        /* ===== FEAT-FIN-13b (end) ===== */
         .aps-share { font-size: 12px; font-weight: bold; color: #0f2a43; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 6px 10px; margin: 0 0 8px; display: inline-block; }
         body.theme-dark .aps-share { color: #7fb4d8; background: #0e2233; border-color: #2a4a66; }
         .aps-wexplain { font-size: 11.5px; color: #64748b; margin: 0 0 10px; line-height: 1.9; }
@@ -1254,6 +1285,9 @@
         <button data-tab="maintenance">تعمیرات و PM</button>
         <div class="nav-group">برنامه‌ریزی</div>
         <button data-tab="planning">🗓️ برنامه‌ریزی تولید</button>
+        <!-- ===== FEAT-FIN-13b: تب مالی و بهای تمام‌شده (نقش finance ثبت، مدیریت فقط‌خواندن، بقیه بدون دسترسی) ===== -->
+        <div class="nav-group">مالی</div>
+        <button data-tab="finance">مالی و بهای تمام‌شده</button>
         <!-- ===== FEAT-PWA-8b: دکمهٔ کوچک «نصب اپ» برای نمایش دوبارهٔ بنر (در حالت نصب‌شده پنهان می‌شود) ===== -->
         <button type="button" id="navInstall" class="nav-install" hidden>📲 نصب وب‌اپ صنعتی فای</button>
     </nav>
@@ -2042,6 +2076,127 @@
             </div>
             <!-- ===== FEAT-PLAN-7 (end) ===== -->
         </section>
+        <!-- ===== FEAT-FIN-13b (begin): تب مالی و بهای تمام‌شده ===== -->
+        <section id="tab-finance" class="hidden">
+            <div class="panel">
+                <h2>💰 مالی و بهای تمام‌شده <span class="plan-engine" id="finChip">در حال بارگذاری…</span></h2>
+                <p class="note">دفتر کل دوطرفهٔ واقعی — اسناد خودکار از ماژول‌های عملیاتی (شمش/انرژی/تولید/ضایعات) فقط از موتور سند واحد با متادیتای منبع؛ ثبت دستی با کنترل توازن بدهکار/بستانکار؛ کدینگ گروه/کل/معین/تفضیلی؛ BOM مالی per سایز؛ دوره‌های مالی با بستن ماه. دسترسی: واحد مالی = ثبت، مدیریت = فقط مشاهده، سایر نقش‌ها = بدون دسترسی.</p>
+                <div class="kpis" id="finKpis"></div>
+            </div>
+            <div class="panel">
+                <h2>🔧 تنظیمات نرخ‌ها و بهاهای پایه (fin_config — نه هاردکد)</h2>
+                <div class="filters" id="finConfigBox"></div>
+                <div class="toolbar"><button class="act" id="finCfgSave">ذخیرهٔ نرخ‌ها</button><span class="note" id="finCfgMsg"></span></div>
+            </div>
+            <div class="panel">
+                <h2>🗂 کدینگ حساب‌ها — گروه / کل / معین / تفضیلی</h2>
+                <div class="toolbar">
+                    <button class="act" id="finAccAddBtn">➕ حساب جدید</button>
+                    <button class="act" id="finCcAddBtn">➕ مرکز هزینه</button>
+                    <span class="note">ثبت فقط در سطح معین/تفضیلی؛ غیرفعال‌شده‌ها ثبت جدید نمی‌پذیرند.</span>
+                </div>
+                <div id="finAccForm" class="filters hidden">
+                    <div class="frow">
+                        <label>کد: <input id="finAccCode" class="fin-inp" style="width:110px" placeholder="110002"></label>
+                        <label>عنوان: <input id="finAccTitle" placeholder="عنوان حساب" style="min-width:180px"></label>
+                        <button class="act" id="finAccSave">ذخیرهٔ حساب</button>
+                        <button class="act" id="finAccCancel">بستن</button>
+                    </div>
+                    <div class="note">گروه = ۱ رقم، کل = ۳ رقم، معین = ۶ رقم، تفضیلی = ۹ رقم. نوع حساب از والد به ارث می‌رسد.</div>
+                    <div class="note" id="finAccMsg"></div>
+                </div>
+                <div id="finCcForm" class="filters hidden">
+                    <div class="frow">
+                        <label>عنوان مرکز هزینه: <input id="finCcTitle" placeholder="مثلاً خط نورد ۲" style="min-width:180px"></label>
+                        <label>کد (اختیاری): <input id="finCcCode" class="fin-inp" style="width:110px" placeholder="CC-07"></label>
+                        <button class="act" id="finCcSave">ذخیره</button>
+                        <button class="act" id="finCcCancel">بستن</button>
+                    </div>
+                    <div class="note" id="finCcMsg"></div>
+                </div>
+                <div class="tablewrap" style="max-height:360px;overflow-y:auto"><div id="finAccTable"></div></div>
+            </div>
+            <div class="panel">
+                <h2>📑 اسناد حسابداری</h2>
+                <div class="toolbar">
+                    <button class="act" id="finSyncBtn">🔄 همگام‌سازی اسناد عملیاتی<span class="fin-badge" id="finPendingBadge"></span></button>
+                    <button class="act" id="finDocNewBtn">➕ سند دستی</button>
+                    <button class="act excel" id="finDocsXls">خروجی اکسل اسناد</button>
+                    <span class="note" id="finSyncMsg"></span>
+                </div>
+                <div id="finDocForm" class="panel hidden">
+                    <h3>ثبت سند دستی (دوطرفه)</h3>
+                    <div class="frow">
+                        <label>تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="findate" id="finDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>شرح سند: <input id="finDesc" placeholder="مثلاً فروش نقدی میلگرد سایز ۱۸" style="min-width:240px"></label>
+                    </div>
+                    <div id="finLines"></div>
+                    <div class="frow">
+                        <button class="act" id="finDocSave">ثبت سند</button>
+                        <button class="act" id="finDocCancel">انصراف</button>
+                        <span class="note" id="finDocBalance"></span>
+                    </div>
+                    <div class="note" id="finDocMsg"></div>
+                </div>
+                <div class="tablewrap" style="max-height:460px;overflow-y:auto"><div id="finDocsTable"></div></div>
+            </div>
+            <div class="panel">
+                <h2>🧮 BOM مالی و بهای استاندارد هر تن (per سایز)</h2>
+                <div class="toolbar">
+                    <button class="act" id="finBomSave">ذخیرهٔ BOM</button>
+                    <button class="act" id="finBomCal">🎚 کالیبره از دادهٔ واقعی ۹۰روزه</button>
+                    <span class="note" id="finBomMsg"></span>
+                </div>
+                <p class="note">ضرایب قابل‌ویرایش: تن شمش per تن میلگرد (از نرخ ضایعات/بالانس)، kWh/تن (میانگین کنتور EM)، دستمزد/سربار/سایر (ریال بر تن) و قیمت فروش مرجع. بهای استاندارد = شمش×بها + kWh×تعرفه + دستمزد + سربار + سایر.</p>
+                <div class="tablewrap" style="max-height:380px;overflow-y:auto"><div id="finBomTable"></div></div>
+            </div>
+            <div class="panel">
+                <h2>📊 بهای تمام‌شدهٔ ماه — واقعی vs استاندارد</h2>
+                <div class="frow">
+                    <label>ماه: <select id="finCostMonth" class="fsel"></select></label>
+                    <button class="act" id="finCostBtn">نمایش تحلیل</button>
+                </div>
+                <div class="tablewrap" style="max-height:380px;overflow-y:auto"><div id="finCostTable"></div></div>
+                <div class="toolbar"><button class="act excel" id="finCostXls">خروجی اکسل بهای تمام‌شده</button></div>
+                <p class="note">واقعی = شمش مصرفی ماه (بالانس/رسید) + انرژی کنتور EM × تعرفه + دستمزد/سربار BOM × تناژ — تخصیص به سایزها به نسبت تناژ باندل‌های تأییدشده. انحراف مثبت قرمز (نامطلوب)، منفی سبز (مطلوب).</p>
+            </div>
+            <div class="panel">
+                <h2>📜 گزارش‌های قانونی</h2>
+                <div class="frow">
+                    <label>از ماه: <select id="finPnlFrom" class="fsel"></select></label>
+                    <label>تا ماه: <select id="finPnlTo" class="fsel"></select></label>
+                    <label>فصل: <select id="finVatQ" class="fsel"><option value="1">بهار</option><option value="2">تابستان</option><option value="3">پاییز</option><option value="4">زمستان</option></select>
+                    <select id="finVatY" class="fsel"></select></label>
+                </div>
+                <div class="toolbar">
+                    <button class="act" id="finPnlBtn">سود و زیان ساده</button>
+                    <button class="act" id="finBalBtn">ترازنامهٔ ساده</button>
+                    <button class="act" id="finVatBtn">خلاصهٔ VAT + فصلی ۱۶۹</button>
+                </div>
+                <div class="tablewrap" style="max-height:420px;overflow-y:auto"><div id="finReportBox"></div></div>
+                <div class="toolbar">
+                    <button class="act excel" id="finPnlXls">اکسل سود و زیان</button>
+                    <button class="act excel" id="finBalXls">اکسل ترازنامه</button>
+                    <button class="act excel" id="finVatXls">اکسل VAT/فصلی</button>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>🔒 دوره‌های مالی (پرچم بستن ماه)</h2>
+                <div class="tablewrap" style="max-height:340px;overflow-y:auto"><div id="finPeriodsTable"></div></div>
+                <p class="note">در ماه بسته‌شده هیچ سندی (خودکار یا دستی) ثبت نمی‌شود — موتور سند رد می‌کند.</p>
+            </div>
+            <details class="panel">
+                <summary style="cursor:pointer;font-weight:800">🧭 راهنمای توسعهٔ یک‌صفحه‌ای — اتصال ماژول‌های مالی آینده (حقوق، خزانه، فروش/دریافتنی، خرید/پرداختنی)</summary>
+                <div style="font-size:12.5px;line-height:2">
+                    <p><b>۱) اسکیما (در live.json، همه افزاینده):</b> <code>fin_accounts[]</code> — چهار سطح با کد ۱/۳/۶/۹ رقمی (گروه/کل/معین/تفضیلی) + type (asset/liability/equity/income/expense) + active؛ <code>fin_docs[]</code> — سند دوطرفه با <code>lines[]</code> شامل (account_id، debit، credit، cost_center_id، ref_module، ref_id)؛ <code>fin_cost_centers[]</code>؛ <code>fin_periods[]</code> با پرچم closed؛ <code>fin_config</code> نرخ‌ها؛ <code>fin_bom[]</code> ضرایب per سایز؛ <code>fin_seq.doc</code> شماره‌گذار.</p>
+                    <p><b>۲) قانون طلایی:</b> هیچ ماژولی مستقیم در fin_docs نمی‌نویسد — همهٔ ثبت‌ها از <b>موتور سند واحد</b> (<code>finPostDoc</code> در server.js) عبور می‌کنند: کنترل توازن، سطح حساب، حساب غیرفعال و دورهٔ بسته آنجا متمرکز است.</p>
+                    <p><b>۳) اتصال ماژول جدید:</b> یا (الف) سند دستی/نیمه‌خودکار: POST /api/fin/docs با lines و source جدید (مثلاً 'payroll') و ref_id یکتا برای idempotency؛ یا (ب) خودکار: یک بلوک جدید به <code>finSyncAuto</code> اضافه کنید — برای هر رکورد عملیاتی lines بسازید و tryPost بزنید؛ دکمهٔ «همگام‌سازی» آن را ثبت می‌کند. هرگز رویداد عملیاتی را تغییر ندهید؛ فقط بخوانید.</p>
+                    <p><b>۴) نرخ‌ها:</b> هر نرخ قانونی (VAT/مالیات/بیمه/تعرفه) فقط از fin_config خوانده می‌شود — آپدیت سالانه فقط یک PUT.</p>
+                    <p><b>۵) نقش‌ها:</b> ثبت = FIN_W (['finance'])، مشاهده = FIN_R (['finance','manager']) + admin؛ در auth.requireRole سرور و ROLE_VIEW کلاینت هر دو نگه‌داری می‌شوند.</p>
+                </div>
+            </details>
+        </section>
+        <!-- ===== FEAT-FIN-13b (end) ===== -->
         <section id="tab-warehouse" class="hidden">
 
             <div class="panel">
@@ -2848,7 +3003,7 @@ box.innerHTML = html;
                         'background:linear-gradient(90deg,#dc2626,#f87171);' +
                         'height:100%;border-radius:6px"></div>' +                        '</div>' +                        '</div>'                    );                }).join('') || '<div class="empty">داده‌ای نیست.</div>';            // ================================================================            // برنامه‌های PM            // ================================================================            const todayJ =                toEnDigits(                    new Date().toLocaleDateString('fa-IR')                ).trim();            const todayJdn = jdnOf(todayJ);            let ph =                '<thead><tr>' +                '<th>ایستگاه</th>' +                '<th>عنوان کار</th>' +                '<th>دوره (روز)</th>' +                '<th>آخرین انجام</th>' +                '<th>سررسید بعدی</th>' +                '<th>مسئول</th>' +                '<th>وضعیت</th>' +                '</tr></thead><tbody>';            const plans = cache.mntPlans || [];            if (!plans.length) {                ph +=                    '<tr>' +                    '<td colspan="7" class="empty">' +                    'برنامه‌ای تعریف نشده است.' +                    '</td>' +                    '</tr>';            }            plans.forEach((p) => {                const next =                    jalaliAddDays(                        p.last_done,                        Number(p.interval_days) || 30                    );                const nd = jdnOf(next);                let st =                    '<span class="chip ok">سالم</span>';                if (                    nd !== null &&                    todayJdn !== null                ) {                    const dn = nd - todayJdn;                    if (dn < 0) {                        st =                            '<span class="chip no">' +                            'عقب‌افتاده' +                            '</span>';                    } else if (dn <= 7) {                        st =                            '<span class="chip wait">' +                            'نزدیک سررسید' +                            '</span>';                    }                }                ph +=                    '<tr>' +                    '<td>' +                    esc(stationFa(p.machine_id)) +                    '</td>' +                    '<td>' +                    esc(p.title) +                    '</td>' +                    '<td>' +                    groupFa(p.interval_days) +                    '</td>' +                    '<td>' +                    esc(toFaDigits(p.last_done || '-')) +                    '</td>' +                    '<td>' +                    esc(toFaDigits(next || '-')) +                    '</td>' +                    '<td>' +                    esc(p.responsible || '-') +                    '</td>' +                    '<td>' +                    st +                    '</td>' +                    '</tr>';            });            document.getElementById('tbl-pmplans').innerHTML =                ph + '</tbody>';            // ================================================================            // تاریخچه تعمیرات و PM            // ================================================================            let lh =                '<thead><tr>' +                '<th>تاریخ</th>' +                '<th>ایستگاه</th>' +                '<th>نوع کار</th>' +                '<th>تکنسین</th>' +                '<th>قطعه</th>' +                '<th>مدت (دقیقه)</th>' +                '<th>توضیحات</th>' +                '</tr></thead><tbody>';            const logs = cache.mntLogs || [];            if (!logs.length) {                lh +=                    '<tr>' +                    '<td colspan="7" class="empty">' +                    'ثبتی نیست.' +                    '</td>' +                    '</tr>';            }            logs                .slice()                .reverse()                .forEach((r) => {                    lh +=                        '<tr>' +                        '<td>' +                        esc(toFaDigits(r.work_date)) +                        '</td>' +                        '<td>' +                        esc(stationFa(r.machine_id)) +                        '</td>' +                        '<td>' +                        esc(                            WORKTYPE_FA[r.work_type] ||                            r.work_type                        ) +                        '</td>' +                        '<td>' +                        esc(r.technician || '-') +                        '</td>' +                        '<td>' +                        esc(r.parts || '-') +                        '</td>' +                        '<td>' +                        groupFa(r.duration_minutes) +                        '</td>' +                        '<td>' +                        esc(r.description || '-') +                        '</td>' +                        '</tr>';                });            document.getElementById('tbl-mntlogs').innerHTML =                lh + '</tbody>';            // ================================================================            // آخرین توقفات / خرابی‌ها            // ================================================================            let th =                '<thead><tr>' +                '<th>تاریخ</th>' +                '<th>علت</th>' +                '<th>ایستگاه</th>' +                '<th>نوع</th>' +                '<th>مدت (دقیقه)</th>' +                '<th>وضعیت</th>' +                '</tr></thead><tbody>';            if (!rows.length) {                th +=                    '<tr>' +                    '<td colspan="6" class="empty">' +                    'داده‌ای ثبت نشده است.' +                    '</td>' +                    '</tr>';            }            rows                .slice()                .sort(                    (a, b) =>                        new Date(b.start_time) -                        new Date(a.start_time)                )                .forEach((r) => {                    th +=                        '<tr>' +                        '<td>' +                        fmtDate(r.start_time) +                        '</td>' +                        '<td>' +                        esc(reasonFa(r.reason_id)) +                        '</td>' +                        '<td>' +                        esc(stationFa(r.machine_id)) +                        '</td>' +                        '<td>' +                        (                            Number(r.is_unplanned)                                ? '<span class="chip no">اضطراری</span>'                                : '<span class="chip ok">برنامه‌ریزی</span>'                        ) +                        '</td>' +                        '<td>' +                        groupFa(r.duration_minutes) +                        '</td>' +                        '<td>' +                        (                            r.end_time                                ? 'بسته'                                : '<span class="chip wait">باز</span>'                        ) +                        '</td>' +                        '</tr>';                });            document.getElementById('tbl-maintenance').innerHTML =                th + '</tbody>';        }        // ================================================================        // Load Maintenance        // ================================================================        async function loadMaintenance() {            if (!cache.downtime) {                try {                    cache.downtime =                        await getJson(                            '/api/downtime'                        );                } catch (e) {                    cache.downtime = [];                }            }            try {                const x =                    await getJson(                        '/api/maintenance-extra'                    );                cache.mntLogs =                    x.logs || [];                cache.mntPlans =                    x.plans || [];            } catch (e) {                cache.mntLogs = [];                cache.mntPlans = [];            }            // پر کردن لیست ایستگاه‌ها            /* ===== FIX-PM-10a (begin): حفظ انتخاب کاربر در بازسازی ===== */            [                'fmStation',                'plStation'            ].forEach((id) => {                const el =                    document.getElementById(id);                if (el) {                    const keep10a = el.value;                    el.innerHTML =                        STATION_OPTIONS;                    if (keep10a && Array.from(el.options).some((o) => o.value === keep10a)) {                        el.value = keep10a;                    }                }            });            /* ===== FIX-PM-10a (end) ===== */            // پر کردن لیست PM            const pl =                document.getElementById(                    'fmPlan'                );            /* ===== FIX-PM-10a: حفظ ارجاع PM انتخابی ===== */            const keep10aPm = pl ? pl.value : '';            if (pl) {                pl.innerHTML =                    '<option value="">' +                    'بدون ارجاع به برنامه PM' +                    '</option>' +                    (                        cache.mntPlans || []                    )                        .map(                            (p) =>                                '<option value="' +
                                 esc(p.id) +
-                                '">' +                                esc(p.title) +                                ' — ' +                                esc(                                    stationFa(                                        p.machine_id                                    )                                ) +                                '</option>'                        )                        .join('');                if (keep10aPm && Array.from(pl.options).some((o) => o.value === keep10aPm)) {                    pl.value = keep10aPm;                }            }            renderMaintenance();        }        // ================================================================        // تغییر بازه گزارش        // ================================================================        document            .getElementById('mntRange')            .addEventListener(                'change',                renderMaintenance            );        // ================================================================        // باز/بسته کردن فرم تعمیر        // ================================================================        document            .getElementById(                'btnAddMaintenance'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'fmMsg'                    ).textContent = '';                }            );        // ================================================================        // باز/بسته کردن فرم PM        // ================================================================        document            .getElementById(                'btnAddPlan'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'plMsg'                    ).textContent = '';                }            );        // ================================================================        // Cancel        // ================================================================        document            .getElementById(                'fmCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .add('hidden');                }            );        document            .getElementById(                'plCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .add('hidden');                }            );        // ================================================================        // انتخاب PM → ایستگاه خودکار        // ================================================================        document            .getElementById(                'fmPlan'            )            .addEventListener(                'change',                () => {                    const id =                        document.getElementById(                            'fmPlan'                        ).value;                    const p =                        (                            cache.mntPlans || []                        ).find(                            (x) =>                                x.id === id                        );                    if (p) {                        document.getElementById(                            'fmStation'                        ).value =                            p.machine_id;                    }                }            );        // ================================================================        // ثبت تعمیر / PM        // ================================================================        document            .getElementById(                'fmSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'fmMsg'                        );                    msg.textContent = '';                    const workDate =                        readJalaliValue(                            document,                            'fmd'                        );                    const body = {                        machine_id:                            document.getElementById(                                'fmStation'                            ).value,                        work_type:                            document.getElementById(                                'fmType'                            ).value,                        plan_id:                            document.getElementById(                                'fmPlan'                            ).value,                        work_date:                            workDate,                        duration_minutes:                            Number(                                document.getElementById(                                    'fmDuration'                                ).value                            ) || 0,                        technician:                            document.getElementById(                                'fmTech'                            ).value.trim(),                        priority:                            document.getElementById(                                'fmPriority'                            ).value,                        parts:                            document.getElementById(                                'fmParts'                            ).value.trim(),                        cost:                            Number(                                document.getElementById(                                    'fmCost'                                ).value                            ) || 0,                        root_cause:                            document.getElementById(                                'fmRootCause'                            ).value.trim(),                        action_taken:                            document.getElementById(                                'fmAction'                            ).value.trim(),                        description:                            document.getElementById(                                'fmDesc'                            ).value.trim()                    };                    if (!workDate) {                        msg.textContent =                            'تاریخ کار را به‌صورت شمسی کامل وارد کنید.';                        return;                    }                    if (                        body.work_type === 'pm' &&                        !body.plan_id                    ) {                        msg.textContent =                            'برای ثبت PM باید یک برنامه PM انتخاب شود.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/entry/maintenance',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در ثبت تعمیرات';                            return;                        }                        document                            .getElementById(                                'formMaintenance'                            )                            .classList                            .add('hidden');                        [                            'fmDuration',                            'fmTech',                            'fmParts',                            'fmCost',                            'fmRootCause',                            'fmAction',                            'fmDesc'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document                            .querySelectorAll(                                '#formMaintenance input[data-jp]'                            )                            .forEach(                                (el) => {                                    el.value = '';                                }                            );                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'ثبت تعمیر/PM با موفقیت ذخیره شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        // ================================================================        // ثبت برنامه PM        // ================================================================        document            .getElementById(                'plSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'plMsg'                        );                    msg.textContent = '';                    const lastDone =                        readJalaliValue(                            document,                            'pllast'                        );                    const body = {                        machine_id:                            document.getElementById(                                'plStation'                            ).value,                        title:                            document.getElementById(                                'plTitle'                            ).value.trim(),                        interval_days:                            Number(                                document.getElementById(                                    'plInterval'                                ).value                            ),                        last_done:                            lastDone,                        responsible:                            document.getElementById(                                'plResp'                            ).value.trim(),                        priority:                            document.getElementById(                                'plPriority'                            ).value,                        notes:                            document.getElementById(                                'plNotes'                            ).value.trim()                    };                    if (                        !body.title ||                        !body.interval_days ||                        !lastDone                    ) {                        msg.textContent =                            'ایستگاه، عنوان، دوره و آخرین انجام الزامی است.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/pm/plan',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در تعریف PM';                            return;                        }                        document                            .getElementById(                                'formPlan'                            )                            .classList                            .add('hidden');                        [                            'plTitle',                            'plInterval',                            'plResp',                            'plNotes'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document.getElementById(                            'plLast'                        ).value = '';                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'برنامه PM با موفقیت ثبت شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        let WEB_ROLE = 'viewer';        const ROLE_CAN = { production: ['admin', 'operator', 'supervisor'], waste: ['admin', 'operator', 'supervisor'], downtime: ['admin', 'operator', 'engineering', 'supervisor'], quality: ['admin', 'quality', 'qc'], warehouse: ['admin', 'warehouse'], maintenance: ['admin', 'engineering', 'supervisor'] };        const ROLE_VIEW = {            admin: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning'],            manager: ['summary', 'analytics', 'planning'], operator: ['production', 'waste', 'downtime', 'planning'], supervisor: ['production', 'waste', 'downtime', 'maintenance', 'planning'], planner: ['summary', 'analytics', 'planning'], warehouse: ['warehouse'], quality: ['quality'], qc: ['quality'], engineering: ['downtime', 'maintenance'],        };        async function loadRole() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' });                if (r.ok) { const j = await r.json(); if (j.ok && j.user) { WEB_ROLE = j.user.role || 'viewer'; WEB_USER = j.user; const fp = document.getElementById('fpBy'); if (fp) fp.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); const fq = document.getElementById('fqBy'); if (fq) fq.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); } }            } catch (e) { /* بی‌ضرر */ }            applyRoleUI();        }        function applyRoleUI() {            const can = (tab) =>                WEB_ROLE === 'admin' ||                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        view.indexOf(                            button.dataset.tab                        ) !== -1                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                view.indexOf(                    currentTab                ) === -1            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
+                                '">' +                                esc(p.title) +                                ' — ' +                                esc(                                    stationFa(                                        p.machine_id                                    )                                ) +                                '</option>'                        )                        .join('');                if (keep10aPm && Array.from(pl.options).some((o) => o.value === keep10aPm)) {                    pl.value = keep10aPm;                }            }            renderMaintenance();        }        // ================================================================        // تغییر بازه گزارش        // ================================================================        document            .getElementById('mntRange')            .addEventListener(                'change',                renderMaintenance            );        // ================================================================        // باز/بسته کردن فرم تعمیر        // ================================================================        document            .getElementById(                'btnAddMaintenance'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'fmMsg'                    ).textContent = '';                }            );        // ================================================================        // باز/بسته کردن فرم PM        // ================================================================        document            .getElementById(                'btnAddPlan'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .toggle('hidden');                    document.getElementById(                        'plMsg'                    ).textContent = '';                }            );        // ================================================================        // Cancel        // ================================================================        document            .getElementById(                'fmCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formMaintenance'                        )                        .classList                        .add('hidden');                }            );        document            .getElementById(                'plCancel'            )            .addEventListener(                'click',                () => {                    document                        .getElementById(                            'formPlan'                        )                        .classList                        .add('hidden');                }            );        // ================================================================        // انتخاب PM → ایستگاه خودکار        // ================================================================        document            .getElementById(                'fmPlan'            )            .addEventListener(                'change',                () => {                    const id =                        document.getElementById(                            'fmPlan'                        ).value;                    const p =                        (                            cache.mntPlans || []                        ).find(                            (x) =>                                x.id === id                        );                    if (p) {                        document.getElementById(                            'fmStation'                        ).value =                            p.machine_id;                    }                }            );        // ================================================================        // ثبت تعمیر / PM        // ================================================================        document            .getElementById(                'fmSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'fmMsg'                        );                    msg.textContent = '';                    const workDate =                        readJalaliValue(                            document,                            'fmd'                        );                    const body = {                        machine_id:                            document.getElementById(                                'fmStation'                            ).value,                        work_type:                            document.getElementById(                                'fmType'                            ).value,                        plan_id:                            document.getElementById(                                'fmPlan'                            ).value,                        work_date:                            workDate,                        duration_minutes:                            Number(                                document.getElementById(                                    'fmDuration'                                ).value                            ) || 0,                        technician:                            document.getElementById(                                'fmTech'                            ).value.trim(),                        priority:                            document.getElementById(                                'fmPriority'                            ).value,                        parts:                            document.getElementById(                                'fmParts'                            ).value.trim(),                        cost:                            Number(                                document.getElementById(                                    'fmCost'                                ).value                            ) || 0,                        root_cause:                            document.getElementById(                                'fmRootCause'                            ).value.trim(),                        action_taken:                            document.getElementById(                                'fmAction'                            ).value.trim(),                        description:                            document.getElementById(                                'fmDesc'                            ).value.trim()                    };                    if (!workDate) {                        msg.textContent =                            'تاریخ کار را به‌صورت شمسی کامل وارد کنید.';                        return;                    }                    if (                        body.work_type === 'pm' &&                        !body.plan_id                    ) {                        msg.textContent =                            'برای ثبت PM باید یک برنامه PM انتخاب شود.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/entry/maintenance',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در ثبت تعمیرات';                            return;                        }                        document                            .getElementById(                                'formMaintenance'                            )                            .classList                            .add('hidden');                        [                            'fmDuration',                            'fmTech',                            'fmParts',                            'fmCost',                            'fmRootCause',                            'fmAction',                            'fmDesc'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document                            .querySelectorAll(                                '#formMaintenance input[data-jp]'                            )                            .forEach(                                (el) => {                                    el.value = '';                                }                            );                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'ثبت تعمیر/PM با موفقیت ذخیره شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        // ================================================================        // ثبت برنامه PM        // ================================================================        document            .getElementById(                'plSave'            )            .addEventListener(                'click',                async () => {                    const msg =                        document.getElementById(                            'plMsg'                        );                    msg.textContent = '';                    const lastDone =                        readJalaliValue(                            document,                            'pllast'                        );                    const body = {                        machine_id:                            document.getElementById(                                'plStation'                            ).value,                        title:                            document.getElementById(                                'plTitle'                            ).value.trim(),                        interval_days:                            Number(                                document.getElementById(                                    'plInterval'                                ).value                            ),                        last_done:                            lastDone,                        responsible:                            document.getElementById(                                'plResp'                            ).value.trim(),                        priority:                            document.getElementById(                                'plPriority'                            ).value,                        notes:                            document.getElementById(                                'plNotes'                            ).value.trim()                    };                    if (                        !body.title ||                        !body.interval_days ||                        !lastDone                    ) {                        msg.textContent =                            'ایستگاه، عنوان، دوره و آخرین انجام الزامی است.';                        return;                    }                    try {                        const r =                            await fetch(                                '/api/pm/plan',                                {                                    method: 'POST',                                    headers: {                                        'Content-Type':                                            'application/json'                                    },                                    body:                                        JSON.stringify(                                            body                                        )                                }                            );                        const j =                            await r.json();                        if (!r.ok) {                            msg.textContent =                                j.error ||                                'خطا در تعریف PM';                            return;                        }                        document                            .getElementById(                                'formPlan'                            )                            .classList                            .add('hidden');                        [                            'plTitle',                            'plInterval',                            'plResp',                            'plNotes'                        ].forEach(                            (id) => {                                document.getElementById(                                    id                                ).value = '';                            }                        );                        document.getElementById(                            'plLast'                        ).value = '';                        await loadMaintenance();                        lastOkAt =                            Date.now();                        setLiveStatus(                            true                        );                        alert(                            'برنامه PM با موفقیت ثبت شد ✅'                        );                    } catch (e) {                        msg.textContent =                            'خطا در ارتباط با سرور';                    }                }            );        let WEB_ROLE = 'viewer';        const ROLE_CAN = { production: ['admin', 'operator', 'supervisor'], waste: ['admin', 'operator', 'supervisor'], downtime: ['admin', 'operator', 'engineering', 'supervisor'], quality: ['admin', 'quality', 'qc'], warehouse: ['admin', 'warehouse'], maintenance: ['admin', 'engineering', 'supervisor'] };        const ROLE_VIEW = {            admin: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance'], /* FEAT-FIN-13b */            manager: ['summary', 'analytics', 'planning', 'finance'], /* FEAT-FIN-13b: مدیریت فقط‌خواندن */ operator: ['production', 'waste', 'downtime', 'planning'], supervisor: ['production', 'waste', 'downtime', 'maintenance', 'planning'], planner: ['summary', 'analytics', 'planning'], warehouse: ['warehouse'], quality: ['quality'], qc: ['quality'], engineering: ['downtime', 'maintenance'], finance: ['summary', 'warehouse', 'finance'], /* FEAT-FIN-13b: مالی + خواندن انبار/خلاصه */        };        async function loadRole() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' });                if (r.ok) { const j = await r.json(); if (j.ok && j.user) { WEB_ROLE = j.user.role || 'viewer'; WEB_USER = j.user; const fp = document.getElementById('fpBy'); if (fp) fp.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); const fq = document.getElementById('fqBy'); if (fq) fq.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); } }            } catch (e) { /* بی‌ضرر */ }            applyRoleUI();        }        function applyRoleUI() {            const can = (tab) =>                WEB_ROLE === 'admin' ||                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        view.indexOf(                            button.dataset.tab                        ) !== -1                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                view.indexOf(                    currentTab                ) === -1            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
                         view[0] +
                         '"]'                    );                if (first) {                    first.click();                } else {                    document                        .querySelectorAll(                            'main > section'                        )                        .forEach(                            section =>                                section.classList                                    .add('hidden')                        );                }            }        }        loadRole();        document.getElementById('applyFilter').addEventListener('click', () => {            activeFilter = { from: readJalaliValue(document, 'pf'), to: readJalaliValue(document, 'pt'), shift: document.getElementById('filterShift').value, product: document.getElementById('filterProduct').value };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('clearFilter').addEventListener('click', () => {            ['pf', 'pt'].forEach((p) => { document.querySelectorAll('input[data-jp="' + p + '"]').forEach((el) => { el.value = ''; }); });            document.getElementById('filterShift').value = 'all'; document.getElementById('filterProduct').value = 'all';            activeFilter = { from: '', to: '', shift: 'all', product: 'all' };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('btnAddProduction').addEventListener('click', () => { document.getElementById('formProduction').classList.toggle('hidden'); document.getElementById('fpMsg').textContent = ''; });        document.getElementById('fpCancel').addEventListener('click', () => { document.getElementById('formProduction').classList.add('hidden'); });        document.getElementById('fpSave').addEventListener('click', async () => {            const msg = document.getElementById('fpMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', product_id: document.getElementById('fpProduct').value, shift_id: document.getElementById('fpShift').value, good_quantity: Number(document.getElementById('fpQty').value), pallet_count: Number(document.getElementById('fpPallets').value) || 0, machine_id: 'st-pack', heat_number: document.getElementById('fpHeat').value.trim(), description: document.getElementById('fpDesc').value.trim() };            try {                const r = await fetch('/api/entry/production', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formProduction').classList.add('hidden');                ['fpQty', 'fpPallets', 'fpDesc', 'fpHeat'].forEach((id) => { document.getElementById(id).value = ''; });                await loadProduction(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت تولید با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddWaste').addEventListener('click', () => { document.getElementById('formWaste').classList.toggle('hidden'); document.getElementById('fwMsg').textContent = ''; });        document.getElementById('fwCancel').addEventListener('click', () => { document.getElementById('formWaste').classList.add('hidden'); });        document.getElementById('fwSave').addEventListener('click', async () => {            const msg = document.getElementById('fwMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', machine_id: document.getElementById('fwStation').value, waste_type: document.getElementById('fwType').value, reason_id: document.getElementById('fwReason').value, shift_id: document.getElementById('fwShift').value, quantity: Number(document.getElementById('fwQty').value), description: document.getElementById('fwDesc').value.trim() };            try {                const r = await fetch('/api/entry/waste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formWaste').classList.add('hidden');                ['fwQty', 'fwDesc'].forEach((id) => { document.getElementById(id).value = ''; });                await loadWaste(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت ضایعات با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddDowntime').addEventListener('click', () => { document.getElementById('formDowntime').classList.toggle('hidden'); document.getElementById('fdMsg').textContent = ''; });        document.getElementById('fdCancel').addEventListener('click', () => { document.getElementById('formDowntime').classList.add('hidden'); });        document.getElementById('fdSave').addEventListener('click', async () => {            const msg = document.getElementById('fdMsg'); msg.textContent = '';            const sd = readJalaliValue(document, 'fds'), ed = readJalaliValue(document, 'fde');            if (!sd || !ed) { msg.textContent = 'تاریخ شمسی را کامل وارد کنید (مثال: ۱۴۰۵/۰۵/۱۶).'; return; }            const start = parseJalaliDateTime(sd, document.getElementById('fdStartTime').value);            const end = parseJalaliDateTime(ed, document.getElementById('fdEndTime').value);            if (!start || !end) { msg.textContent = 'تاریخ یا ساعت نامعتبر است.'; return; }            const body = { reason_id: document.getElementById('fdReason').value, is_unplanned: Number(document.getElementById('fdType').value), shift_id: document.getElementById('fdShift').value, start_time: start.toISOString(), end_time: end.toISOString(), machine_id: document.getElementById('fdStation').value, description: document.getElementById('fdDesc').value.trim() };            try {                const r = await fetch('/api/entry/downtime', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formDowntime').classList.add('hidden');                ['fdStartTime', 'fdEndTime', 'fdDesc'].forEach((id) => { document.getElementById(id).value = ''; });                document.querySelectorAll('#formDowntime input[data-jp]').forEach((el) => { el.value = ''; });                await loadDowntime(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت توقف با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddQuality').addEventListener('click', () => { document.getElementById('formQuality').classList.toggle('hidden'); document.getElementById('fqMsg').textContent = ''; });        document.getElementById('fqCancel').addEventListener('click', () => { document.getElementById('formQuality').classList.add('hidden'); });        document.getElementById('fqSave').addEventListener('click', async () => {            const msg = document.getElementById('fqMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', heat_number: document.getElementById('fqHeat').value.trim(), rebar_size: Number(document.getElementById('fqSize').value), yield_strength: Number(document.getElementById('fqPressure').value), tensile_strength: Number(document.getElementById('fqLining').value), elongation_percent: Number(document.getElementById('fqDrop').value) || 0, /* ===== FEAT-QC-3: ارسال فیلدهای دستگاه ===== */ sample_length_mm: Number(document.getElementById('fqLen').value) || 0, sample_weight_g: Number(document.getElementById('fqWt').value) || 0, nominal_diameter_mm: Number(document.getElementById('fqDia').value) || 0, section_area_mm2: Number(document.getElementById('fqArea').value) || 0, yield_kgf: Number(document.getElementById('fqYkgf').value) || 0, kg_per_m: Number(document.getElementById('fqKgM').value) || 0, rib_diameter_mm: Number(document.getElementById('fqRibD').value) || 0, nafi_diameter_mm: Number(document.getElementById('fqNafi').value) || 0 /* FIX-QC-3b: نافی */, ratio_rm_reh: Number(document.getElementById('fqRatio').value) || 0, bend_test_passed: Number(document.getElementById('fqLeak').value), visual_inspection: Number(document.getElementById('fqVisual').value), description: document.getElementById('fqDesc').value.trim() };            try {                const r = await fetch('/api/entry/quality', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formQuality').classList.add('hidden');                ['fqHeat', 'fqPressure', 'fqLining', 'fqDrop', 'fqDesc', 'fqLen', 'fqWt', 'fqRibD', 'fqNafi'].forEach((id) => { document.getElementById(id).value = ''; });                await loadQuality(); lastOkAt = Date.now(); setLiveStatus(true); alert('آزمون QC با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        // ===== REVERT-STEEL-2: ارزیابی زندهٔ QC در فرم (هم‌تراز مانیتور دستگاه تست کشش) =====
         /* ===== FEAT-QC-3 (begin): محاسبات خودکار + ارزیابی زندهٔ هم‌تراز مانیتور دستگاه تست کشش ===== */
@@ -3992,7 +4147,419 @@ showRes();
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', emWire); else emWire();
     emLoad();
 })();
-// ===== FEAT-EM-12b (end) =====
+// ===== FEAT-FIN-13b (begin): ماژول مالی/حسابداری/بهای تمام‌شده — کلاینت =====
+(function finModule() {
+    const $ = (id) => document.getElementById(id);
+    const FLEVEL_FA = { 1: 'گروه', 2: 'کل', 3: 'معین', 4: 'تفضیلی' };
+    const FTYPE_FA = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };
+    const FSRC_FA = { manual: 'دستی', auto_billet: 'شمش', auto_energy: 'انرژی', auto_production: 'تولید', auto_waste: 'ضایعات' };
+    const st = { ov: null, accounts: [], cc: [], docs: [], pending: null, bom: [], config: null, periods: [], cost: null, lastReport: null, lastReportKind: '' };
+    const canWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'finance';
+    const rls = (x, dash) => (x == null || isNaN(Number(x))) ? (dash || '—') : groupFa(Math.round(Number(x)));
+    const dec = (x) => (x == null || isNaN(Number(x))) ? '—' : toFaDigits(Math.round(Number(x) * 100) / 100);
+    function toast(msg, kind) {
+        try {
+            let host = document.getElementById('finToastHost');
+            if (!host) { host = document.createElement('div'); host.id = 'finToastHost'; host.className = 'aps-toast-host'; host.setAttribute('aria-live', 'polite'); document.body.appendChild(host); }
+            const d = document.createElement('div');
+            d.className = 'aps-toast' + (kind === 'err' ? ' err' : '');
+            d.setAttribute('role', 'status'); d.textContent = msg;
+            host.appendChild(d);
+            setTimeout(() => d.classList.add('show'), 30);
+            setTimeout(() => { d.classList.remove('show'); setTimeout(() => d.remove(), 350); }, 4200);
+        } catch (e) { /* بی‌ضرر */ }
+    }
+    async function jf(url, opts) {
+        const r = await fetch(url, Object.assign({ cache: 'no-store' }, opts || {}));
+        let j = null; try { j = await r.json(); } catch (e) { }
+        if (!r.ok) throw new Error((j && j.error) || ('خطای سرور (' + r.status + ')'));
+        return j;
+    }
+    const numFa = (s) => String(s == null ? '' : s).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
+    function jToday() { try { return toFaDigits(new Date().toLocaleDateString('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' })); } catch (e) { return ''; } }
+
+    /* ---------- KPI ---------- */
+    function renderKpis() {
+        const box = $('finKpis'); if (!box || !st.ov) return;
+        const p = st.pending || {};
+        const pendSum = (p.billets || 0) + (p.energy || 0) + (p.bundles || 0) + (p.waste || 0);
+        const curPeriod = st.periods.find((x) => x.id === st.ov.month_now);
+        const badge = $('finPendingBadge');
+        if (badge) { badge.textContent = pendSum > 0 ? toFaDigits(pendSum) : ''; badge.style.display = pendSum > 0 ? '' : 'none'; }
+        const items = [
+            { l: 'اسناد ثبت‌شده', v: toFaDigits(st.ov.counts.docs), c: '' },
+            { l: 'جمع گردشنهٔ اسناد (ریال)', v: rls(st.docs.reduce((s, d) => s + (Number(d.total) || 0), 0)), c: '' },
+            { l: 'در انتظار سند خودکار', v: toFaDigits(pendSum), c: pendSum > 0 ? 'amber' : 'green' },
+            { l: 'دورهٔ جاری', v: toFaDigits((curPeriod && curPeriod.label) || st.ov.month_now.replace('-', '/')), c: curPeriod && curPeriod.closed ? 'red' : 'green' },
+            { l: 'نرخ‌ها: VAT / مالیات / بیمه', v: toFaDigits(st.ov.config.vat_rate) + '٪ / ' + toFaDigits(st.ov.config.corporate_tax_rate) + '٪ / ' + toFaDigits(st.ov.config.employer_insurance_rate) + '٪', c: '' }
+        ];
+        box.innerHTML = items.map((k) => '<div class="kpi ' + (k.c || '') + '"><div class="v">' + k.v + '</div><div class="l">' + esc(k.l) + '</div></div>').join('');
+    }
+
+    /* ---------- تنظیمات ---------- */
+    function renderConfig() {
+        const box = $('finConfigBox'); if (!box || !st.config) return;
+        const c = st.config;
+        const fld = (key, label, step) => '<label>' + label + ': <input type="number" step="' + (step || '1') + '" id="fcfg_' + key + '" value="' + c[key] + '" class="fin-inp fin-wcell" style="width:130px"></label>';
+        box.innerHTML = '<div class="frow">'
+            + fld('vat_rate', 'نرخ مالیات بر ارزش افزوده (٪)') + fld('corporate_tax_rate', 'نرخ مالیات درآمد شرکت (٪)') + fld('employer_insurance_rate', 'بیمه سهم کارفرما (٪)')
+            + '</div><div class="frow">'
+            + fld('billet_rial_per_kg', 'بهای شمش (ریال/kg)', '1000') + fld('energy_tariff_rial_per_kwh', 'تعرفهٔ برق (ریال/kWh)', '100') + fld('scrap_rial_per_kg', 'بهای اسقاط ضایعات (ریال/kg)', '1000') + fld('quarterly_report_deadline_days', 'مهلت گزارش فصلی ۱۶۹ (روز)')
+            + '</div>';
+        $('finCfgSave').style.display = canWrite() ? '' : 'none';
+    }
+
+    /* ---------- کدینگ حساب‌ها ---------- */
+    function renderAccounts() {
+        const box = $('finAccTable'); if (!box) return;
+        const ccChips = (st.cc || []).map((c) => '<span class="chip">' + esc(c.title) + '</span>').join(' ');
+        let html = '<p class="note">مراکز هزینه: ' + (ccChips || '—') + '</p>';
+        html += '<table><thead><tr><th>کد</th><th>عنوان</th><th>سطح</th><th>نوع</th><th>وضعیت</th><th>اقدام</th></tr></thead><tbody>';
+        st.accounts.forEach((a) => {
+            const tog = canWrite() ? '<button class="act" data-facc-toggle="' + a.id + '" data-on="' + (a.active === false ? '0' : '1') + '">' + (a.active === false ? 'فعال‌سازی' : 'غیرفعال') + '</button>' : '';
+            html += '<tr class="fin-tree-l' + a.level + '"><td>' + toFaDigits(a.code) + '</td><td>' + esc(a.title) + '</td><td>' + FLEVEL_FA[a.level] + '</td><td>' + FTYPE_FA[a.type] + '</td><td>' + (a.active === false ? '<span class="chip no">غیرفعال</span>' : '<span class="chip ok">فعال</span>') + '</td><td>' + tog + '</td></tr>';
+        });
+        box.innerHTML = html + '</tbody></table>';
+    }
+
+    /* ---------- اسناد ---------- */
+    function renderDocs() {
+        const box = $('finDocsTable'); if (!box) return;
+        if (!st.docs.length) { box.innerHTML = '<p class="note">هنوز سندی ثبت نشده — «همگام‌سازی اسناد عملیاتی» را بزنید یا سند دستی ثبت کنید.</p>'; return; }
+        const ccTitle = (id) => { const c = (st.cc || []).find((x) => x.id === id); return c ? c.title : '—'; };
+        box.innerHTML = st.docs.map((d) => '<details class="fin-doc"><summary>سند ' + toFaDigits(d.doc_no_fa) + ' — ' + toFaDigits(d.date_jalali) + '<span class="src">' + (FSRC_FA[d.source] || d.source) + '</span> — ' + esc(d.desc || '') + '<b> | ' + rls(d.total) + ' ریال</b></summary>'
+            + '<table class="fin-lines"><thead><tr><th>کد</th><th>حساب</th><th>بدهکار (ریال)</th><th>بستانکار (ریال)</th><th>مرکز هزینه</th><th>ارجاع</th></tr></thead><tbody>'
+            + (d.lines || []).map((ln) => '<tr><td>' + toFaDigits(ln.account_code) + '</td><td>' + esc(ln.account_title) + '</td><td>' + rls(ln.debit, '') + '</td><td>' + rls(ln.credit, '') + '</td><td>' + esc(ccTitle(ln.cost_center_id)) + '</td><td>' + esc(ln.ref_module ? (ln.ref_module + ':' + (ln.ref_id || '')) : '—') + '</td></tr>').join('')
+            + '</tbody></table><div class="note">ثبت‌کننده: ' + esc(d.created_by || '—') + '</div></details>').join('');
+    }
+
+    /* ---------- فرم سند دستی ---------- */
+    const FIN_LINE_N = 4;
+    function buildDocForm() {
+        const box = $('finLines'); if (!box) return;
+        const opts = ['<option value="">— انتخاب حساب —</option>'].concat(st.accounts.filter((a) => Number(a.level) >= 3 && a.active !== false).map((a) => '<option value="' + a.id + '">' + toFaDigits(a.code) + ' — ' + esc(a.title) + '</option>')).join('');
+        const ccOpts = ['<option value="">—</option>'].concat((st.cc || []).map((c) => '<option value="' + c.id + '">' + esc(c.title) + '</option>')).join('');
+        let html = '<table class="fin-lines"><thead><tr><th>حساب (معین/تفضیلی)</th><th>بدهکار (ریال)</th><th>بستانکار (ریال)</th><th>مرکز هزینه</th></tr></thead><tbody>';
+        for (let i = 0; i < FIN_LINE_N; i++) {
+            html += '<tr><td><select id="finLnAcc' + i + '" class="fsel" style="min-width:200px">' + opts + '</select></td>'
+                + '<td><input type="number" min="0" id="finLnD' + i + '" class="fin-inp fin-wcell"></td>'
+                + '<td><input type="number" min="0" id="finLnC' + i + '" class="fin-inp fin-wcell"></td>'
+                + '<td><select id="finLnCc' + i + '" class="fsel">' + ccOpts + '</select></td></tr>';
+        }
+        box.innerHTML = html + '</tbody></table>';
+        for (let i = 0; i < FIN_LINE_N; i++) { $('finLnD' + i).addEventListener('input', paintBalance); $('finLnC' + i).addEventListener('input', paintBalance); }
+        paintBalance();
+    }
+    function finLinesPayload() {
+        const rows = [];
+        for (let i = 0; i < FIN_LINE_N; i++) {
+            const acc = $('finLnAcc' + i).value; if (!acc) continue;
+            rows.push({ account_id: acc, debit: Number($('finLnD' + i).value) || 0, credit: Number($('finLnC' + i).value) || 0, cost_center_id: $('finLnCc' + i).value || null });
+        }
+        return rows;
+    }
+    function paintBalance() {
+        const el = $('finDocBalance'); if (!el) return;
+        const rows = finLinesPayload();
+        const d = rows.reduce((s, r) => s + r.debit, 0), c = rows.reduce((s, r) => s + r.credit, 0);
+        const diff = Math.round(d - c);
+        if (!rows.length) { el.textContent = ''; el.className = 'note'; return; }
+        if (d === c && d > 0) { el.textContent = '✅ تراز است — جمع: ' + rls(d) + ' ریال'; el.className = 'note fin-bal-ok'; }
+        else { el.textContent = '❌ عدم توازن — بدهکار ' + rls(d) + ' / بستانکار ' + rls(c) + ' / اختلاف ' + rls(Math.abs(diff)) + ' ریال'; el.className = 'note fin-bal-no'; }
+    }
+
+    /* ---------- BOM ---------- */
+    function stdCostClient(row) {
+        const c = st.config || {};
+        return Math.round((Number(row.billet_t_per_t) || 0) * (Number(c.billet_rial_per_kg) || 0) * 1000
+            + (Number(row.kwh_per_t) || 0) * (Number(c.energy_tariff_rial_per_kwh) || 0)
+            + (Number(row.labor_rial_per_t) || 0) + (Number(row.overhead_rial_per_t) || 0) + (Number(row.other_rial_per_t) || 0));
+    }
+    function renderBom() {
+        const box = $('finBomTable'); if (!box) return;
+        let html = '<table><thead><tr><th>سایز</th><th>تن شمش / تن میلگرد</th><th>kWh / تن</th><th>دستمزد (ریال/تن)</th><th>سربار (ریال/تن)</th><th>سایر (ریال/تن)</th><th>قیمت فروش (ریال/تن)</th><th>بهای استاندارد (ریال/تن)</th><th>حاشیه ٪</th></tr></thead><tbody>';
+        st.bom.forEach((b, i) => {
+            html += '<tr><td><b>' + toFaDigits(b.size) + '</b></td>'
+                + '<td><input type="number" step="0.001" min="0" data-bi="' + i + '" data-bf="billet_t_per_t" value="' + b.billet_t_per_t + '" class="fin-inp fin-wcell"></td>'
+                + '<td><input type="number" step="1" min="0" data-bi="' + i + '" data-bf="kwh_per_t" value="' + b.kwh_per_t + '" class="fin-inp fin-wcell"></td>'
+                + '<td><input type="number" step="100000" min="0" data-bi="' + i + '" data-bf="labor_rial_per_t" value="' + b.labor_rial_per_t + '" class="fin-inp fin-wcell"></td>'
+                + '<td><input type="number" step="100000" min="0" data-bi="' + i + '" data-bf="overhead_rial_per_t" value="' + b.overhead_rial_per_t + '" class="fin-inp fin-wcell"></td>'
+                + '<td><input type="number" step="50000" min="0" data-bi="' + i + '" data-bf="other_rial_per_t" value="' + b.other_rial_per_t + '" class="fin-inp fin-wcell"></td>'
+                + '<td><input type="number" step="1000000" min="0" data-bi="' + i + '" data-bf="sale_price_rial_per_t" value="' + b.sale_price_rial_per_t + '" class="fin-inp fin-wcell"></td>'
+                + '<td id="finStd_' + i + '"><b>' + rls(stdCostClient(b)) + '</b></td>'
+                + '<td id="finMrg_' + i + '">' + dec(b.sale_price_rial_per_t > 0 ? (b.sale_price_rial_per_t - stdCostClient(b)) / stdCostClient(b) * 100 : null) + '٪</td></tr>';
+        });
+        box.innerHTML = html + '</tbody></table>';
+        box.querySelectorAll('input[data-bi]').forEach((el) => el.addEventListener('input', () => {
+            const i = Number(el.dataset.bi), f = el.dataset.bf;
+            st.bom[i][f] = Number(el.value) || 0;
+            const sc = stdCostClient(st.bom[i]);
+            $('finStd_' + i).innerHTML = '<b>' + rls(sc) + '</b>';
+            $('finMrg_' + i).textContent = dec(st.bom[i].sale_price_rial_per_t > 0 ? (st.bom[i].sale_price_rial_per_t - sc) / sc * 100 : null) + '٪';
+        }));
+    }
+
+    /* ---------- بهای تمام‌شدهٔ ماه ---------- */
+    function renderCost(j) {
+        const box = $('finCostTable'); if (!box) return;
+        st.cost = j;
+        if (j.empty) { box.innerHTML = '<p class="note">' + esc(j.hint_empty) + '</p>'; return; }
+        const chip = (v) => '<span class="chip ' + (v > 0 ? 'no' : 'ok') + '">' + dec(v) + '</span>';
+        let html = '<table><thead><tr><th>سایز</th><th>تناژ (تن)</th><th>مواد (ریال)</th><th>انرژی (ریال)</th><th>دستمزد (ریال)</th><th>سربار (ریال)</th><th>جمع بهای واقعی (ریال)</th><th>بهای واقعی/تن</th><th>استاندارد/تن</th><th>انحراف/تن</th><th>انحراف ٪</th><th>فروش/تن</th><th>حاشیه ٪</th></tr></thead><tbody>';
+        j.rows.forEach((r) => {
+            html += '<tr><td><b>' + toFaDigits(r.size) + '</b></td><td>' + dec(r.tonnage) + '</td>'
+                + '<td>' + rls(r.elements.material) + '</td><td>' + rls(r.elements.energy) + '</td><td>' + rls(r.elements.labor) + '</td><td>' + rls(r.elements.overhead) + '</td>'
+                + '<td><b>' + rls(r.elements.material + r.elements.energy + r.elements.labor + r.elements.overhead + r.elements.other) + '</b></td>'
+                + '<td>' + rls(r.per_t.total) + '</td><td>' + rls(r.std_per_t) + '</td>'
+                + '<td>' + chip(r.variance_per_t) + '</td><td><span class="' + (r.variance_per_t > 0 ? 'fin-var-no' : 'fin-var-ok') + '" style="padding:1px 6px;border-radius:6px">' + dec(r.variance_pct) + '٪</span></td>'
+                + '<td>' + rls(r.sale_price_per_t) + '</td><td>' + dec(r.margin_pct) + '٪</td></tr>';
+        });
+        html += '</tbody></table>';
+        html += '<p class="note">مبنای ماه: شمش مصرفی ' + rls(j.basis.billet_kg) + ' kg | انرژی ' + rls(j.basis.kwh) + ' kWh | تناژ تأییدشده ' + dec(j.basis.total_tonnage) + ' تن — ' + esc(j.label) + '</p>';
+        box.innerHTML = html;
+    }
+
+    /* ---------- گزارش‌ها ---------- */
+    function renderReport(kind, j) {
+        const box = $('finReportBox'); if (!box) return;
+        st.lastReport = j; st.lastReportKind = kind;
+        let html = '';
+        if (kind === 'pnl') {
+            html = '<table class="fin-lines"><thead><tr><th>کد</th><th>حساب</th><th>مبلغ (ریال)</th></tr></thead><tbody>'
+                + '<tr><td colspan="3" class="fin-tree-l1">درآمدها</td></tr>'
+                + j.incomes.map((r) => '<tr><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td><td>' + rls(r.amount) + '</td></tr>').join('')
+                + '<tr><td colspan="2"><b>جمع درآمدها</b></td><td><b>' + rls(j.total_income) + '</b></td></tr>'
+                + '<tr><td colspan="3" class="fin-tree-l1">هزینه‌ها</td></tr>'
+                + j.expenses.map((r) => '<tr><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td><td>' + rls(r.amount) + '</td></tr>').join('')
+                + '<tr><td colspan="2"><b>جمع هزینه‌ها</b></td><td><b>' + rls(j.total_expense) + '</b></td></tr>'
+                + '<tr><td colspan="2"><b>سود (زیان) دوره</b></td><td class="' + (j.profit >= 0 ? 'fin-bal-ok' : 'fin-bal-no') + '"><b>' + rls(j.profit) + '</b></td></tr>'
+                + '<tr><td colspan="2">مالیات برآوردی (' + toFaDigits(j.tax_rate) + '٪ — ماده ۱۰۵)</td><td>' + rls(j.tax) + '</td></tr>'
+                + '<tr><td colspan="2"><b>سود خالص پس از مالیات</b></td><td><b>' + rls(j.net_profit) + '</b></td></tr>'
+                + '</tbody></table><p class="note">بازه: ' + toFaDigits(j.from || 'ابتدا') + ' تا ' + toFaDigits(j.to || 'امروز') + ' — ' + toFaDigits(j.doc_count) + ' سند</p>';
+        } else if (kind === 'balance') {
+            html = '<table class="fin-lines"><thead><tr><th>کد</th><th>حساب</th><th>مانده (ریال)</th></tr></thead><tbody>'
+                + '<tr><td colspan="3" class="fin-tree-l1">دارایی‌ها</td></tr>' + j.assets.map((r) => '<tr><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td><td>' + rls(r.amount) + '</td></tr>').join('')
+                + '<tr><td colspan="2"><b>جمع دارایی‌ها</b></td><td><b>' + rls(j.total_assets) + '</b></td></tr>'
+                + '<tr><td colspan="3" class="fin-tree-l1">بدهی‌ها</td></tr>' + j.liabilities.map((r) => '<tr><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td><td>' + rls(r.amount) + '</td></tr>').join('')
+                + '<tr><td colspan="2"><b>جمع بدهی‌ها</b></td><td><b>' + rls(j.total_liabilities) + '</b></td></tr>'
+                + '<tr><td colspan="3" class="fin-tree-l1">سرمایه</td></tr>' + j.equity.map((r) => '<tr><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td><td>' + rls(r.amount) + '</td></tr>').join('')
+                + '<tr><td colspan="2">سود (زیان) دوره</td><td>' + rls(j.period_profit) + '</td></tr>'
+                + '<tr><td colspan="2"><b>جمع بدهی + سرمایه + سود</b></td><td><b>' + rls(j.total_liabilities + j.total_equity + j.period_profit) + '</b></td></tr>'
+                + '</tbody></table><p class="note">' + (j.balanced ? '✅ تراز برقرار است.' : '⚠️ تراز برقرار نیست — اسناد را بازبینی کنید.') + '</p>';
+        } else if (kind === 'vat') {
+            html = '<table class="fin-lines"><tbody>'
+                + '<tr><td>دوره</td><td><b>' + esc(j.label) + '</b></td></tr>'
+                + '<tr><td>نرخ مالیات بر ارزش افزوده (fin_config)</td><td><b>' + toFaDigits(j.vat_rate) + '٪</b></td></tr>'
+                + '<tr><td>پایهٔ فروش (اسناد درآمدی)</td><td>' + rls(j.sales_base) + ' ریال</td></tr>'
+                + '<tr><td>پایهٔ خرید (مصرف/موجودی ورودی)</td><td>' + rls(j.purchase_base) + ' ریال</td></tr>'
+                + '<tr><td>VAT فروش برآوردی</td><td>' + rls(j.vat_sales_est) + ' ریال</td></tr>'
+                + '<tr><td>VAT خرید برآوردی</td><td>' + rls(j.vat_purchase_est) + ' ریال</td></tr>'
+                + '<tr><td><b>ماندهٔ VAT (بستانکاری)</b></td><td class="' + (j.vat_net_est >= 0 ? 'fin-bal-no' : 'fin-bal-ok') + '"><b>' + rls(j.vat_net_est) + ' ریال</b></td></tr>'
+                + '<tr><td>VAT خرید ثبت‌شده در اسناد (210001)</td><td>' + rls(j.vat_buy_posted) + '</td></tr>'
+                + '<tr><td>VAT فروش ثبت‌شده در اسناد (210002)</td><td>' + rls(j.vat_sale_posted) + '</td></tr>'
+                + '</tbody></table>'
+                + '<p class="note">📋 ' + esc(j.quarterly169.note) + ' — تعداد اسناد فصل: ' + toFaDigits(j.quarterly169.doc_count) + ' | جمع خرید: ' + rls(j.quarterly169.purchase_total) + ' | جمع فروش: ' + rls(j.quarterly169.sales_total) + '</p>';
+        }
+        box.innerHTML = html;
+    }
+
+    /* ---------- دوره‌ها ---------- */
+    function renderPeriods() {
+        const box = $('finPeriodsTable'); if (!box) return;
+        let html = '<table><thead><tr><th>ماه</th><th>شناسه</th><th>وضعیت</th><th>اقدام</th></tr></thead><tbody>';
+        st.periods.forEach((p) => {
+            const act = canWrite() ? '<button class="act" data-fper="' + p.id + '" data-closed="' + (p.closed ? '1' : '0') + '">' + (p.closed ? 'بازکردن' : 'بستن ماه') + '</button>' : '';
+            html += '<tr><td>' + toFaDigits(p.label) + '</td><td>' + toFaDigits(p.id) + '</td><td>' + (p.closed ? '<span class="chip no">بسته</span>' : '<span class="chip ok">باز</span>') + '</td><td>' + act + '</td></tr>';
+        });
+        box.innerHTML = html + '</tbody></table>';
+    }
+
+    /* ---------- بارگذاری ---------- */
+    async function loadAll() {
+        const panel = document.querySelector('#tab-finance');
+        if (!panel) return;
+        if (!(WEB_ROLE === 'admin' || WEB_ROLE === 'finance' || WEB_ROLE === 'manager')) {
+            $('finChip').textContent = 'بدون دسترسی'; return;
+        }
+        try {
+            const [ov, ac, dc] = await Promise.all([jf('/api/fin/overview'), jf('/api/fin/accounts'), jf('/api/fin/docs?limit=60')]);
+            st.ov = ov; st.config = ov.config; st.periods = ov.periods || []; st.cc = ov.cost_centers || []; st.bom = ov.bom || [];
+            st.accounts = ac.accounts || []; st.docs = dc.docs || []; st.pending = dc.pending || ov.pending || {};
+            $('finChip').textContent = canWrite() ? 'دسترسی کامل مالی' : 'مشاهده (فقط‌خواندن)';
+            renderKpis(); renderConfig(); renderAccounts(); renderDocs(); renderBom(); renderPeriods(); buildDocForm();
+            const sel = $('finCostMonth');
+            if (sel && !sel.options.length) {
+                sel.innerHTML = st.periods.slice().reverse().map((p) => '<option value="' + p.id + '"' + (p.id === st.ov.month_now ? ' selected' : '') + '>' + toFaDigits(p.label) + '</option>').join('');
+                const fy = $('finPnlFrom'), ty = $('finPnlTo'), vy = $('finVatY');
+                if (fy) { fy.innerHTML = st.periods.map((p) => '<option value="' + p.id + '">' + toFaDigits(p.label) + '</option>').join(''); ty.innerHTML = fy.innerHTML; fy.value = st.periods[0].id; ty.value = st.ov.month_now; }
+                if (vy) { const y = Number(String(st.ov.month_now).slice(0, 4)); vy.innerHTML = '<option value="' + y + '">' + toFaDigits(y) + '</option><option value="' + (y - 1) + '">' + toFaDigits(y - 1) + '</option>'; }
+            }
+            $('finCfgSave').style.display = canWrite() ? '' : 'none';
+            $('finSyncBtn').style.display = canWrite() ? '' : 'none';
+            $('finDocNewBtn').style.display = canWrite() ? '' : 'none';
+            $('finBomSave').style.display = canWrite() ? '' : 'none';
+            $('finBomCal').style.display = canWrite() ? '' : 'none';
+            $('finAccAddBtn').style.display = canWrite() ? '' : 'none';
+            $('finCcAddBtn').style.display = canWrite() ? '' : 'none';
+        } catch (e) {
+            $('finChip').textContent = 'خطا';
+            const box = $('finKpis'); if (box) box.innerHTML = '<div class="kpi red"><div class="v">—</div><div class="l">' + esc(e.message || 'خطا در بارگذاری ماژول مالی') + '</div></div>';
+        }
+    }
+    async function reloadDocs() {
+        try { const dc = await jf('/api/fin/docs?limit=60'); st.docs = dc.docs || []; st.pending = dc.pending || {}; renderDocs(); renderKpis(); } catch (e) { toast('خطا در بازخوانی اسناد: ' + e.message, 'err'); }
+    }
+
+    /* ---------- رویدادها ---------- */
+    function wire() {
+        $('finCfgSave').addEventListener('click', async () => {
+            const msg = $('finCfgMsg'); msg.textContent = '';
+            const body = {};
+            ['vat_rate', 'corporate_tax_rate', 'employer_insurance_rate', 'billet_rial_per_kg', 'energy_tariff_rial_per_kwh', 'scrap_rial_per_kg', 'quarterly_report_deadline_days'].forEach((k) => { body[k] = numFa($('fcfg_' + k).value); });
+            try { const j = await jf('/api/fin/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); st.config = j.config; st.ov.config = j.config; toast('نرخ‌ها ذخیره شد ✅'); renderKpis(); renderBom(); }
+            catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+        });
+        $('finAccAddBtn').addEventListener('click', () => { $('finAccForm').classList.toggle('hidden'); $('finCcForm').classList.add('hidden'); });
+        $('finCcAddBtn').addEventListener('click', () => { $('finCcForm').classList.toggle('hidden'); $('finAccForm').classList.add('hidden'); });
+        $('finAccCancel').addEventListener('click', () => $('finAccForm').classList.add('hidden'));
+        $('finCcCancel').addEventListener('click', () => $('finCcForm').classList.add('hidden'));
+        $('finAccSave').addEventListener('click', async () => {
+            const msg = $('finAccMsg'); msg.textContent = '';
+            try {
+                await jf('/api/fin/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: numFa($('finAccCode').value), title: $('finAccTitle').value.trim() }) });
+                toast('حساب جدید ثبت شد ✅'); $('finAccCode').value = ''; $('finAccTitle').value = '';
+                const ac = await jf('/api/fin/accounts'); st.accounts = ac.accounts || []; renderAccounts(); buildDocForm();
+            } catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+        });
+        $('finCcSave').addEventListener('click', async () => {
+            const msg = $('finCcMsg'); msg.textContent = '';
+            try {
+                await jf('/api/fin/cost-centers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: numFa($('finCcCode').value), title: $('finCcTitle').value.trim() }) });
+                toast('مرکز هزینه ثبت شد ✅'); $('finCcCode').value = ''; $('finCcTitle').value = '';
+                const ac = await jf('/api/fin/accounts'); st.cc = ac.cost_centers || []; renderAccounts(); buildDocForm();
+            } catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+        });
+        $('finAccTable').addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-facc-toggle]'); if (!b) return;
+            const on = b.dataset.on === '1';
+            try { await jf('/api/fin/accounts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.dataset.faccToggle, active: !on }) }); toast(on ? 'حساب غیرفعال شد — ثبت جدید نمی‌پذیرد.' : 'حساب فعال شد ✅'); const ac = await jf('/api/fin/accounts'); st.accounts = ac.accounts || []; renderAccounts(); buildDocForm(); }
+            catch (e2) { toast(e2.message, 'err'); }
+        });
+        $('finSyncBtn').addEventListener('click', async () => {
+            const btn = $('finSyncBtn'); const msg = $('finSyncMsg');
+            if (btn.classList.contains('loading')) return;
+            btn.classList.add('loading'); btn.disabled = true;
+            msg.textContent = 'در حال ساخت اسناد خودکار…';
+            try {
+                const j = await jf('/api/fin/docs/sync', { method: 'POST' });
+                msg.textContent = '';
+                toast('همگام‌سازی کامل شد: ' + toFaDigits(j.created) + ' سند جدید' + (j.dup ? '، ' + toFaDigits(j.dup) + ' تکراری' : '') + (j.closed ? '، ' + toFaDigits(j.closed) + ' در دورهٔ بسته' : '') + (j.failed ? '، ' + toFaDigits(j.failed) + ' ناموفق' : ''), j.failed ? 'err' : undefined);
+                await reloadDocs();
+            } catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+            finally { btn.classList.remove('loading'); btn.disabled = false; }
+        });
+        $('finDocNewBtn').addEventListener('click', () => {
+            const f = $('finDocForm'); f.classList.toggle('hidden');
+            if (!f.classList.contains('hidden')) { $('finDate').value = jToday(); paintBalance(); }
+        });
+        $('finDocCancel').addEventListener('click', () => $('finDocForm').classList.add('hidden'));
+        $('finDocSave').addEventListener('click', async () => {
+            const msg = $('finDocMsg'); msg.textContent = ''; msg.className = 'note';
+            const dateJ = readJalaliValue(document, 'findate');
+            if (!dateJ) { msg.textContent = 'تاریخ شمسی سند را کامل وارد کنید (نمونه: ۱۴۰۵/۰۶/۱۲).'; msg.className = 'note fin-bal-no'; return; }
+            const lines = finLinesPayload();
+            if (lines.length < 2) { msg.textContent = 'حداقل دو ردیف با حساب انتخاب کنید.'; msg.className = 'note fin-bal-no'; return; }
+            const d = lines.reduce((s, r) => s + r.debit, 0), c = lines.reduce((s, r) => s + r.credit, 0);
+            if (d !== c || d <= 0) { msg.textContent = 'سند تراز نیست — جمع بدهکار و بستانکار باید برابر و بزرگ‌تر از صفر باشد.'; msg.className = 'note fin-bal-no'; return; }
+            try {
+                const j = await jf('/api/fin/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date_jalali: dateJ, desc: $('finDesc').value.trim(), lines: lines }) });
+                toast('سند ' + toFaDigits(j.doc.doc_no_fa) + ' ثبت شد ✅');
+                $('finDocForm').classList.add('hidden'); $('finDesc').value = '';
+                await reloadDocs();
+            } catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+        });
+        $('finBomSave').addEventListener('click', async () => {
+            const msg = $('finBomMsg'); msg.textContent = '';
+            try {
+                const j = await jf('/api/fin/bom', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: st.bom }) });
+                st.bom = j.bom || st.bom; toast('BOM مالی ذخیره شد ✅'); renderBom();
+            } catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+        });
+        $('finBomCal').addEventListener('click', async () => {
+            const msg = $('finBomMsg'); msg.textContent = '';
+            try {
+                const j = await jf('/api/fin/bom/calibrate', { method: 'POST' });
+                msg.textContent = j.note; msg.className = 'note';
+                toast('کالیبراسیون: ضریب شمش ' + (j.ratio == null ? '—' : dec(j.ratio)) + ' | kWh/تن ' + (j.kwh_per_t == null ? '—' : dec(j.kwh_per_t)));
+                const ov = await jf('/api/fin/overview'); st.bom = ov.bom || []; renderBom();
+            } catch (e) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; }
+        });
+        $('finCostBtn').addEventListener('click', async () => {
+            try { const j = await jf('/api/fin/costing?month=' + encodeURIComponent($('finCostMonth').value)); renderCost(j); }
+            catch (e) { toast(e.message, 'err'); }
+        });
+        $('finPnlBtn').addEventListener('click', async () => {
+            try { const j = await jf('/api/fin/reports/pnl?from=' + encodeURIComponent($('finPnlFrom').value) + '&to=' + encodeURIComponent($('finPnlTo').value)); renderReport('pnl', j); }
+            catch (e) { toast(e.message, 'err'); }
+        });
+        $('finBalBtn').addEventListener('click', async () => {
+            try { const j = await jf('/api/fin/reports/balance'); renderReport('balance', j); }
+            catch (e) { toast(e.message, 'err'); }
+        });
+        $('finVatBtn').addEventListener('click', async () => {
+            try { const j = await jf('/api/fin/reports/vat?year=' + encodeURIComponent($('finVatY').value) + '&quarter=' + encodeURIComponent($('finVatQ').value)); renderReport('vat', j); }
+            catch (e) { toast(e.message, 'err'); }
+        });
+        $('finPeriodsTable').addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-fper]'); if (!b) return;
+            const closed = b.dataset.closed === '1';
+            try { await jf('/api/fin/periods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_id: b.dataset.fper, closed: !closed }) }); toast(closed ? 'دوره باز شد ✅' : 'دوره بسته شد — ثبت سند در آن ممنوع است.'); const ov = await jf('/api/fin/overview'); st.periods = ov.periods || []; renderPeriods(); renderKpis(); }
+            catch (e2) { toast(e2.message, 'err'); }
+        });
+        /* ---------- خروجی اکسل ---------- */
+        $('finDocsXls').addEventListener('click', () => {
+            if (!st.docs.length) { toast('سندی برای خروجی نیست.', 'err'); return; }
+            const rows = [];
+            st.docs.forEach((d) => (d.lines || []).forEach((ln) => rows.push({ doc: toFaDigits(d.doc_no_fa), date: toFaDigits(d.date_jalali), src: FSRC_FA[d.source] || d.source, desc: d.desc || '', acc: toFaDigits(ln.account_code), acc_t: ln.account_title, d: ln.debit, c: ln.credit })));
+            downloadXls('اسناد_حسابداری', [{ label: 'شماره سند', key: 'doc' }, { label: 'تاریخ', key: 'date' }, { label: 'منبع', key: 'src' }, { label: 'شرح', key: 'desc' }, { label: 'کد حساب', key: 'acc' }, { label: 'حساب', key: 'acc_t' }, { label: 'بدهکار', key: 'd' }, { label: 'بستانکار', key: 'c' }], rows, 'دفتر روزنامه — اسناد حسابداری');
+        });
+        $('finCostXls').addEventListener('click', () => {
+            if (!st.cost || st.cost.empty) { toast('ابتدا تحلیل ماه را نمایش دهید.', 'err'); return; }
+            const rows = st.cost.rows.map((r) => ({ size: toFaDigits(r.size), ton: r.tonnage, mat: r.elements.material, en: r.elements.energy, lab: r.elements.labor, ovh: r.elements.overhead, oth: r.elements.other, per_t: r.per_t.total, std: r.std_per_t, var_t: r.variance_per_t, var_p: r.variance_pct, sale: r.sale_price_per_t, mrg: r.margin_pct }));
+            downloadXls('بهای_تمام‌شده_ماهانه', [{ label: 'سایز', key: 'size' }, { label: 'تناژ (تن)', key: 'ton' }, { label: 'مواد', key: 'mat' }, { label: 'انرژی', key: 'en' }, { label: 'دستمزد', key: 'lab' }, { label: 'سربار', key: 'ovh' }, { label: 'سایر', key: 'oth' }, { label: 'بهای واقعی/تن', key: 'per_t' }, { label: 'استاندارد/تن', key: 'std' }, { label: 'انحراف/تن', key: 'var_t' }, { label: 'انحراف ٪', key: 'var_p' }, { label: 'فروش/تن', key: 'sale' }, { label: 'حاشیه ٪', key: 'mrg' }], rows, 'بهای تمام‌شدهٔ ماهانه — ' + (st.cost.label || ''));
+        });
+        $('finPnlXls').addEventListener('click', () => {
+            if (st.lastReportKind !== 'pnl' || !st.lastReport) { toast('ابتدا گزارش سود و زیان را بسازید.', 'err'); return; }
+            const j = st.lastReport;
+            const rows = j.incomes.map((r) => ({ t: 'درآمد', code: toFaDigits(r.code), title: r.title, amt: r.amount }))
+                .concat(j.expenses.map((r) => ({ t: 'هزینه', code: toFaDigits(r.code), title: r.title, amt: r.amount })))
+                .concat([{ t: 'جمع درآمد', code: '', title: '', amt: j.total_income }, { t: 'جمع هزینه', code: '', title: '', amt: j.total_expense }, { t: 'سود (زیان)', code: '', title: '', amt: j.profit }, { t: 'مالیات ' + j.tax_rate + '٪', code: '', title: '', amt: j.tax }, { t: 'سود خالص', code: '', title: '', amt: j.net_profit }]);
+            downloadXls('سود_و_زیان', [{ label: 'نوع', key: 't' }, { label: 'کد', key: 'code' }, { label: 'حساب', key: 'title' }, { label: 'مبلغ (ریال)', key: 'amt' }], rows, 'صورت سود و زیان ساده');
+        });
+        $('finBalXls').addEventListener('click', () => {
+            if (st.lastReportKind !== 'balance' || !st.lastReport) { toast('ابتدا ترازنامه را بسازید.', 'err'); return; }
+            const j = st.lastReport;
+            const rows = j.assets.map((r) => ({ t: 'دارایی', code: toFaDigits(r.code), title: r.title, amt: r.amount }))
+                .concat(j.liabilities.map((r) => ({ t: 'بدهی', code: toFaDigits(r.code), title: r.title, amt: r.amount })))
+                .concat(j.equity.map((r) => ({ t: 'سرمایه', code: toFaDigits(r.code), title: r.title, amt: r.amount })))
+                .concat([{ t: 'سود دوره', code: '', title: '', amt: j.period_profit }, { t: 'جمع دارایی‌ها', code: '', title: '', amt: j.total_assets }, { t: 'جمع بدهی+سرمایه+سود', code: '', title: '', amt: j.total_liabilities + j.total_equity + j.period_profit }]);
+            downloadXls('ترازنامه', [{ label: 'نوع', key: 't' }, { label: 'کد', key: 'code' }, { label: 'حساب', key: 'title' }, { label: 'مانده (ریال)', key: 'amt' }], rows, 'ترازنامهٔ ساده');
+        });
+        $('finVatXls').addEventListener('click', () => {
+            if (st.lastReportKind !== 'vat' || !st.lastReport) { toast('ابتدا خلاصهٔ VAT را بسازید.', 'err'); return; }
+            const j = st.lastReport;
+            const rows = [
+                { k: 'دوره', v: j.label }, { k: 'نرخ VAT', v: j.vat_rate + '٪' }, { k: 'پایهٔ فروش (ریال)', v: j.sales_base }, { k: 'پایهٔ خرید (ریال)', v: j.purchase_base },
+                { k: 'VAT فروش برآوردی', v: j.vat_sales_est }, { k: 'VAT خرید برآوردی', v: j.vat_purchase_est }, { k: 'ماندهٔ VAT', v: j.vat_net_est },
+                { k: 'تعداد اسناد فصل', v: j.quarterly169.doc_count }, { k: 'مهلت گزارش ۱۶۹', v: j.quarterly169.deadline_jalali }
+            ];
+            downloadXls('VAT_فصلی_169', [{ label: 'شرح', key: 'k' }, { label: 'مقدار', key: 'v' }], rows, 'خلاصهٔ مالیات بر ارزش افزوده و گزارش فصلی مادهٔ ۱۶۹');
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+    loaders.finance = function () { return loadAll(); }; /* FEAT-FIN-13b: ورود به تب مالی */
+})();
+// ===== FEAT-FIN-13b (end) =====
 // ===== FEAT-PWA-8b (begin): ثبت سرویس‌ورکر + بنر نصب دوستانه (Android: beforeinstallprompt — iOS: راهنمای Share → Add to Home Screen) =====
 // ===== FIX-PWA-9a (begin): بنر نصب در اولین ورود موبایل مستقل از Secure Context (HTTP LAN) =====
 (function () {
