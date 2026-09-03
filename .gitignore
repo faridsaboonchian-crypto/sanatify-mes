@@ -9,3 +9,8 @@ build/
 
 # FEAT-HTTPS-11c - mkcert TLS material (private keys are never committed)
 *.pem
+
+# ===== SAAS-15a: پیکربندی/لوگوی تنانت — مخصوص هر استقرار (قالب commit می‌شود) =====
+web-server/web-server/tenant.json
+web-server/web-server/public/tenant-logo.png
+web-server/web-server/public/tenant-logo.jpg

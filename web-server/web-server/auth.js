@@ -86,6 +86,28 @@ function isLocked(username) {
     if (f.until) failures.delete(username);
     return false;
 }
+
+// ===== SAAS-15a (begin): برندینگ تنانت روی صفحهٔ ورود — بدون tenant.json: بدون هیچ تغییر =====
+let tenantBrand15a = null;
+function escBrand15a(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function setTenantBranding15a(b) {
+    tenantBrand15a = (b && (b.name || b.logo)) ? { name: String(b.name || ''), logo: String(b.logo || '') } : null;
+}
+function loginHtml15a() {
+    if (!tenantBrand15a) return LOGIN_HTML;
+    let html = LOGIN_HTML;
+    if (tenantBrand15a.name) {
+        html = html.split('ورود | صنعتی فای (SANATIFY) — ERP/MES فولاد').join('ورود | ' + escBrand15a(tenantBrand15a.name));
+        html = html.split('<div class="brand-name">صنعتی فای (SANATIFY)<small>').join('<div class="brand-name">' + escBrand15a(tenantBrand15a.name) + '<small>');
+    }
+    if (tenantBrand15a.logo) {
+        html = html.replace(/<div class="brand-mark"([^>]*)>[\s\S]*?<\/div>/, '<div class="brand-mark"><img src="' + escBrand15a(tenantBrand15a.logo) + '" alt="لوگو" style="width:34px;height:34px;border-radius:8px;object-fit:contain" /></div>');
+    }
+    return html;
+}
+// ===== SAAS-15a (end) =====
 function registerFail(username) {
     const f = failures.get(username) || { count: 0, until: 0 };
     f.count += 1;
@@ -242,7 +264,7 @@ const LOGIN_HTML = `<!DOCTYPE html>
 function handlePublic(req, res, pathname) {
     if (req.method === 'GET' && pathname === '/login') {
         if (getSession(req)) { redirect(res, '/'); return true; }
-        htmlRes(res, LOGIN_HTML);
+        htmlRes(res, loginHtml15a()); /* SAAS-15a: برندینگ تنانت */
         return true;
     }
     if (req.method === 'POST' && pathname === '/api/auth/login') { doLogin(req, res); return true; }
@@ -306,4 +328,4 @@ function requireRole(req, allowed) {
     return allowed.indexOf(role) !== -1;
 }
 
-module.exports = { handlePublic: handlePublic, enforce: enforce, requireRole: requireRole };
+module.exports = { handlePublic: handlePublic, enforce: enforce, requireRole: requireRole, setTenantBranding15a: setTenantBranding15a };

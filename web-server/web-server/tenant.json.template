@@ -1,0 +1,20 @@
+{
+  "tenant_id": "sanatify",
+  "name": "صنعتی فای",
+  "logo": "",
+  "brand_colors": {
+    "primary": "",
+    "accent": ""
+  },
+  "active_modules": ["summary", "analytics", "production", "quality", "inventory", "maintenance", "em", "planning", "finance"],
+  "max_users": 0,
+  "max_records": 0,
+  "license_key": "",
+  "expires_at": "",
+  "custom_settings": {
+    "default_currency": "IRR",
+    "date_format": "jalali",
+    "allowed_origins": [],
+    "support_contact": ""
+  }
+}

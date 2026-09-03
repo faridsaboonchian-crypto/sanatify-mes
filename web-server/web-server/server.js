@@ -199,6 +199,96 @@ function handleHealthFast(req, res) {
 }
 
 // ---------- سرور ----------
+// ===== SAAS-15a (begin): تنانت + لایسنس — تک‌نمونه با فایل tenant.json کنار server.js =====
+// الگو: استقرار per-tenant (یک سرور برای هر مشتری، پیکربندی با tenant.json — الگوی standalone-app
+// الگوهای SaaS Azure با ایزوله‌سازی کامل داده؛ ERPNext هر tenant را یک site جدا می‌گیرد، ما هر استقرار را)
+const TENANT_FILE_15A = path.join(ROOT, 'tenant.json');
+const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance'];
+const DEFAULT_TENANT_15A = {
+    tenant_id: 'sanatify', name: 'صنعتی فای', logo: '', brand_colors: {},
+    active_modules: MODULES_15A.slice(), max_users: 0, max_records: 0,
+    license_key: '', expires_at: '', custom_settings: {}
+};
+let tenantCache15a = null, tenantMtime15a = 0;
+// خواندن با کش mtime — تغییر CLI/پنل بدون ری‌استارت از درخواست بعدی اعمال می‌شود
+function loadTenant15a() {
+    try {
+        const st = fs.existsSync(TENANT_FILE_15A) ? fs.statSync(TENANT_FILE_15A) : null;
+        if (!st) { tenantCache15a = null; return DEFAULT_TENANT_15A; }
+        if (tenantCache15a && st.mtimeMs === tenantMtime15a) return tenantCache15a;
+        const raw = JSON.parse(fs.readFileSync(TENANT_FILE_15A, 'utf8'));
+        const cfg = Object.assign({}, DEFAULT_TENANT_15A, raw);
+        if (!Array.isArray(cfg.active_modules)) cfg.active_modules = MODULES_15A.slice();
+        else cfg.active_modules = cfg.active_modules.filter((m) => MODULES_15A.indexOf(m) !== -1);
+        if (!cfg.active_modules.length) cfg.active_modules = MODULES_15A.slice(); // پیکربندی خراب → قفل کامل نه؛ همهٔ ماژول‌ها
+        if (!cfg.custom_settings || typeof cfg.custom_settings !== 'object' || Array.isArray(cfg.custom_settings)) cfg.custom_settings = {};
+        tenantCache15a = cfg; tenantMtime15a = st.mtimeMs;
+        return cfg;
+    } catch (e) {
+        console.warn('[SaaS-15a] tenant.json نامعتبر — حالت پیش‌فرض (همهٔ ماژول‌ها فعال):', (e && e.message) || e);
+        tenantCache15a = null; return DEFAULT_TENANT_15A;
+    }
+}
+function isLicenseExpired15a(cfg) {
+    const exp = String((cfg && cfg.expires_at) || '').trim();
+    if (!exp) return false;
+    const t = Date.parse(exp);
+    return !isNaN(t) && Date.now() > t;
+}
+// آیا ماژول در لایسنس فعال است؟ (انقضا ⇒ هیچ؛ بدون tenant.json ⇒ همه)
+function checkModuleAccess15a(moduleId) {
+    const cfg = loadTenant15a();
+    if (isLicenseExpired15a(cfg)) return false;
+    return cfg.active_modules.indexOf(moduleId) !== -1;
+}
+function countUsers15a() {
+    try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; }
+}
+function countRecords15a(live) {
+    let n = 0;
+    TABLES.forEach((k) => { if (live && Array.isArray(live[k])) n += live[k].length; });
+    if (live && Array.isArray(live.energy_logs)) n += live.energy_logs.length;
+    if (live && Array.isArray(live.fin_docs)) n += live.fin_docs.length;
+    return n;
+}
+// آیا سقف کاربر/رکورد رد نشده؟ (۰ = بی‌سقف)
+function checkTenantLimits15a() {
+    const cfg = loadTenant15a();
+    const users = countUsers15a();
+    let records = 0;
+    try { records = countRecords15a(readLive()); } catch (e) { records = 0; }
+    const maxUsers = Number(cfg.max_users) || 0, maxRecords = Number(cfg.max_records) || 0;
+    return { ok: (!maxUsers || users <= maxUsers) && (!maxRecords || records <= maxRecords), users, records, maxUsers, maxRecords };
+}
+// نگاشت مسیر API → ماژول لایسنس (null = عمومی/مستثنی)
+function moduleForPath15a(pathname) {
+    if (pathname.indexOf('/api/fin') === 0) return 'finance';
+    if (pathname.indexOf('/api/energy/') === 0) return 'em';
+    if (pathname.indexOf('/api/planning/') === 0) return 'planning';
+    if (pathname.indexOf('/api/inventory') === 0) return 'inventory';
+    if (pathname.indexOf('/api/quality') === 0) return 'quality';
+    if (pathname.indexOf('/api/maintenance') === 0 || pathname.indexOf('/api/pm/') === 0) return 'maintenance';
+    if (pathname.indexOf('/api/dashboard') === 0 || pathname.indexOf('/api/analytics') === 0) return 'analytics';
+    if (pathname === '/api/summary' || pathname.indexOf('/api/summary/') === 0) return 'summary';
+    const PROD_15A = ['/api/production', '/api/waste', '/api/bundles', '/api/billets', '/api/downtime', '/api/genealogy', '/api/balance'];
+    for (let i = 0; i < PROD_15A.length; i++) if (pathname === PROD_15A[i] || pathname.indexOf(PROD_15A[i] + '/') === 0) return 'production';
+    const ENTRY_15A = { '/api/entry/production': 'production', '/api/entry/waste': 'production', '/api/entry/downtime': 'production', '/api/entry/quality': 'quality', '/api/entry/maintenance': 'maintenance' };
+    return ENTRY_15A[pathname] || null;
+}
+// مسیر فایل لوگو فقط داخل PUBLIC_DIR معتبر است (ضد path-traversal)
+function resolveTenantLogoFile15a(cfg) {
+    const l = String((cfg && cfg.logo) || '');
+    if (!l || l.indexOf('data:') === 0) return null;
+    const p = path.normalize(path.join(PUBLIC_DIR, l));
+    if (!p.startsWith(PUBLIC_DIR)) return null;
+    try { return fs.existsSync(p) ? p : null; } catch (e) { return null; }
+}
+// برندینگ صفحهٔ ورود (در auth.js اعمال می‌شود) — بدون tenant.json: null = بدون تغییر
+(function initTenantBrand15a() {
+    const c = loadTenant15a();
+    auth.setTenantBranding15a(tenantCache15a ? { name: c.name, logo: c.logo || '' } : null);
+})();
+// ===== SAAS-15a (end) =====
 // ===== FEAT-HTTPS-11c (begin): هندلر به تابع نام‌دار استخراج شد تا بین HTTP و HTTPS مشترک باشد =====
 function appRequestHandler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -210,10 +300,66 @@ function appRequestHandler(req, res) {
     const pathname = decodeURIComponent(parsed.pathname);
 
     // ===== S1 AUTH: public auth routes (login page + /api/auth/*) =====
+    // ===== SAAS-15a: تازه‌سازی برندینگ لاگین با mtime کش — تغییر tenant.json بدون ری‌استارت اعمال می‌شود =====
+    if (req.method === 'GET' && pathname === '/login') {
+        const c15aLogin = loadTenant15a();
+        auth.setTenantBranding15a(tenantCache15a ? { name: c15aLogin.name, logo: c15aLogin.logo || '' } : null);
+    }
     if (auth.handlePublic(req, res, pathname)) return;
+    // ===== SAAS-15a (begin): مسیرهای عمومی تنانت — برندینگ بدون احراز هویت (بدون دادهٔ حساس) =====
+    if (req.method === 'GET' && pathname === '/api/tenant/config') {
+        // بدون tenant.json → tenant:null (کلاینت هیچ تغییری نمی‌دهد — برند پیش‌فرض دست‌نخورده)
+        if (!tenantCache15a) { loadTenant15a(); }
+        if (!tenantCache15a) return sendJson(res, { ok: true, tenant: null });
+        const c15a = tenantCache15a;
+        return sendJson(res, { ok: true, tenant: {
+            tenant_id: c15a.tenant_id, name: c15a.name, logo: c15a.logo || '',
+            brand_colors: c15a.brand_colors || {}, active_modules: c15a.active_modules.slice(),
+            license: { expired: isLicenseExpired15a(c15a), expires_at: c15a.expires_at || '' },
+        } });
+    }
+    if (req.method === 'GET' && (pathname === '/tenant-logo.png' || pathname === '/tenant-logo.jpg')) {
+        const lp15a = path.join(PUBLIC_DIR, pathname.slice(1));
+        fs.readFile(lp15a, (e15a, d15a) => {
+            if (e15a) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 Not Found'); return; }
+            res.writeHead(200, { 'Content-Type': pathname.endsWith('.jpg') ? 'image/jpeg' : 'image/png', 'Cache-Control': 'no-cache' }); res.end(d15a);
+        });
+        return;
+    }
+    // ===== SAAS-15a (end) =====
     // ===== FEAT-PWA-8b (begin): دارایی‌های عمومی PWA بدون احراز هویت — فقط مانیفست/سرویس‌ورکر/آیکون برند (بدون هیچ دادهٔ حساس) =====
     /* ===== FIX-PWA-10c: favicon هم به لیست عمومی PWA افزوده شد ===== */
     if (req.method === 'GET' && (pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/icon-192.png' || pathname === '/icon-512.png' || pathname === '/favicon.ico')) {
+        // ===== SAAS-15a: مانیفست/فاوآیکون پویا فقط وقتی tenant.json واقعاً موجود است — وگرنه رفتار سابق =====
+        loadTenant15a();
+        if (tenantCache15a) {
+            const tCfg15a = tenantCache15a;
+            if (pathname === '/manifest.webmanifest') {
+                const logoPath15a = resolveTenantLogoFile15a(tCfg15a);
+                const icons15a = logoPath15a
+                    ? [{ src: tCfg15a.logo, sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: tCfg15a.logo, sizes: '512x512', type: 'image/png', purpose: 'any' }]
+                    : [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }];
+                const m15a = {
+                    name: tCfg15a.name, short_name: tCfg15a.name, description: tCfg15a.name + ' — ERP/MES',
+                    id: '/', lang: 'fa', dir: 'rtl', start_url: '/', scope: '/', display: 'standalone',
+                    background_color: '#0b1622', theme_color: (tCfg15a.brand_colors && tCfg15a.brand_colors.primary) || '#0f2a43',
+                    icons: icons15a,
+                };
+                res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache' });
+                res.end(JSON.stringify(m15a));
+                return;
+            }
+            if (pathname === '/favicon.ico') {
+                const lp15a = resolveTenantLogoFile15a(tCfg15a);
+                if (lp15a) {
+                    fs.readFile(lp15a, (e15a, d15a) => {
+                        if (e15a) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 Not Found'); return; }
+                        res.writeHead(200, { 'Content-Type': lp15a.endsWith('.jpg') ? 'image/jpeg' : 'image/png', 'Cache-Control': 'no-cache' }); res.end(d15a);
+                    });
+                    return;
+                }
+            }
+        }
         const rel2 = pathname === '/manifest.webmanifest' ? 'manifest.webmanifest' : pathname.slice(1);
         const fp2 = path.join(PUBLIC_DIR, rel2);
         const h2 = { 'Cache-Control': 'no-cache' };
@@ -231,6 +377,27 @@ function appRequestHandler(req, res) {
     // (NOTE: /api/ingest and /api/health are whitelisted INSIDE auth.enforce, so the
     //  mobile app sync and monitoring keep working without a web session.)
     if (auth.enforce(req, res, pathname)) return;
+
+    // ===== SAAS-15a: گیت لایسنس/ماژول — پس از احراز هویت، پیش از همهٔ هندلرهای داده =====
+    // مستثنی‌ها: health/snapshot/ingest (قرارداد اپ موبایل/مانیتورینگ)، auth، tenant
+    if (pathname.indexOf('/api/') === 0 && pathname.indexOf('/api/auth/') !== 0 && pathname.indexOf('/api/tenant/') !== 0
+        && pathname !== '/api/health' && pathname !== '/api/snapshot' && pathname !== '/api/ingest') {
+        const tGate15a = loadTenant15a();
+        if (isLicenseExpired15a(tGate15a)) {
+            return sendJson(res, { error: 'لایسنس سامانه منقضی شده است — لطفاً با پشتیبانی تماس بگیرید.', code: 'LICENSE_EXPIRED' }, 403);
+        }
+        const modGate15a = moduleForPath15a(pathname);
+        if (modGate15a && !checkModuleAccess15a(modGate15a)) {
+            return sendJson(res, { error: 'این ماژول در لایسنس شما فعال نیست — لطفاً با پشتیبانی تماس بگیرید.', code: 'MODULE_DISABLED', module: modGate15a }, 403);
+        }
+        if (req.method !== 'GET') {
+            const limGate15a = checkTenantLimits15a();
+            if (!limGate15a.ok) {
+                return sendJson(res, { error: 'سقف ظرفیت لایسنس پر شده است (کاربران: ' + limGate15a.users + '/' + (limGate15a.maxUsers || '∞') + ' — رکوردها: ' + limGate15a.records + '/' + (limGate15a.maxRecords || '∞') + ') — لطفاً با پشتیبانی تماس بگیرید.', code: 'LIMIT_REACHED' }, 403);
+            }
+        }
+    }
+    // ===== SAAS-15a (گیت — end) =====
 
     // ===== ✅ ADDITIVE — D3: endpoint اسنپ‌شات برای pull اپ (بدون نشست وب) =====
     if (pathname === '/api/snapshot') {
