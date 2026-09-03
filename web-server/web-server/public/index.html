@@ -1118,6 +1118,20 @@
         .aps-rank1 { border-right-color: #059669 !important; }
         .aps-rank-badge { background: #059669; color: #fff; border-radius: 8px; padding: 1px 8px; font-size: 10.5px; font-weight: bold; }
         /* ===== FEAT-PLAN-9c (end) ===== */
+        /* ===== FIX-APS-12a (begin): عدد زندهٔ وزن‌ها + سهم نرمال‌شده — کاملاً تم‌آوار ===== */
+        .aps-weights .aps-wval { min-width: 36px; text-align: center; background: #0e7490; color: #fff; border-radius: 7px; padding: 2px 7px; font-size: 11.5px; }
+        body.theme-dark .aps-weights .aps-wval { background: #164e63; color: #7fd7e8; }
+        .aps-share { font-size: 12px; font-weight: bold; color: #0f2a43; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 6px 10px; margin: 0 0 8px; display: inline-block; }
+        body.theme-dark .aps-share { color: #7fb4d8; background: #0e2233; border-color: #2a4a66; }
+        .aps-wexplain { font-size: 11.5px; color: #64748b; margin: 0 0 10px; line-height: 1.9; }
+        body.theme-dark .aps-wexplain { color: #8aa6bd; }
+        @media (max-width: 480px) {
+            .aps-weights { gap: 8px 10px; }
+            .aps-weights label { width: 100%; justify-content: space-between; }
+            .aps-weights input[type=range] { flex: 1; width: auto; min-width: 0; }
+            .aps-share { display: block; }
+        }
+        /* ===== FIX-APS-12a (end) ===== */
         /* ===== FIX-PLAN-10d (begin): راهنمای ماژول ===== */
 
         .plan-guide { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
@@ -1876,12 +1890,16 @@
             <div class="panel hidden" id="planApsPanel">
                 <h2>سناریوهای APS — مقایسه و رتبه‌بندی <span class="plan-engine" id="planApsEngine">در حال بارگذاری…</span></h2>
                 <div class="aps-weights">
-                    <label>وزن تناژ <input type="range" id="apsW1" min="0" max="10" step="1" value="5"></label>
-                    <label>وزن ریسک <input type="range" id="apsW2" min="0" max="10" step="1" value="3"></label>
-                    <label>وزن ضایعات <input type="range" id="apsW3" min="0" max="10" step="1" value="2"></label>
+                    <label>وزن تناژ <input type="range" id="apsW1" min="0" max="100" step="5" value="50"><b class="aps-wval" id="apsW1v">۵۰</b></label>
+                    <label>وزن ریسک <input type="range" id="apsW2" min="0" max="100" step="5" value="30"><b class="aps-wval" id="apsW2v">۳۰</b></label>
+                    <label>وزن ضایعات <input type="range" id="apsW3" min="0" max="100" step="5" value="20"><b class="aps-wval" id="apsW3v">۲۰</b></label>
                     <button class="act" id="apsRefresh">🔄 بروزرسانی سناریوها</button>
                     <span class="note" id="apsGenAt"></span>
                 </div>
+                <!-- ===== FIX-APS-12a (begin): سهم نرمال‌شدهٔ سه وزن + یک خط توضیح فرمول ===== -->
+                <div class="aps-share" id="apsShare" aria-live="polite">سهم وزن‌ها: تناژ ۵۰٪ | ریسک ۳۰٪ | ضایعات ۲۰٪</div>
+                <p class="aps-wexplain">امتیاز هر سناریو = مجموع وزن‌دار تناژ/ریسک/ضایعات؛ هر وزن بیشتر باشد، آن معیار در رتبه‌بندی مهم‌تر است.</p>
+                <!-- ===== FIX-APS-12a (end) ===== -->
                 <div class="note hidden" id="apsAiNote"></div>
                 <div class="plan-suggest-grid" id="apsCards"></div>
                 <div class="tablewrap" id="apsTableBox" style="max-height:420px;overflow-y:auto"></div>
@@ -3573,6 +3591,9 @@ showRes();
     const WKEY = 'san.aps.weights';
     const st = { scenarios: [], genAt: null, aiNote: null, aiCfg: false, emptyHint: null, loaded: false, w: { ton: 5, risk: 3, waste: 2 } };
     try { const w = JSON.parse(localStorage.getItem(WKEY) || 'null'); if (w && typeof w.ton === 'number') st.w = w; } catch (e) { }
+    /* ===== FIX-APS-12a (begin): مهاجرت یک‌بارهٔ مقیاس قدیمی ۰..۱۰ → ۰..۱۰۰ (نسبت‌ها حفظ می‌شود) ===== */
+    if (!st.w._v12a) { st.w = { ton: (st.w.ton || 0) * 10, risk: (st.w.risk || 0) * 10, waste: (st.w.waste || 0) * 10, _v12a: 1 }; saveW(); }
+    /* ===== FIX-APS-12a (end) ===== */
     const apsCanWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'planner'; /* ناقل از plan7 نیست */
     const $ = (id) => document.getElementById(id);
     const n10 = (x) => Math.round((Number(x) || 0) * 10) / 10;
@@ -3676,13 +3697,28 @@ showRes();
     }
     let debT = null;
     function debounced() { clearTimeout(debT); debT = setTimeout(load, 800); } /* بازمحاسبهٔ debounced <۲ ثانیه */
+    /* ===== FIX-APS-12a (begin): عدد زندهٔ هر اسلایدر + سهم نرمال‌شدهٔ سه وزن (ارقام فارسی) ===== */
+    function paintWeights() {
+        const keys2 = ['ton', 'risk', 'waste'];
+        const names2 = { ton: 'تناژ', risk: 'ریسک', waste: 'ضایعات' };
+        ['apsW1', 'apsW2', 'apsW3'].forEach((id, i) => {
+            const el = $(id), v = $(id + 'v'); if (!el) return;
+            el.value = st.w[keys2[i]];
+            if (v) v.textContent = toFaDigits(Math.round(Number(el.value) || 0));
+        });
+        const Wsum2 = (st.w.ton + st.w.risk + st.w.waste) || 1;
+        const sh2 = $('apsShare');
+        if (sh2) sh2.textContent = 'سهم وزن‌ها: ' + keys2.map((k) => names2[k] + ' ' + toFaDigits(Math.round(st.w[k] / Wsum2 * 100)) + '٪').join(' | ');
+    }
+    /* ===== FIX-APS-12a (end) ===== */
     function wire() {
         const keys = ['ton', 'risk', 'waste'];
         ['apsW1', 'apsW2', 'apsW3'].forEach((id, i) => {
             const el = $(id); if (!el) return;
             el.value = st.w[keys[i]];
-            el.addEventListener('input', () => { st.w[keys[i]] = Number(el.value) || 0; saveW(); render(); }); /* تغییر اسلایدر → تغییر ترتیب فوری */
+            el.addEventListener('input', () => { st.w[keys[i]] = Number(el.value) || 0; saveW(); render(); paintWeights(); debounced(); }); /* FIX-APS-12a: ترتیب فوری + عدد زنده + بازمحاسبهٔ debounced (تازه‌سازی «محاسبه:») */
         });
+        paintWeights(); /* FIX-APS-12a: پیکرتراشی اولیهٔ عدد/سهم از مقادیر ذخیره‌شده */
         const rb = $('apsRefresh'); if (rb) rb.addEventListener('click', load);
         window.addEventListener('aps-refresh', debounced);
         const cbox = $('apsCards');
