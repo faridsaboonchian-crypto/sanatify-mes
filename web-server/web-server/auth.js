@@ -11,15 +11,21 @@ const path = require('path');
 
 const USERS_FILE = path.join(__dirname, 'web-users.json');
 const SESSION_COOKIE = 'mes_session';
-const SESSION_MS = 12 * 60 * 60 * 1000; // 12h sliding window
+const SESSION_MS = 8 * 60 * 60 * 1000; /* SEC-15b: timeout مطلق ۸ ساعت (قبلاً ۱۲ ساعته لغزان) */
+const SESSION_IDLE_MS = 30 * 60 * 1000; /* SEC-15b: idle timeout ۳۰ دقیقه از آخرین فعالیت */
 const MAX_FAIL = 5;
 const LOCK_MS = 60 * 1000;
 
 // endpoints the mobile app / monitoring hit WITHOUT a web session
 const PUBLIC_API = ['/api/ingest', '/api/health', '/api/snapshot'];
 
-const sessions = new Map();   // sid -> { user, expires }
-const failures = new Map();   // username -> { count, until }
+const sessions = new Map();   // sid -> { user, expires, lastSeen }
+/* SEC-15b: سیستم قدیمی قفل ۶۰ثانیه‌ای per-username باregisterLoginFail15b دولایه جایگزین شد */
+
+/* SEC-15b: نویسندهٔ audit از server.js تزریق می‌شود (مسیر واحد + چرخش ماهانه) */
+let auditWriter15b = null;
+function setAuditWriter15b(fn) { auditWriter15b = typeof fn === 'function' ? fn : null; }
+function audit15b(entry) { try { if (auditWriter15b) auditWriter15b(entry); } catch (e) { /* بی‌ضرر */ } }
 
 function loadUsers() {
     try {
@@ -39,6 +45,33 @@ function safeEqual(a, b) {
     return crypto.timingSafeEqual(ba, bb);
 }
 
+// ===== SEC-15b (begin): هش رمز — scrypt داخلی Node (KDF حافظه‌سخت، جایگزین stdlib برای bcrypt — بدون npm جدید) =====
+// قالب: scrypt$N$r$p$<salt-b64>$<hash-b64> — پسوند‌پذیر برای الگوریتم‌های آینده (الگوی $2b$ bcrypt)
+function hashPassword(plain) {
+    const N = 16384, r = 8, p = 1, keylen = 64;
+    const salt = crypto.randomBytes(16);
+    const key = crypto.scryptSync(String(plain), salt, keylen, { N: N, r: r, p: p });
+    return 'scrypt$' + N + '$' + r + '$' + p + '$' + salt.toString('base64') + '$' + key.toString('base64');
+}
+function verifyPassword(plain, stored) {
+    const s = String(stored || '');
+    if (s.indexOf('scrypt$') !== 0) return safeEqual(plain, s); /* backward-compat موقت: plaintext قدیمی */
+    const parts = s.split('$');
+    if (parts.length !== 6) return false;
+    try {
+        const N = parseInt(parts[1], 10), r = parseInt(parts[2], 10), p = parseInt(parts[3], 10);
+        if (!N || !r || !p) return false;
+        const salt = Buffer.from(parts[4], 'base64');
+        const want = Buffer.from(parts[5], 'base64');
+        const got = crypto.scryptSync(String(plain), salt, want.length, { N: N, r: r, p: p });
+        return got.length === want.length && crypto.timingSafeEqual(got, want);
+    } catch (e) { return false; }
+}
+function usersWrite15b(arr) { /* نوشتن اتمیک web-users.json — برای ارتقای خودکار per-user */
+    try { const tmp = USERS_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.renameSync(tmp, USERS_FILE); return true; } catch (e) { return false; }
+}
+// ===== SEC-15b (end) =====
+
 function parseCookies(header) {
     const out = {};
     if (!header) return out;
@@ -52,40 +85,105 @@ function parseCookies(header) {
 }
 function setCookie(res, sid) {
     const maxAge = Math.floor(SESSION_MS / 1000);
-    res.setHeader('Set-Cookie', SESSION_COOKIE + '=' + sid + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=' + maxAge);
+    res.setHeader('Set-Cookie', SESSION_COOKIE + '=' + sid + '; HttpOnly; Path=/; SameSite=Lax' + (cookieSecure15b ? '; Secure' : '') + '; Max-Age=' + maxAge);
 }
 function clearCookie(res) {
-    res.setHeader('Set-Cookie', SESSION_COOKIE + '=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0');
+    res.setHeader('Set-Cookie', SESSION_COOKIE + '=; HttpOnly; Path=/; SameSite=Lax' + (cookieSecure15b ? '; Secure' : '') + '; Max-Age=0');
 }
+let cookieSecure15b = false; /* SEC-15b: از server.js با tlsMode تنظیم می‌شود */
+function setSecureCookie15b(v) { cookieSecure15b = !!v; }
 
 function readBody(req) {
+    // ===== SEC-15b: سقف ۱MB (لاگین بدنهٔ کوچکی دارد) =====
+    const CAP_15B = 1024 * 1024;
     return new Promise((resolve, reject) => {
         let d = '';
-        req.on('data', (c) => (d += c));
-        req.on('end', () => resolve(d));
+        let over15b = false;
+        req.on('data', (c) => {
+            if (over15b) return;
+            d += c;
+            if (d.length > CAP_15B) { over15b = true; const e = new Error('payload too large'); e.code15b = 'PAYLOAD_TOO_LARGE'; try { req.destroy(); } catch (e2) { /* noop */ } reject(e); }
+        });
+        req.on('end', () => { if (!over15b) resolve(d); });
         req.on('error', reject);
     });
 }
+// ===== SEC-15b: CORS دقیق — فهرست مجاز از tenant.custom_settings.allowed_origins (null = همان‌مبدأ) =====
+let corsAllowedOrigins15b = null;
+function setCorsConfig15b(origins) { corsAllowedOrigins15b = (Array.isArray(origins) && origins.length) ? origins.map(String) : null; }
+function isOriginAllowed15b(origin) {
+    const o = String(origin || '');
+    if (!o) return false;
+    return !!(corsAllowedOrigins15b && corsAllowedOrigins15b.indexOf(o) !== -1);
+}
+function clientIp15b(req) {
+    const xf = req.headers['x-forwarded-for'];
+    if (xf) { const first = String(xf).split(',')[0].trim(); if (first) return first; }
+    return (req.socket && req.socket.remoteAddress) || '?';
+}
 function jsonRes(res, obj, code) {
     const body = JSON.stringify(obj);
-    res.writeHead(code || 200, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Cache-Control': 'no-store',
-    });
+    /* SEC-15b: حذف ACAO:* — فقط originهای مجاز tenant (پیش‌فرض همان‌مبدأ بدون هدر) */
+    const h15b = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Vary': 'Origin' };
+    const req15b = res.__req15b;
+    const origin15b = req15b ? String(req15b.headers.origin || '') : '';
+    if (origin15b && isOriginAllowed15b(origin15b)) { h15b['Access-Control-Allow-Origin'] = origin15b; h15b['Access-Control-Allow-Credentials'] = 'true'; }
+    res.writeHead(code || 200, h15b);
     res.end(body);
 }
 function redirect(res, loc) { res.writeHead(302, { 'Location': loc }); res.end(); }
 function htmlRes(res, html) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html); }
 
-function isLocked(username) {
-    const f = failures.get(username);
-    if (!f) return false;
-    if (f.until && Date.now() < f.until) return true;
-    if (f.until) failures.delete(username);
-    return false;
+// ===== SEC-15b (begin): ضد-BruteForce دولایه — شمارش per-IP و per-username با پنجرهٔ لغزان =====
+// ۵ خطا در ۱۰ دقیقه ⇒ قفل ۱۵ دقیقه (۴۲۹)؛ ۱۰ خطا در ۱ ساعت ⇒ قفل ۲ ساعته + هشدار audit
+const BF_WINDOW_MS = 10 * 60 * 1000;
+const BF_SHORT_THRESHOLD = 5, BF_SHORT_LOCK_MS = 15 * 60 * 1000;
+const BF_LONG_WINDOW_MS = 60 * 60 * 1000, BF_LONG_THRESHOLD = 10, BF_LONG_LOCK_MS = 2 * 60 * 60 * 1000;
+const bfUser15b = new Map();
+const bfIp15b = new Map();
+function bfHit15b(map, key, now) {
+    const v = map.get(key) || { short: [], long: [], lockUntil: 0 };
+    v.short = v.short.filter((t) => now - t < BF_WINDOW_MS);
+    v.long = v.long.filter((t) => now - t < BF_LONG_WINDOW_MS);
+    v.short.push(now); v.long.push(now);
+    map.set(key, v);
+    return v;
 }
+function bfLockedMs15b(map, key, now) {
+    const v = map.get(key);
+    if (!v || !v.lockUntil) return 0;
+    if (now < v.lockUntil) return v.lockUntil - now;
+    v.lockUntil = 0;
+    return 0;
+}
+function bfSweep15b() {
+    const now = Date.now();
+    [bfUser15b, bfIp15b].forEach((map) => {
+        for (const [k, v] of map) {
+            v.short = v.short.filter((t) => now - t < BF_WINDOW_MS);
+            v.long = v.long.filter((t) => now - t < BF_LONG_WINDOW_MS);
+            if (!v.short.length && !v.long.length && now >= (v.lockUntil || 0)) map.delete(k);
+        }
+    });
+}
+var bfSweepTimer15b = setInterval(bfSweep15b, 5 * 60 * 1000);
+if (bfSweepTimer15b.unref) bfSweepTimer15b.unref();
+/* برمی‌گرداند مدت قفل (ms) یا صفر؛ هشدار بلند را با auditFn ثبت می‌کند */
+function registerLoginFail15b(username, ip, auditFn) {
+    const now = Date.now();
+    const u = bfHit15b(bfUser15b, username, now);
+    const i = bfHit15b(bfIp15b, ip, now);
+    let lockMs = 0, long15b = false;
+    if (u.short.length >= BF_SHORT_THRESHOLD || i.short.length >= BF_SHORT_THRESHOLD) lockMs = BF_SHORT_LOCK_MS;
+    if (u.long.length >= BF_LONG_THRESHOLD || i.long.length >= BF_LONG_THRESHOLD) { lockMs = BF_LONG_LOCK_MS; long15b = true; }
+    if (lockMs) {
+        u.lockUntil = Math.max(u.lockUntil || 0, now + lockMs);
+        i.lockUntil = Math.max(i.lockUntil || 0, now + lockMs);
+        if (auditFn) auditFn('auth.bruteforce_lock', { username: username, ip: ip, long_lock: long15b, locked_sec: Math.round(lockMs / 1000), fails_short: u.short.length, fails_long: u.long.length });
+    }
+    return lockMs;
+}
+// ===== SEC-15b (end) =====
 
 // ===== SAAS-15a (begin): برندینگ تنانت روی صفحهٔ ورود — بدون tenant.json: بدون هیچ تغییر =====
 let tenantBrand15a = null;
@@ -108,15 +206,30 @@ function loginHtml15a() {
     return html;
 }
 // ===== SAAS-15a (end) =====
-function registerFail(username) {
-    const f = failures.get(username) || { count: 0, until: 0 };
-    f.count += 1;
-    if (f.count >= MAX_FAIL) { f.until = Date.now() + LOCK_MS; f.count = 0; }
-    failures.set(username, f);
-}
+function registerFail(username) { /* SECURITY-DEAD: با SEC-15b جایگزین شد — نگه‌داشته نشد */ }
 function verify(username, password) {
-    const u = loadUsers().find((x) => safeEqual(x.username, username));
-    if (!u || !safeEqual(u.password, password)) return null;
+    const users = loadUsers();
+    const u = users.find((x) => safeEqual(x.username, username));
+    if (!u) {
+        /* SEC-15b: زمان‌مشابه ضد شمارش کاربر — کاربر ناموجود هم هزینهٔ scrypt می‌پردازد */
+        try { crypto.scryptSync(String(password), 'decoy-salt-sec15b', 32, { N: 16384, r: 8, p: 1 }); } catch (e) { /* noop */ }
+        return null;
+    }
+    const stored = (u.password_hash != null && String(u.password_hash).indexOf('scrypt$') === 0) ? u.password_hash : (u.password != null ? u.password : null);
+    if (stored == null || !verifyPassword(password, stored)) return null;
+    /* SEC-15b: ارتقای خودکار plaintext → hash پس از اولین ورود موفق (مهاجرت نرم per-user) */
+    if (u.password_hash == null && u.password != null) {
+        try {
+            const upgraded = users.map((x) => {
+                if (x !== u) return x;
+                const c = Object.assign({}, x);
+                delete c.password;
+                c.password_hash = hashPassword(password);
+                return c;
+            });
+            if (usersWrite15b(upgraded)) console.log('[Auth] SEC-15b: رمز کاربر', username, 'به hash ارتقا یافت');
+        } catch (e) { /* بی‌ضرر — دفعهٔ بعد دوباره تلاش می‌شود */ }
+    }
     return { username: u.username, role: u.role || 'viewer', name: u.name || u.username };
 }
 function getSession(req) {
@@ -124,8 +237,10 @@ function getSession(req) {
     if (!sid) return null;
     const s = sessions.get(sid);
     if (!s) return null;
-    if (s.expires < Date.now()) { sessions.delete(sid); return null; }
-    s.expires = Date.now() + SESSION_MS; // sliding renewal
+    const now = Date.now();
+    if (s.expires < now) { sessions.delete(sid); return null; } /* SEC-15b: سقف مطلق ۸ ساعت */
+    if (s.lastSeen && now - s.lastSeen > SESSION_IDLE_MS) { sessions.delete(sid); return null; } /* SEC-15b: بی‌کاری ۳۰ دقیقه */
+    s.lastSeen = now;
     return s;
 }
 
@@ -277,21 +392,40 @@ function doLogin(req, res) {
     readBody(req).then((body) => {
         let b = {};
         try { b = JSON.parse(body || '{}'); } catch (e) { return jsonRes(res, { ok: false, error: 'invalid' }, 400); }
-        const username = String(b.username || '').trim();
+        /* SEC-15b: username پاک‌سازی می‌شود؛ password کلمه‌به‌کلمه (هش باید روی ورودی دقیق باشد) */
+        const username = String(b.username || '').trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').slice(0, 100);
         const password = b.password != null ? String(b.password) : '';
         if (!username) return jsonRes(res, { ok: false, error: 'missing' }, 400);
-        if (isLocked(username)) {
-            return jsonRes(res, { ok: false, error: 'locked', retryAfterSec: Math.ceil(LOCK_MS / 1000) }, 429);
+        const ip15b = clientIp15b(req);
+        const now = Date.now();
+        const lockMs = Math.max(bfLockedMs15b(bfUser15b, username, now), bfLockedMs15b(bfIp15b, ip15b, now));
+        if (lockMs > 0) {
+            const ra = Math.ceil(lockMs / 1000);
+            audit15b({ ts: new Date().toISOString(), user: username, role: '-', ip: ip15b, action: 'auth.login_locked', endpoint: '/api/auth/login', status: 429, user_agent: String(req.headers['user-agent'] || '').slice(0, 200), retry_after_sec: ra });
+            return jsonRes(res, { ok: false, error: 'locked', message: 'تلاش بیش از حد — حساب موقتاً قفل شده است؛ لطفاً بعداً تلاش کنید.', retryAfterSec: ra }, 429);
         }
         const user = verify(username, password);
-        if (!user) { registerFail(username); console.log('[Auth] login FAIL ->', username); return jsonRes(res, { ok: false, error: 'invalid' }, 401); }
-        failures.delete(username);
+        if (!user) {
+            const lockFor = registerLoginFail15b(username, ip15b, audit15b);
+            console.log('[Auth] login FAIL ->', username, '(', ip15b, ')');
+            if (lockFor > 0) {
+                return jsonRes(res, { ok: false, error: 'locked', message: 'تلاش بیش از حد — ورود موقتاً قفل شد؛ ' + Math.round(lockFor / 60000) + ' دقیقه دیگر تلاش کنید.', retryAfterSec: Math.round(lockFor / 1000) }, 429);
+            }
+            return jsonRes(res, { ok: false, error: 'invalid' }, 401);
+        }
+        /* SEC-15b: rotation — نشستِ کوکی قبلی (در صورت وجود) باطل و sid تازه صادر می‌شود (ضد fixation) */
+        const oldSid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+        if (oldSid) sessions.delete(oldSid);
         const sid = crypto.randomBytes(32).toString('hex');
-        sessions.set(sid, { user: user, expires: Date.now() + SESSION_MS });
+        sessions.set(sid, { user: user, expires: Date.now() + SESSION_MS, lastSeen: Date.now() });
         setCookie(res, sid);
-        console.log('[Auth] login OK ->', user.username, '(' + user.role + ')');
+        audit15b({ ts: new Date().toISOString(), user: user.username, role: user.role, ip: ip15b, action: 'auth.login_ok', endpoint: '/api/auth/login', status: 200, user_agent: String(req.headers['user-agent'] || '').slice(0, 200) });
+        console.log('[Auth] login OK ->', user.username, '(' + user.role + ')', ip15b);
         return jsonRes(res, { ok: true, user: user });
-    }).catch((e) => jsonRes(res, { ok: false, error: String(e && e.message ? e.message : e) }, 500));
+    }).catch((e) => {
+        if (e && e.code15b === 'PAYLOAD_TOO_LARGE') return jsonRes(res, { ok: false, error: 'payload_too_large', message: 'حجم درخواست بیش از حد مجاز است.' }, 413);
+        return jsonRes(res, { ok: false, error: String(e && e.message ? e.message : e) }, 500);
+    });
 }
 function doLogout(req, res) {
     const sid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
@@ -328,4 +462,9 @@ function requireRole(req, allowed) {
     return allowed.indexOf(role) !== -1;
 }
 
-module.exports = { handlePublic: handlePublic, enforce: enforce, requireRole: requireRole, setTenantBranding15a: setTenantBranding15a };
+module.exports = {
+    handlePublic: handlePublic, enforce: enforce, requireRole: requireRole,
+    setTenantBranding15a: setTenantBranding15a,
+    setSecureCookie15b: setSecureCookie15b, setCorsConfig15b: setCorsConfig15b, isOriginAllowed15b: isOriginAllowed15b,
+    hashPassword: hashPassword, verifyPassword: verifyPassword, clientIp15b: clientIp15b, setAuditWriter15b: setAuditWriter15b, /* SEC-15b */
+};

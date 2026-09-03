@@ -9,6 +9,8 @@ const http = require('http');
 const https = require('https');
 // ===== FEAT-HTTPS-11d: ماژول داخلی net برای peek اولین بایت پورت اصلی — صفر وابستگی جدید =====
 const net = require('net');
+// ===== SEC-15b: ماژول داخلی crypto — هش رمز (scrypt معادل bcrypt در stdlib)، payload_hash و session id =====
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const auth = require('./auth');
@@ -135,13 +137,15 @@ async function loadData() {
 // ---------- پاسخ‌ها ----------
 function sendJson(res, obj, code = 200) {
     const body = JSON.stringify(obj);
-    res.writeHead(code, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Cache-Control': 'no-store',
-    });
+    // ===== SEC-15b: CORS دقیق — فقط originهای مجاز از tenant.custom_settings.allowed_origins (پیش‌فرض: همان‌مبدأ = بدون هدر ACAO) =====
+    const h15b = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Vary': 'Origin' };
+    const req15b = res.__req15b;
+    const origin15b = req15b ? String(req15b.headers.origin || '') : '';
+    if (origin15b && auth.isOriginAllowed15b(origin15b)) {
+        h15b['Access-Control-Allow-Origin'] = origin15b;
+        h15b['Access-Control-Allow-Credentials'] = 'true';
+    }
+    res.writeHead(code, h15b);
     res.end(body);
 }
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
@@ -153,8 +157,62 @@ function sendFile(res, filePath) {
     });
 }
 function readBody(req) {
-    return new Promise((resolve, reject) => { let d = ''; req.on('data', (c) => (d += c)); req.on('end', () => resolve(d)); req.on('error', reject); });
+    // ===== SEC-15b: سقف ۱MB روی بدنه + پاک‌سازی JSON مرکزی (همهٔ هندلرها خودکار پوشش می‌شوند) =====
+    const CAP_15B = 1024 * 1024;
+    return new Promise((resolve, reject) => {
+        let d = '';
+        let over15b = false;
+        req.on('data', (c) => {
+            if (over15b) return;
+            d += c;
+            if (d.length > CAP_15B) {
+                over15b = true;
+                const e = new Error('payload too large'); e.code15b = 'PAYLOAD_TOO_LARGE';
+                try { req.destroy(); } catch (e2) { /* noop */ }
+                reject(e);
+            }
+        });
+        req.on('end', () => { if (!over15b) resolve(sanitizeRawJson15b(d)); });
+        req.on('error', reject);
+    });
 }
+// ===== SEC-15b (begin): پاک‌سازی ورودی سراسری — trim + سقف طول + حذف کنترل‌کاراکترها + خنثی‌سازی <> =====
+// الگوی OWASP: اعتبارسنجی ورودی + کدگذاری در رندر (esc() کلاینت) — این لایه سد دوم است
+const INPUT_MAX_STR_15B = 100000; // سقف رشتهٔ واحد (بدون آسیب به پای‌لودهای بزرگ ingest)
+function sanitizeInput15b(obj, depth) {
+    const d = depth || 0;
+    if (d > 8) return null; // عمق غیرمعمول → حذف
+    if (obj === null || obj === undefined) return obj;
+    const t = typeof obj;
+    if (t === 'string') {
+        let s = obj;
+        if (s.length > INPUT_MAX_STR_15B) s = s.slice(0, INPUT_MAX_STR_15B);
+        s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''); // کنترل‌کاراکترها (به‌جز \n \r \t)
+        s = s.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return s;
+    }
+    if (t === 'number' || t === 'boolean') return obj;
+    if (Array.isArray(obj)) {
+        if (obj.length > 5000) obj = obj.slice(0, 5000);
+        return obj.map((x) => sanitizeInput15b(x, d + 1));
+    }
+    if (t === 'object') {
+        const keys = Object.keys(obj);
+        const o = {};
+        keys.slice(0, 500).forEach((k) => { o[k] = sanitizeInput15b(obj[k], d + 1); });
+        return o;
+    }
+    return null; // توابع/سایر انواع → حذف
+}
+// اگر بدنه JSON معتبر بود → پاک‌سازی و بازسری؛ وگرنه عبور خام (هندلرهای JSON آن را ۴۰۰ می‌دهند)
+function sanitizeRawJson15b(raw) {
+    try {
+        const t = String(raw || '').trim();
+        if (!t || (t[0] !== '{' && t[0] !== '[')) return raw;
+        return JSON.stringify(sanitizeInput15b(JSON.parse(t)));
+    } catch (e) { return raw; }
+}
+// ===== SEC-15b (end) =====
 
 // ---------- محاسبات ----------
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -289,15 +347,128 @@ function resolveTenantLogoFile15a(cfg) {
     auth.setTenantBranding15a(tenantCache15a ? { name: c.name, logo: c.logo || '' } : null);
 })();
 // ===== SAAS-15a (end) =====
+// ===== SEC-15b (begin): هدرهای امنیتی + ریت‌لیمیت + audit خودکار + IP کلاینت =====
+// CSP: self + inline (تک‌فایل فعلی) + Chart.js/فونت از cdn.jsdelivr.net — بدون unsafe-eval (الگوی OWASP Secure Headers)
+const CSP_15B = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "font-src 'self' data: https://cdn.jsdelivr.net",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+].join('; ');
+function applySecurityHeaders15b(res, req) {
+    try {
+        res.setHeader('Content-Security-Policy', CSP_15B);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+        // HSTS فقط در حالت HTTPS (الگوی OWASP — هیچ حالت HTTP نمی‌شکند)
+        if (tlsMode === 'HTTPS') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        // SEC-15b/SAAS-15a: تازه‌سازی CORS از tenant (allowed_origins) با mtime-کش — ارزان
+        if (req) {
+            const tc15b = loadTenant15a();
+            auth.setCorsConfig15b(tenantCache15a && tc15b.custom_settings && Array.isArray(tc15b.custom_settings.allowed_origins) ? tc15b.custom_settings.allowed_origins : null);
+        }
+    } catch (e) { /* بی‌ضرر */ }
+}
+function clientIp15b(req) {
+    const xf = req.headers['x-forwarded-for'];
+    if (xf) { const first = String(xf).split(',')[0].trim(); if (first) return first; }
+    return (req.socket && req.socket.remoteAddress) || '?';
+}
+// ریت‌لیمیت عمومی: ۱۰۰ درخواست/دقیقه per-IP برای API (لاگین مسیر اختصاصی دارد)
+const RL_WINDOW_MS_15B = 60 * 1000, RL_MAX_15B = 100;
+const rlMap15b = new Map();
+function rateLimit15b(req, pathname) {
+    if (pathname.indexOf('/api/') !== 0) return 0;
+    if (pathname === '/api/auth/login') return 0;
+    const ip = clientIp15b(req);
+    const now = Date.now();
+    const arr = (rlMap15b.get(ip) || []).filter((t) => now - t < RL_WINDOW_MS_15B);
+    if (arr.length >= RL_MAX_15B) { rlMap15b.set(ip, arr); return Math.ceil((arr[0] + RL_WINDOW_MS_15B - now) / 1000); }
+    arr.push(now); rlMap15b.set(ip, arr);
+    return 0;
+}
+var rlSweepTimer15b = setInterval(() => { try { const now = Date.now(); for (const [k, v] of rlMap15b) { const f = v.filter((t) => now - t < RL_WINDOW_MS_15B); if (f.length) rlMap15b.set(k, f); else rlMap15b.delete(k); } } catch (e) { /* noop */ } }, 5 * 60 * 1000);
+if (rlSweepTimer15b.unref) rlSweepTimer15b.unref();
+// audit خودکار هر POST/PUT/DELETE + چرخش ماهانه (audit-YYYY-MM.json)
+const AUDIT_FILE_15B = path.join(ROOT, 'audit.json'); /* SEC-15b: نسخهٔ ماژول‌سطح */
+function auditRotate15b() {
+    try {
+        if (!fs.existsSync(AUDIT_FILE_15B)) return;
+        const d = new Date(fs.statSync(AUDIT_FILE_15B).mtimeMs);
+        const cur = new Date();
+        if (d.getUTCFullYear() !== cur.getUTCFullYear() || d.getUTCMonth() !== cur.getUTCMonth()) {
+            const name = 'audit-' + d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.json';
+            fs.renameSync(AUDIT_FILE_15B, path.join(ROOT, name));
+            console.log('[Audit] SEC-15b: چرخش ماهانه →', name);
+        }
+    } catch (e) { /* بی‌ضرر */ }
+}
+function writeAudit15b(entry) {
+    try {
+        auditRotate15b();
+        const arr = readJson(AUDIT_FILE_15B) || [];
+        arr.push(entry);
+        writeJson(AUDIT_FILE_15B, arr.slice(-2000));
+    } catch (e) { /* بی‌ضرر */ }
+}
+auth.setAuditWriter15b(writeAudit15b); /* SEC-15b: مسیر واحد audit برای auth.js (لاگین/قفل) */
+// ===== SEC-15b (end) =====
 // ===== FEAT-HTTPS-11c (begin): هندلر به تابع نام‌دار استخراج شد تا بین HTTP و HTTPS مشترک باشد =====
 function appRequestHandler(req, res) {
+    res.__req15b = req; /* SEC-15b: برای CORS دقیق در sendJson/jsonRes */
+    // ===== SEC-15b: preflight OPTIONS با هدرهای صحیح — فقط originهای مجاز =====
     if (req.method === 'OPTIONS') {
-        res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' });
+        const origin15b = String(req.headers.origin || '');
+        const h15b = { 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '600', 'Vary': 'Origin' };
+        if (origin15b && auth.isOriginAllowed15b(origin15b)) { h15b['Access-Control-Allow-Origin'] = origin15b; h15b['Access-Control-Allow-Credentials'] = 'true'; }
+        res.writeHead(204, h15b);
         res.end(); return;
     }
+    // ===== SEC-15b: هدرهای امنیتی روی همهٔ پاسخ‌ها =====
+    applySecurityHeaders15b(res, req);
     let parsed;
     try { parsed = new URL(req.url, `http://${req.headers.host || 'localhost'}`); } catch (e) { res.writeHead(400); res.end('Bad Request'); return; }
     const pathname = decodeURIComponent(parsed.pathname);
+    // ===== SEC-15b: سقف حجم بدنه ۱MB (۴۱۳) =====
+    const cl15b = Number(req.headers['content-length'] || 0);
+    if (cl15b > 1024 * 1024) {
+        return sendJson(res, { error: 'حجم درخواست بیش از حد مجاز است (سقف ۱ مگابایت).', code: 'PAYLOAD_TOO_LARGE' }, 413);
+    }
+    // ===== SEC-15b: ریت‌لیمیت عمومی — ۱۰۰/دقیقه per-IP با Retry-After =====
+    const rl15b = rateLimit15b(req, pathname);
+    if (rl15b > 0) {
+        res.setHeader('Retry-After', String(rl15b));
+        return sendJson(res, { error: 'تعداد درخواست‌ها بیش از حد مجاز است — لطفاً کمی صبر کنید.', code: 'RATE_LIMITED' }, 429);
+    }
+    // ===== SEC-15b: audit خودکار هر POST/PUT/DELETE (ip/ua/status/payload_hash) — از طریق res finish =====
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
+        try {
+            const h15b = crypto.createHash('sha256');
+            const t015b = Date.now();
+            req.on('data', (c) => { try { h15b.update(c); } catch (e) { /* noop */ } });
+            res.on('finish', () => {
+                try {
+                    writeAudit15b({
+                        ts: new Date().toISOString(),
+                        user: req.user ? req.user.username : '-', role: req.user ? req.user.role : '-',
+                        ip: clientIp15b(req), action: 'http.' + req.method.toLowerCase(), endpoint: pathname,
+                        status: res.statusCode, user_agent: String(req.headers['user-agent'] || '').slice(0, 200),
+                        payload_hash: h15b.digest('hex').slice(0, 32), ms: Date.now() - t015b,
+                    });
+                } catch (e) { /* بی‌ضرر */ }
+            });
+        } catch (e) { /* بی‌ضرر */ }
+    }
 
     // ===== S1 AUTH: public auth routes (login page + /api/auth/*) =====
     // ===== SAAS-15a: تازه‌سازی برندینگ لاگین با mtime کش — تغییر tenant.json بدون ری‌استارت اعمال می‌شود =====
@@ -454,11 +625,8 @@ function appRequestHandler(req, res) {
     // ===== ✅ ADDITIVE — ممیزی: ثبت رویدادهای ورودی وب =====
     const AUDIT_FILE = path.join(__dirname, 'audit.json');
     function auditLog(req, action, payload) {
-        try {
-            const arr = readJson(AUDIT_FILE) || [];
-            arr.push({ ts: new Date().toISOString(), user: req.user ? req.user.username : '?', role: req.user ? req.user.role : '?', action: action, payload: payload });
-            writeJson(AUDIT_FILE, arr.slice(-2000));
-        } catch (e) { /* بی‌ضرر */ }
+        /* SEC-15b: مسیر واحد audit با ip و چرخش ماهانه */
+        writeAudit15b({ ts: new Date().toISOString(), user: req.user ? req.user.username : '?', role: req.user ? req.user.role : '?', ip: clientIp15b(req), action: action, payload: payload });
     }
     // ===== ✅ ADDITIVE — W4: ورود داده از وب «کنترل کیفیت» با کنترل نقش =====
     if (req.method === 'POST' && pathname === '/api/entry/quality') {
@@ -469,7 +637,7 @@ function appRequestHandler(req, res) {
         req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
         req.on('end', () => {
             try {
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
                 const rec = {
                     id: 'web-q-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
                     heat_number: String(b.heat_number || '').trim(),
@@ -1892,7 +2060,7 @@ function appRequestHandler(req, res) {
 
             try {
 
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
 
                 const workType = String(
                     b.work_type || 'repair'
@@ -2142,7 +2310,7 @@ function appRequestHandler(req, res) {
 
             try {
 
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
 
                 const interval =
                     Number(b.interval_days);
@@ -2338,7 +2506,7 @@ function appRequestHandler(req, res) {
         req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
         req.on('end', () => {
             try {
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
                 const good = Number(b.good_quantity);
                 const rec = {
                     id: 'web-p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -2377,7 +2545,7 @@ function appRequestHandler(req, res) {
         req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
         req.on('end', () => {
             try {
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
                 const qty = Number(b.quantity);
                 const rec = {
                     id: 'web-w-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -2415,7 +2583,7 @@ function appRequestHandler(req, res) {
         req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
         req.on('end', () => {
             try {
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
                 const start = new Date(b.start_time);
                 const end = new Date(b.end_time);
                 if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
@@ -2459,7 +2627,7 @@ function appRequestHandler(req, res) {
         req.on('data', (c) => { raw += c; if (raw.length > 100000) req.destroy(); });
         req.on('end', () => {
             try {
-                const b = JSON.parse(raw || '{}');
+                const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
                 const cnt = Number(b.count);
                 if (!Number.isFinite(cnt) || cnt <= 0) return sendJson(res, { error: 'count معتبر نیست.' }, 400);
                 const rec = { id: 'sen-' + Date.now().toString(36), station_id: String(b.station_id || 'st-pack'), count: cnt, source: 'sensor', timestamp: b.timestamp ? new Date(b.timestamp).toISOString() : new Date().toISOString() };
@@ -3926,6 +4094,7 @@ try {
 } catch (e) {
     console.warn('[HTTPS] cert.pem/key.pem در دسترس نیست — fallback خودکار به HTTP روی همان پورت:', (e && e.code) || (e && e.message) || e);
 }
+auth.setSecureCookie15b(tlsMode === 'HTTPS'); /* SEC-15b: پرچم Secure کوکی فقط در HTTPS */
 
 // ===== FEAT-HTTPS-11d (begin): تک‌پورت‌سازی 3001 — HTTP برهنهٔ خودکار به HTTPS =====
 // مشکل: کاربران آدرس را برهنه تایپ می‌کنند (IP:3001) و مرورگر پیش‌فرض http می‌رود → 503/SSL +
