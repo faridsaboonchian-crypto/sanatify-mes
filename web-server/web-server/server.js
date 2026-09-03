@@ -205,7 +205,8 @@ const server = http.createServer((req, res) => {
     // ===== S1 AUTH: public auth routes (login page + /api/auth/*) =====
     if (auth.handlePublic(req, res, pathname)) return;
     // ===== FEAT-PWA-8b (begin): دارایی‌های عمومی PWA بدون احراز هویت — فقط مانیفست/سرویس‌ورکر/آیکون برند (بدون هیچ دادهٔ حساس) =====
-    if (req.method === 'GET' && (pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/icon-192.png' || pathname === '/icon-512.png')) {
+    /* ===== FIX-PWA-10c: favicon هم به لیست عمومی PWA افزوده شد ===== */
+    if (req.method === 'GET' && (pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/icon-192.png' || pathname === '/icon-512.png' || pathname === '/favicon.ico')) {
         const rel2 = pathname === '/manifest.webmanifest' ? 'manifest.webmanifest' : pathname.slice(1);
         const fp2 = path.join(PUBLIC_DIR, rel2);
         const h2 = { 'Cache-Control': 'no-cache' };

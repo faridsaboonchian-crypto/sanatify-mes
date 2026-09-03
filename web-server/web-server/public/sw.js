@@ -3,7 +3,7 @@
    + زنجیرهٔ fallback سالم (کش → شل → صفحهٔ آفلاین inline)؛ هرگز صفحهٔ سفید؛
    manifest/آیکون‌ها cache-first نسخه‌دار؛ دادهٔ حساس (/api/*) هرگز کش نمی‌شود ===== */
 'use strict';
-var SHELL_CACHE = 'sanatify-shell-v10b1';
+var SHELL_CACHE = 'sanatify-shell-v10c1'; /* FIX-PWA-10c: آیکون‌های جدید */
 var SHELL_ASSETS = [
     '/manifest.webmanifest',
     '/icon-192.png',
