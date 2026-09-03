@@ -588,6 +588,111 @@ function appRequestHandler(req, res) {
         } catch (e) { return null; } finally { clearTimeout(timer); }
     }
 
+    // ===== FEAT-EM-12b (begin): مدیریت انرژی — energy_logs در live.json + endpoint ثبت/فهرست/آمار با نقش و ممیزی =====
+    const EM_READ_ROLES = ['admin', 'engineering', 'planner', 'manager', 'supervisor', 'operator', 'warehouse', 'viewer', 'quality', 'qc'];
+    const EM_WRITE_ROLES = ['admin', 'engineering'];
+    const EM_LINES = { mill: 'خط نورد گرم', furnace: 'کوره/ذوب', pack: 'بسته‌بندی باندل', aux: 'تاسیسات و کمپرسور', plant: 'سراسر کارخانه' };
+    function emFaToEn(s) { return String(s || '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)); }
+    function emDayKey(iso) { const t = Date.parse(iso); return isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10); }
+    if (req.method === 'GET' && pathname === '/api/energy/logs') {
+        if (!auth.requireRole(req, EM_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ انرژی برای نقش شما مجاز نیست.' }, 403);
+        const live = readLive();
+        const logs = (Array.isArray(live.energy_logs) ? live.energy_logs : []).slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        return sendJson(res, { ok: true, logs: logs });
+    }
+    if (req.method === 'POST' && pathname === '/api/energy/logs') {
+        if (!auth.requireRole(req, EM_WRITE_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت انرژی فقط برای نقش مهندسی/مدیر مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر: JSON نادرست است.' }, 400); }
+            const dateJ = emFaToEn(String(b.date_jalali || '')).trim();
+            if (!/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.test(dateJ)) return sendJson(res, { error: 'تاریخ شمسی نامعتبر است (نمونه: ۱۴۰۵/۰۶/۱۲).' }, 400);
+            const tsIso = planJalaliToTs(dateJ, 12);
+            if (!tsIso) return sendJson(res, { error: 'تاریخ شمسی نامعتبر است.' }, 400);
+            const shiftId = ['shift-morning-301', 'shift-night-302'].indexOf(b.shift_id) !== -1 ? b.shift_id : null;
+            if (!shiftId) return sendJson(res, { error: 'شیفت را انتخاب کنید.' }, 400);
+            const lineKey = EM_LINES[b.line] ? b.line : null;
+            if (!lineKey) return sendJson(res, { error: 'خط را انتخاب کنید.' }, 400);
+            const kwh = Math.round((Number(emFaToEn(b.kwh)) || 0) * 10) / 10;
+            if (!(kwh > 0) || kwh > 100000000) return sendJson(res, { error: 'مقدار kWh باید عددی بزرگ‌تر از صفر باشد.' }, 400);
+            const live = readLive();
+            if (!Array.isArray(live.energy_logs)) live.energy_logs = [];
+            const rid = String(b.request_id || '').slice(0, 64);
+            const dup = rid ? live.energy_logs.find((x) => x && x.request_id === rid) : null;
+            if (dup) { auditLog(req, 'energy.duplicate', { id: dup.id }); return sendJson(res, { ok: true, duplicate: true, log: dup }); }
+            const rec = {
+                id: 'em-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                request_id: rid || null,
+                date_jalali: dateJ,
+                iso_date: String(tsIso).slice(0, 10),
+                shift_id: shiftId,
+                line: lineKey,
+                line_fa: EM_LINES[lineKey],
+                kwh: kwh,
+                note: String(b.note || '').trim().slice(0, 200),
+                created_by: (req.user && (req.user.name || req.user.username)) || '?',
+                created_at: new Date().toISOString(),
+            };
+            live.energy_logs.push(rec);
+            if (writeJson(LIVE_FILE, live)) {
+                auditLog(req, 'energy.insert', { id: rec.id, kwh: kwh, date: dateJ, shift: shiftId, line: lineKey });
+                return sendJson(res, { ok: true, log: rec });
+            }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'GET' && pathname === '/api/energy/stats') {
+        if (!auth.requireRole(req, EM_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive();
+        const logs = Array.isArray(live.energy_logs) ? live.energy_logs : [];
+        const sinceIso = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+        const byDay = {};
+        logs.forEach((l) => { if (!l || !l.iso_date || String(l.iso_date) < sinceIso) return; byDay[l.iso_date] = (byDay[l.iso_date] || 0) + (Number(l.kwh) || 0); });
+        /* تناژ واقعی روزانه از باندل‌های تولیدشده */
+        const tonByDay = {};
+        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((r) => {
+            const k = r ? emDayKey(r.produced_at) : ''; if (!k || k < sinceIso) return;
+            tonByDay[k] = (tonByDay[k] || 0) + (Number(r.net_weight_kg) || 0) / 1000;
+        });
+        const days = Object.keys(byDay).sort().map((k) => {
+            const ton = Math.round((tonByDay[k] || 0) * 100) / 100;
+            return { date: k, kwh: Math.round(byDay[k] * 10) / 10, tonnage: ton, kwh_per_ton: ton > 0 ? Math.round(byDay[k] / ton * 100) / 100 : null };
+        });
+        const vals = days.map((d) => d.kwh_per_ton).filter((v) => v != null && v > 0);
+        const avg = vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length * 100) / 100 : null;
+        const anomalies = [];
+        if (avg != null) {
+            days.forEach((d) => {
+                if (d.kwh_per_ton == null) return;
+                const dev = Math.round((d.kwh_per_ton - avg) / avg * 1000) / 10;
+                d.deviation_pct = dev;
+                if (Math.abs(dev) > 15) {
+                    d.anomalous = true;
+                    d.dir = dev > 0 ? 'up' : 'down';
+                    anomalies.push({ date: d.date, dir: d.dir, dev: dev, reason: 'انرژی/تن روز ' + d.date + ' حدود ' + Math.abs(dev) + '٪ ' + (dev > 0 ? 'بالاتر' : 'پایین‌تر') + ' از میانگین ۳۰روزه (' + d.kwh_per_ton + ' در برابر ' + avg + ' kWh/تن)' + (dev > 0 ? ' — بررسی توقفات/کاهش تولید یا نشتی مصرف' : ' — احتمالاً تولید بالا/رکورد مصرف ناقص') });
+                } else { d.anomalous = false; }
+            });
+        }
+        /* پیوند زمینه‌ای: توقفات برقی ۷روز اخیر */
+        const elecCut = new Date(Date.now() - 7 * 86400000).toISOString();
+        const electrical = (Array.isArray(live.downtime_logs) ? live.downtime_logs : []).filter((r) => {
+            if (!r || !r.start_time || String(r.start_time) < elecCut) return false;
+            const rid = String(r.reason_id || '').toLowerCase();
+            return rid.indexOf('electr') !== -1 || rid.indexOf('power') !== -1;
+        }).slice(-10).map((r) => ({ start_time: r.start_time, duration_minutes: Number(r.duration_minutes) || 0, station_id: r.station_id || null }));
+        return sendJson(res, {
+            ok: true,
+            total_kwh_30d: Math.round(days.reduce((s, d) => s + d.kwh, 0) * 10) / 10,
+            avg_kwh_per_ton: avg,
+            window_days: 30,
+            days: days,
+            anomalies: anomalies,
+            electrical_downtimes: electrical,
+            generated_at: new Date().toISOString(),
+        });
+    }
+    // ===== FEAT-EM-12b (end) =====
+
     /* ===== endpointهای برنامه‌ریزی ===== */
     if (req.method === 'GET' && pathname === '/api/planning/plans') {
         if (!auth.requireRole(req, PLAN_READ_ROLES)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ برنامه‌ریزی برای نقش شما مجاز نیست.' }, 403);

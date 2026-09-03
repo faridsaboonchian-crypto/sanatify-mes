@@ -1117,6 +1117,17 @@
         body.theme-dark .aps-kv b { color: #7fb4d8; }
         .aps-rank1 { border-right-color: #059669 !important; }
         .aps-rank-badge { background: #059669; color: #fff; border-radius: 8px; padding: 1px 8px; font-size: 10.5px; font-weight: bold; }
+        /* ===== FEAT-EM-12b (begin): استایل مدیریت انرژی — کاملاً تم‌آوار ===== */
+        .em-anomalies { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+        .em-anomalies .chip { font-size: 11px; line-height: 1.8; }
+        .em-tariff { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #475569; font-weight: bold; }
+        .em-tariff input { width: 92px; text-align: center; }
+        body.theme-dark .em-tariff { color: #8aa6bd; }
+        .em-err { color: #dc2626; font-size: 11.5px; font-weight: bold; }
+        body.theme-dark .em-err { color: #f87171; }
+        #emTrendWrap { position: relative; height: 220px; }
+        @media (max-width: 480px) { .em-tariff input { width: 78px; } #emTrendWrap { height: 170px; } }
+        /* ===== FEAT-EM-12b (end) ===== */
         /* ===== FEAT-PLAN-9c (end) ===== */
         /* ===== FIX-APS-12a (begin): عدد زندهٔ وزن‌ها + سهم نرمال‌شده — کاملاً تم‌آوار ===== */
         .aps-weights .aps-wval { min-width: 36px; text-align: center; background: #0e7490; color: #fff; border-radius: 7px; padding: 2px 7px; font-size: 11.5px; }
@@ -1828,6 +1839,54 @@
                 <div class="tablewrap">
                     <table id="tbl-maintenance"></table>
                 </div>
+
+                <!-- ===== FEAT-EM-12b (begin): زیربخش مدیریت انرژی در تب PM ===== -->
+                <div class="mnt-section-head">
+                    <div>
+                        <h3>⚡ مدیریت انرژی</h3>
+                        <span>ثبت کنتور kWh، انرژی/تن، هشدار ناهنجاری و هزینه با تعرفهٔ قابل‌تنظیم</span>
+                    </div>
+                    <div class="toolbar">
+                        <label class="em-tariff">تعرفه (ریال/kWh): <input type="text" inputmode="numeric" id="emTariff" placeholder="۳۰۰۰"></label>
+                        <button class="act" id="emAddBtn" style="display:none">➕ ثبت kWh</button>
+                        <button class="act excel" id="emExport">خروجی اکسل 📊</button>
+                    </div>
+                </div>
+                <div class="kpis" id="emKpis"></div>
+                <div class="em-anomalies" id="emAnomalies"></div>
+                <div class="chart-card"><div id="emTrendWrap"><canvas id="emTrend"></canvas></div></div>
+                <div class="tablewrap" style="max-height:340px;overflow-y:auto">
+                    <table id="emTable"></table>
+                </div>
+                <div class="note" id="emLink"></div>
+
+                <div class="filters hidden mnt-form" id="emForm">
+                    <div class="mnt-form-title">ثبت انرژی کنتور (kWh)</div>
+                    <div class="frow">
+                        <label>تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="emDate" id="emDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>شیفت:
+                            <select id="emShift" class="fsel">
+                                <option value="shift-morning-301">صبح</option>
+                                <option value="shift-night-302">شب</option>
+                            </select>
+                        </label>
+                        <label>خط:
+                            <select id="emLine" class="fsel">
+                                <option value="mill">خط نورد گرم</option>
+                                <option value="furnace">کوره/ذوب</option>
+                                <option value="pack">بسته‌بندی باندل</option>
+                                <option value="aux">تاسیسات و کمپرسور</option>
+                                <option value="plant">سراسر کارخانه</option>
+                            </select>
+                        </label>
+                        <label>کیلووات‌ساعت: <input type="text" inputmode="decimal" id="emKwh" placeholder="مثلاً ۱۲۴۵۰" style="width:110px;text-align:center"></label>
+                        <label>توضیح: <input type="text" id="emNote" placeholder="اختیاری" style="max-width:180px"></label>
+                        <button class="act" id="emSave">ذخیره</button>
+                        <button class="act" id="emCancel">انصراف</button>
+                        <span class="em-err" id="emMsg"></span>
+                    </div>
+                </div>
+                <!-- ===== FEAT-EM-12b (end) ===== -->
 
             </div>
         </section>
@@ -3738,6 +3797,146 @@ showRes();
 })();
 // ===== FEAT-PLAN-9c (end) =====
 // ===== FEAT-PLAN-7 (end) =====
+// ===== FEAT-EM-12b (begin): مدیریت انرژی — ثبت kWh، KPI انرژی/تن، نمودار روند ۳۰روزه، هشدار ناهنجاری >۱۵٪، اتصال کارت خلاصه، خروجی اکسل =====
+(function emModule() {
+    const EM_TKEY = 'san.em.tariff';
+    const emSt = { logs: [], stats: null, chart: null, loading: false };
+    const $em = (id) => document.getElementById(id);
+    const emCanWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'engineering';
+    const emFa = (x) => (x == null || isNaN(Number(x))) ? '—' : groupFa(Math.round(Number(x) * 100) / 100);
+    const emJDay = (iso) => { try { return toFaDigits(new Date(iso + 'T12:00:00').toLocaleDateString('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' })); } catch (e) { return toFaDigits(iso); } };
+    const emToday = () => { try { return toFaDigits(new Date().toLocaleDateString('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' })); } catch (e) { return ''; } };
+    let emTariff = 3000;
+    try { const t = Number(localStorage.getItem(EM_TKEY)); if (t > 0) emTariff = t; } catch (e) { }
+    function emSaveTariff() { try { localStorage.setItem(EM_TKEY, String(emTariff)); } catch (e) { } }
+    function emPaintKpis() {
+        const box = $em('emKpis'); if (!box) return;
+        const s = emSt.stats;
+        const totalKwh = s ? s.total_kwh_30d : null;
+        const avgKpt = s && s.avg_kwh_per_ton != null ? s.avg_kwh_per_ton : null;
+        const cost = totalKwh != null ? Math.round(totalKwh * emTariff) : null;
+        const items = [
+            { l: 'جمع kWh (۳۰روز)', v: totalKwh == null ? '—' : emFa(totalKwh), c: '', d: st2logsCount() + ' رکورد کنتور' },
+            { l: 'میانگین انرژی/تن', v: avgKpt == null ? '—' : emFa(avgKpt) + ' kWh/تن', c: avgKpt == null ? 'gray' : 'teal', d: 'پایه: تناژ واقعی باندل‌ها' },
+            { l: 'هزینهٔ برق (ریال)', v: cost == null ? '—' : emFa(cost), c: cost == null ? 'gray' : 'amber', d: 'تعرفه: ' + emFa(emTariff) + ' ریال/kWh (قابل‌ویرایش)' },
+            { l: 'روزهای ناهنجار (>۱۵٪)', v: emFa(s && s.anomalies ? s.anomalies.length : 0), c: (s && s.anomalies && s.anomalies.length) ? 'red' : 'green', d: 'انحراف از میانگین ۳۰روزه' },
+        ];
+        box.innerHTML = items.map((k) => '<div class="kpi kpi2 ' + k.c + '"><div class="k">' + esc(k.l) + '</div><div class="v">' + k.v + '</div>' + (k.d ? '<div class="d">' + esc(k.d) + '</div>' : '') + '</div>').join('');
+    }
+    function st2logsCount() { return emFa(emSt.logs.length); }
+    function emPaintAnomalies() {
+        const box = $em('emAnomalies'); if (!box) return;
+        const s = emSt.stats; const list = (s && s.anomalies) || [];
+        if (!list.length) { box.innerHTML = '<span class="chip ok">بدون ناهنجاری — انرژی/تن همهٔ روزها در بازهٔ ±۱۵٪ میانگین است</span>'; return; }
+        box.innerHTML = list.map((a) => '<span class="chip ' + (a.dir === 'up' ? 'no' : 'wait') + '">' + esc(a.reason) + '</span>').join(' ');
+    }
+    function emPaintTable() {
+        const t = $em('emTable'); if (!t) return;
+        const logs = emSt.logs.slice(0, 60);
+        const days = (emSt.stats && emSt.stats.days) || [];
+        t.innerHTML = '<thead><tr><th>تاریخ</th><th>شیفت</th><th>خط</th><th>kWh</th><th>انرژی/تن روز</th><th>توضیح</th><th>ثبت‌کننده</th></tr></thead><tbody>'
+            + (logs.length ? logs.map((l) => {
+                const d = days.find((x) => x.date === l.iso_date);
+                return '<tr><td>' + toFaDigits(l.date_jalali || '') + '</td><td>' + (l.shift_id === 'shift-morning-301' ? 'صبح' : 'شب') + '</td><td>' + esc(l.line_fa || l.line || '—') + '</td><td><b>' + emFa(l.kwh) + '</b></td><td>' + (d && d.kwh_per_ton != null ? emFa(d.kwh_per_ton) : '—') + '</td><td>' + esc(l.note || '—') + '</td><td>' + esc(l.created_by || '—') + '</td></tr>';
+            }).join('') : '<tr><td colspan="7">هنوز رکوردی ثبت نشده — با دکمهٔ «ثبت kWh» شروع کنید (نقش مهندسی/مدیر).</td></tr>') + '</tbody>';
+    }
+    function emPaintChart() {
+        const cv = $em('emTrend'); if (!cv) return;
+        const s = emSt.stats; const days = (s && s.days) || [];
+        const dark = (typeof ui4IsDark === 'function') ? ui4IsDark() : document.body.classList.contains('theme-dark');
+        const grid = dark ? 'rgba(127,180,216,.15)' : 'rgba(15,42,67,.08)';
+        const tick = dark ? '#8aa6bd' : '#64748b';
+        const avg = s && s.avg_kwh_per_ton != null ? s.avg_kwh_per_ton : null;
+        if (emSt.chart) { try { emSt.chart.destroy(); } catch (e) { } emSt.chart = null; }
+        emSt.chart = new Chart(cv, {
+            type: 'line',
+            data: { labels: days.map((d) => emJDay(d.date)), datasets: [
+                { label: 'انرژی/تن (kWh/تن)', data: days.map((d) => d.kwh_per_ton), borderColor: dark ? '#7fb4d8' : '#0e7490', backgroundColor: dark ? 'rgba(127,180,216,.12)' : 'rgba(14,116,144,.12)', borderWidth: 2, tension: .35, pointRadius: 2, fill: true, spanGaps: true },
+                (avg != null ? { label: 'میانگین ۳۰روزه', data: days.map(() => avg), borderColor: dark ? '#f59e0b' : '#d97706', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false } : null),
+            ].filter(Boolean) },
+            options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { color: tick, font: { size: 10 } } }, tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + emFa(c.parsed.y) } } }, scales: { y: { beginAtZero: false, grid: { color: grid }, ticks: { color: tick, font: { size: 10 } } }, x: { grid: { display: false }, ticks: { color: tick, font: { size: 9 }, maxRotation: 45 } } } }
+        });
+    }
+    function emPaintLink() {
+        const el = $em('emLink'); if (!el) return;
+        const s = emSt.stats; const dl = (s && s.electrical_downtimes) || [];
+        if (!dl.length) { el.textContent = 'پیوند زمینه‌ای: در ۷ روز اخیر توقف برقی ثبت نشده است.'; return; }
+        el.innerHTML = 'پیوند زمینه‌ای — توقفات برقی ۷روز اخیر (تأثیر بر الگوی مصرف): ' + dl.map((d) => '<span class="chip wait">' + fmtDate(d.start_time) + ' — ' + groupFa(d.duration_minutes) + ' دقیقه</span>').join(' ');
+    }
+    function emPaintSummaryCard() {
+        let target = null;
+        document.querySelectorAll('#tab-summary .kpi').forEach((c) => { const k = c.querySelector('.k'); if (k && k.textContent.indexOf('میانگین انرژی/تن') !== -1) target = c; });
+        if (!target) return;
+        const s = emSt.stats;
+        if (!s || s.avg_kwh_per_ton == null) return; /* تا رسیدن دادهٔ کنتور، placeholder می‌ماند */
+        const v = target.querySelector('.v'), d = target.querySelector('.d');
+        if (v) v.textContent = emFa(s.avg_kwh_per_ton);
+        if (d) d.textContent = 'از دادهٔ کنتور انرژی — ' + groupFa(s.total_kwh_30d) + ' kWh در ۳۰روز';
+        target.classList.remove('gray'); target.classList.add('teal');
+    }
+    async function emLoad() {
+        if (emSt.loading) return; emSt.loading = true;
+        try {
+            const [r1, r2] = await Promise.all([fetch('/api/energy/logs', { cache: 'no-store' }), fetch('/api/energy/stats', { cache: 'no-store' })]);
+            if (r1.ok) { const j = await r1.json(); emSt.logs = j.logs || []; }
+            if (r2.ok) { const j = await r2.json(); emSt.stats = j; }
+            emPaintKpis(); emPaintAnomalies(); emPaintTable(); emPaintChart(); emPaintLink(); emPaintSummaryCard();
+            const btn = $em('emAddBtn'); if (btn) btn.style.display = emCanWrite() ? '' : 'none';
+        } catch (e) { /* بی‌ضرر */ }
+        emSt.loading = false;
+    }
+    function emWire() {
+        const f = $em('emForm');
+        if (f) attachJalaliMasks(f);
+        const ab = $em('emAddBtn');
+        if (ab) ab.addEventListener('click', () => {
+            if (!emCanWrite() || !f) return;
+            f.classList.toggle('hidden');
+            $em('emMsg').textContent = '';
+            const d = $em('emDate'); if (d && !d.value) d.value = emToday();
+        });
+        const cb = $em('emCancel'); if (cb) cb.addEventListener('click', () => { if (f) f.classList.add('hidden'); });
+        const sb = $em('emSave');
+        if (sb) sb.addEventListener('click', async () => {
+            const msg = $em('emMsg'); msg.textContent = '';
+            if (!emCanWrite()) { msg.textContent = 'ثبت فقط برای نقش مهندسی/مدیر مجاز است.'; return; }
+            if (!f) return;
+            const dv = readJalaliValue(f, 'emDate');
+            if (!dv) { msg.textContent = 'تاریخ شمسی کامل را وارد کنید (نمونه: ۱۴۰۵/۰۶/۱۲).'; return; }
+            const kwh = Number(toEnDigits($em('emKwh').value).replace(/[^\d.]/g, ''));
+            if (!(kwh > 0)) { msg.textContent = 'مقدار kWh را عددی بزرگ‌تر از صفر وارد کنید.'; return; }
+            const body = { request_id: 'em-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), date_jalali: dv, shift_id: $em('emShift').value, line: $em('emLine').value, kwh: kwh, note: $em('emNote').value.trim() };
+            try {
+                const r = await fetch('/api/energy/logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const j = await r.json();
+                if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت انرژی'; return; }
+                f.classList.add('hidden'); $em('emKwh').value = ''; $em('emNote').value = '';
+                await emLoad();
+                lastOkAt = Date.now(); setLiveStatus(true);
+            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }
+        });
+        const tb = $em('emTariff');
+        if (tb) {
+            tb.value = toFaDigits(String(emTariff));
+            tb.addEventListener('input', () => { const n = Number(toEnDigits(tb.value).replace(/[^\d.]/g, '')); emTariff = n > 0 ? n : 0; emSaveTariff(); emPaintKpis(); });
+        }
+        const eb = $em('emExport');
+        if (eb) eb.addEventListener('click', () => {
+            const s = emSt.stats; const days = (s && s.days) || [];
+            if (!days.length && !emSt.logs.length) { alert('دادهٔ انرژی برای خروجی وجود ندارد.'); return; }
+            downloadCsv('انرژی_۳۰روزه', [{ label: 'تاریخ شمسی', key: 'd' }, { label: 'kWh', key: 'k' }, { label: 'تناژ (تن)', key: 't' }, { label: 'انرژی/تن', key: 'kpt' }, { label: 'انحراف از میانگین ٪', key: 'dev' }, { label: 'ناهنجاری', key: 'an' }], days.map((x) => ({ d: emJDay(x.date), k: x.kwh, t: x.tonnage, kpt: x.kwh_per_ton == null ? '—' : x.kwh_per_ton, dev: x.deviation_pct == null ? '—' : x.deviation_pct, an: x.anomalous ? 'بله' : 'خیر' })), 'گزارش مدیریت انرژی — ۳۰ روز');
+        });
+        /* ورود به تب تعمیرات → بارگذاری همزمان انرژی */
+        const prevM = loaders.maintenance;
+        loaders.maintenance = async function () { const r = prevM ? await prevM() : undefined; emLoad(); return r; };
+        /* کارت خلاصه پس از هر بازسازی خلاصه از دادهٔ تازهٔ EM پر می‌شود */
+        const prevS = loaders.summary;
+        loaders.summary = async function () { const r = prevS ? await prevS() : undefined; emPaintSummaryCard(); return r; };
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', emWire); else emWire();
+    emLoad();
+})();
+// ===== FEAT-EM-12b (end) =====
 // ===== FEAT-PWA-8b (begin): ثبت سرویس‌ورکر + بنر نصب دوستانه (Android: beforeinstallprompt — iOS: راهنمای Share → Add to Home Screen) =====
 // ===== FIX-PWA-9a (begin): بنر نصب در اولین ورود موبایل مستقل از Secure Context (HTTP LAN) =====
 (function () {
