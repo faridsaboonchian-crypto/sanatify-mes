@@ -117,7 +117,7 @@ const LOGIN_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ورود | صنعتی فای — Sanatify MES</title>
+<title>ورود | صنعتی فای (SANATIFY) — ERP/MES فولاد</title>
 <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
 <style>
   /* ===== FEAT-UI-4a: صفحهٔ ورود صنعتی — گرادیان سرمه‌ای + بافت خطوط کارخانه ===== */
@@ -182,7 +182,7 @@ const LOGIN_HTML = `<!DOCTYPE html>
 <body>
   <div class="brand-top">
     <div class="brand-mark" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 20V9l6 4V9l6 4V5l8 4v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" fill="#7fd3e8"/><path d="M2 20V9l6 4V9l6 4V5l8 4v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" stroke="#e6f7ff" stroke-width="1.1"/><rect x="5" y="16" width="2.6" height="2.6" fill="#0f2a43"/><rect x="10.5" y="16" width="2.6" height="2.6" fill="#0f2a43"/><rect x="16" y="16" width="2.6" height="2.6" fill="#0f2a43"/></svg></div>
-    <div class="brand-name">صنعتی فای (Sanatify)<small>سامانه یکپارچه MES صنعت فولاد</small></div>
+    <div class="brand-name">صنعتی فای (SANATIFY)<small>سامانه یکپارچه صنعتی فای (SANATIFY) — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</small></div>
   </div>
   <form class="card" id="lf" autocomplete="on">
     <div class="card-head">
@@ -200,7 +200,7 @@ const LOGIN_HTML = `<!DOCTYPE html>
     <button class="submit" id="btn" type="submit">ورود به پنل</button>
     <div class="secure-note">🔒 دسترسی محدود به پرسنل مجاز — تمام ورودها ثبت می‌شود</div>
   </form>
-  <div class="page-foot">Sanatify MES v2.6<span class="sep">|</span>© ۱۴۰۵ صنعتی فای — تمام حقوق محفوظ است</div>
+  <div class="page-foot">Sanatify ERP/MES v2.6<span class="sep">|</span>© ۱۴۰۵ صنعتی فای — تمام حقوق محفوظ است</div>
   <script>
     var f = document.getElementById('lf');
     var err = document.getElementById('err');

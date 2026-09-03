@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>صنعتی فای (Sanatify) — سامانه یکپارچه MES فولاد</title>
+    <title>سامانه یکپارچه صنعتی فای (SANATIFY) — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
     </script>
@@ -1103,6 +1103,14 @@
         .nav-install { width: calc(100% - 8px); margin: 14px 4px 0; background: rgba(14, 116, 144, .18); color: #7fd4e8; border: 1px solid rgba(14, 116, 144, .55); border-radius: 8px; padding: 10px 12px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: bold; min-height: 44px; text-align: right; }
         .nav-install:hover { background: rgba(14, 116, 144, .32); }
         .nav-install[hidden] { display: none; }
+        /* ===== FIX-BRAND-8d (begin): فوتر برنددار چسبان به ته صفحه — هم‌سو با تم روز/شب ===== */
+        body { min-height: 100vh; display: flex; flex-direction: column; }
+        main { flex: 1 0 auto; }
+        .app-foot { margin-top: auto; padding: 12px 16px 16px; text-align: center; font-size: 11.5px; color: #64748b; border-top: 1px solid #e2e8f0; }
+        .app-foot .app-foot-brand { font-weight: bold; color: #1e3d59; }
+        body.theme-dark .app-foot { color: #8aa6bd; border-top-color: #1d3a55; }
+        body.theme-dark .app-foot .app-foot-brand { color: #7fb4d8; }
+        /* ===== FIX-BRAND-8d (end) ===== */
         /* ===== FEAT-PWA-8b (end) ===== */
         /* ===== FEAT-BI-2 (end) ===== */</style>
 </head>
@@ -1111,7 +1119,7 @@
     <header>
         <button id="navToggle" aria-controls="nav" aria-expanded="true" aria-label="باز و بسته کردن منو" title="منو">☰</button>
         <!-- ===== FEAT-UI-4b: عنوان برندینگ — کامل در دسکتاپ، فشردهٔ یک‌خطی در موبایل ===== -->
-        <h1 class="brand-title"><span class="bt-full">سامانه یکپارچه صنعتی فای (Sanatify) — MES گزارش‌گیری و ردیابی تولید فولاد</span><span class="bt-compact">صنعتی فای (Sanatify) — MES فولاد</span></h1>
+        <h1 class="brand-title"><span class="bt-full">سامانه یکپارچه صنعتی فای (SANATIFY) — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</span><span class="bt-compact">صنعتی فای (SANATIFY) — ERP/MES فولاد</span></h1>
         <div class="userbar" id="userbar"></div>
         <!-- ===== FEAT-UI-4c: کنترل تم سراسری (روز/شب/خودکار) ===== -->
             <div class="thmseg" id="thmSeg" role="group" aria-label="حالت نمایش: روز، شب یا خودکار">
@@ -2208,6 +2216,8 @@
 
         </section>
     </main>
+    <!-- ===== FIX-BRAND-8d: فوتر برنددار — عنوان یکپارچه ERP/MES (چسبان به ته صفحه) ===== -->
+    <footer class="app-foot"><span class="app-foot-brand">سامانه یکپارچه صنعتی فای (SANATIFY)</span> — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</footer>
     <script>
         const API = '';
         const cache = {};
