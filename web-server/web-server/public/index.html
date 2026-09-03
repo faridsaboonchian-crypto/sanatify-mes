@@ -1132,6 +1132,21 @@
         /* ===== FIX-APS-12a (begin): عدد زندهٔ وزن‌ها + سهم نرمال‌شده — کاملاً تم‌آوار ===== */
         .aps-weights .aps-wval { min-width: 36px; text-align: center; background: #0e7490; color: #fff; border-radius: 7px; padding: 2px 7px; font-size: 11.5px; }
         body.theme-dark .aps-weights .aps-wval { background: #164e63; color: #7fd7e8; }
+        /* ===== FIX-PLAN-13a (begin): بازخورد مرئی دکمهٔ بروزرسانی سناریوها — اسپینر، توست، فلاش تغییر (تم‌آوار) ===== */
+        #apsRefresh.loading { opacity: .8; pointer-events: none; }
+        #apsRefresh.loading::before { content: '\27F3'; display: inline-block; margin-inline-end: 5px; font-weight: 700; animation: apsSpin13a .8s linear infinite; }
+        @keyframes apsSpin13a { to { transform: rotate(360deg); } }
+        .aps-flash { animation: apsFlash13a 1.6s ease-out 1; }
+        @keyframes apsFlash13a { 0% { box-shadow: 0 0 0 3px rgba(13, 148, 136, .55); background: rgba(13, 148, 136, .08); } 100% { box-shadow: 0 0 0 3px rgba(13, 148, 136, 0); background: transparent; } }
+        body.theme-dark .aps-flash { animation: apsFlashDark13a 1.6s ease-out 1; }
+        @keyframes apsFlashDark13a { 0% { box-shadow: 0 0 0 3px rgba(127, 212, 232, .5); background: rgba(127, 212, 232, .08); } 100% { box-shadow: 0 0 0 3px rgba(127, 212, 232, 0); background: transparent; } }
+        .aps-toast-host { position: fixed; bottom: 20px; right: 50%; transform: translateX(50%); z-index: 99999; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+        .aps-toast { max-width: min(480px, 92vw); background: #0f2a43; color: #e6f7ff; border: 1px solid #0e7490; border-radius: 12px; padding: 10px 16px; font-size: 12.5px; font-weight: 600; box-shadow: 0 10px 30px rgba(2, 8, 20, .35); opacity: 0; transform: translateY(8px); transition: opacity .3s, transform .3s; }
+        .aps-toast.show { opacity: 1; transform: translateY(0); }
+        .aps-toast.err { background: #7f1d1d; border-color: #ef4444; color: #fff; }
+        body.theme-dark .aps-toast { background: #071b2e; border-color: #164e63; }
+        body.theme-dark .aps-toast.err { background: #450a0a; border-color: #b91c1c; }
+        /* ===== FIX-PLAN-13a (end) ===== */
         .aps-share { font-size: 12px; font-weight: bold; color: #0f2a43; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 6px 10px; margin: 0 0 8px; display: inline-block; }
         body.theme-dark .aps-share { color: #7fb4d8; background: #0e2233; border-color: #2a4a66; }
         .aps-wexplain { font-size: 11.5px; color: #64748b; margin: 0 0 10px; line-height: 1.9; }
@@ -3679,7 +3694,12 @@ showRes();
     function renderChip() {
         const el = $('planApsEngine'); if (!el) return;
         el.textContent = st.aiCfg ? '⚙️ موتور APS داخلی + توضیح AI' : '⚙️ موتور APS داخلی';
-        const gen = $('apsGenAt'); if (gen) gen.textContent = st.genAt ? ('محاسبه: ' + fmtDate(st.genAt)) : '';
+        const gen = $('apsGenAt');
+        if (gen) { /* FIX-PLAN-13a: نمایش ثانیه در timestamp تا هر بازمحاسبهٔ مرئی باشد */
+            let g13a = '';
+            if (st.genAt) { try { g13a = 'محاسبه: ' + new Date(st.genAt).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'medium' }); } catch (e13a) { g13a = 'محاسبه: ' + fmtDate(st.genAt); } }
+            gen.textContent = g13a;
+        }
         const an = $('apsAiNote');
         if (an) { if (st.aiNote) { an.classList.remove('hidden'); an.innerHTML = '🤖 <b>توضیح اختیاری AI:</b> ' + esc(st.aiNote); } else an.classList.add('hidden'); }
     }
@@ -3742,18 +3762,43 @@ showRes();
         renderCards(list);
         renderTable(list);
     }
-    async function load() {
+    /* ===== FIX-PLAN-13a (begin): بازمحاسبهٔ اجباری از دادهٔ لحظه + بازخورد مرئی — توست/فلاش/خطا (قبلاً خطا بی‌صدا بود) ===== */
+    function apsSig13a(list) {
+        try { return JSON.stringify((list || []).map((s) => [s.id, s.kpis && s.kpis.healthy_tonnage_p50, s.kpis && s.kpis.healthy_tonnage_p10, s.kpis && s.kpis.healthy_tonnage_p90, s.kpis && s.kpis.risk, s.kpis && s.kpis.expected_waste_kg, s.kpis && s.kpis.oee_pct, s.kpis && s.kpis.confidence_mc_pct, s.kpis && s.kpis.fulfillment_pct, s.kpis && s.kpis.shortage])); } catch (e) { return String((list || []).length); }
+    }
+    function apsToast13a(msg, kind) {
         try {
-            const r = await fetch('/api/planning/scenarios', { cache: 'no-store' });
-            if (!r.ok) { const p = $('planApsPanel'); if (p && (r.status === 403 || r.status === 401)) p.classList.add('hidden'); return; }
+            let host = document.getElementById('apsToastHost');
+            if (!host) { host = document.createElement('div'); host.id = 'apsToastHost'; host.className = 'aps-toast-host'; host.setAttribute('aria-live', 'polite'); document.body.appendChild(host); }
+            const d = document.createElement('div');
+            d.className = 'aps-toast' + (kind === 'err' ? ' err' : '');
+            d.setAttribute('role', 'status');
+            d.textContent = msg;
+            host.appendChild(d);
+            setTimeout(() => d.classList.add('show'), 30);
+            setTimeout(() => { d.classList.remove('show'); setTimeout(() => d.remove(), 350); }, 4200);
+        } catch (e) { /* بی‌ضرر */ }
+    }
+    async function load(opts) {
+        const viaBtn = !!(opts && opts.via === 'button'); /* FIX-PLAN-13a: بازخورد مرئی فقط برای کلیک دکمه؛ مسیرهای خودکار/اسلایدر مثل قبل */
+        try {
+            const r = await fetch('/api/planning/scenarios?_f=' + Date.now(), { cache: 'no-store' }); /* FIX-PLAN-13a: URL یکتا + no-store = دو لایهٔ ضدکش؛ سرور از readLive() لحظه‌ای محاسبه می‌کند */
+            if (!r.ok) { const p = $('planApsPanel'); if (p && (r.status === 403 || r.status === 401)) p.classList.add('hidden'); if (viaBtn) apsToast13a('بازمحاسبهٔ سناریوها ناموفق بود (کد ' + r.status + ').', 'err'); return; }
             const j = await r.json();
+            const before = apsSig13a(st.scenarios);
             st.scenarios = j.scenarios || [];
             st.genAt = j.generated_at; st.aiCfg = !!j.ai_configured; st.aiNote = j.ai_note || null;
             st.emptyHint = (j.reasons_hint || [])[0] || null;
             st.loaded = true;
             render();
-        } catch (e) { /* بی‌ضرر */ }
+            if (viaBtn) {
+                const changed = before !== apsSig13a(st.scenarios);
+                apsToast13a(changed ? 'سناریوها از دادهٔ لحظه بازسازی شدند — اعداد/رتبه‌ها به‌روز شدند.' : 'سناریوها از دادهٔ لحظه بازسازی شدند (اعداد بدون تغییر).');
+                if (changed) { const cf = $('apsCards'), tb = $('apsTableBox'); [cf, tb].forEach((el) => { if (el) { el.classList.remove('aps-flash'); void el.offsetWidth; el.classList.add('aps-flash'); } }); }
+            }
+        } catch (e) { if (viaBtn) apsToast13a('خطا در ارتباط با سرور هنگام بازمحاسبهٔ سناریوها.', 'err'); }
     }
+    /* ===== FIX-PLAN-13a (end) ===== */
     let debT = null;
     function debounced() { clearTimeout(debT); debT = setTimeout(load, 800); } /* بازمحاسبهٔ debounced <۲ ثانیه */
     /* ===== FIX-APS-12a (begin): عدد زندهٔ هر اسلایدر + سهم نرمال‌شدهٔ سه وزن (ارقام فارسی) ===== */
@@ -3778,7 +3823,18 @@ showRes();
             el.addEventListener('input', () => { st.w[keys[i]] = Number(el.value) || 0; saveW(); render(); paintWeights(); debounced(); }); /* FIX-APS-12a: ترتیب فوری + عدد زنده + بازمحاسبهٔ debounced (تازه‌سازی «محاسبه:») */
         });
         paintWeights(); /* FIX-APS-12a: پیکرتراشی اولیهٔ عدد/سهم از مقادیر ذخیره‌شده */
-        const rb = $('apsRefresh'); if (rb) rb.addEventListener('click', load);
+        /* ===== FIX-PLAN-13a (begin): دکمهٔ بروزرسانی — اسپینر حین محاسبهٔ اجباری + غیرفعال‌سازی ضدهم‌زنی ===== */
+        const rb = $('apsRefresh');
+        if (rb) {
+            rb.title = 'بازمحاسبهٔ اجباری سناریوها از دادهٔ لحظهٔ سرور';
+            rb.addEventListener('click', async () => {
+                if (rb.classList.contains('loading')) return;
+                rb.classList.add('loading'); rb.disabled = true; rb.setAttribute('aria-busy', 'true');
+                try { await load({ via: 'button' }); }
+                finally { rb.classList.remove('loading'); rb.disabled = false; rb.removeAttribute('aria-busy'); }
+            });
+        }
+        /* ===== FIX-PLAN-13a (end) ===== */
         window.addEventListener('aps-refresh', debounced);
         const cbox = $('apsCards');
         if (cbox) cbox.addEventListener('click', (e) => {
