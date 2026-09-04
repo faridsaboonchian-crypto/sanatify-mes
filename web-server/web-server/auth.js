@@ -246,7 +246,7 @@ function loginHtml15a() {
         html = html.split('<div class="brand-name">صنعتی فای (SANATIFY)<small>').join('<div class="brand-name">' + escBrand15a(tenantBrand15a.name) + '<small>');
     }
     if (tenantBrand15a.logo) {
-        html = html.replace(/<div class="brand-mark"([^>]*)>[\s\S]*?<\/div>/, '<div class="brand-mark"><img src="' + escBrand15a(tenantBrand15a.logo) + '" alt="لوگو" style="width:34px;height:34px;border-radius:8px;object-fit:contain" /></div>');
+        html = html.replace(/<div class="brand-mark"([^>]*)>[\s\S]*?<\/div>/, '<div class="brand-mark" style="width:56px;height:56px;border-radius:15px"><img src="' + escBrand15a(tenantBrand15a.logo) + '" alt="لوگو" style="width:48px;height:48px;border-radius:12px;object-fit:contain;padding:3px;background:rgba(255,255,255,.15)" /></div>'); /* FIX-UI-18c: لوگوی لاگین متناسب بزرگ‌تر — جعبه ۵۶px + تصویر ۴۸px واضح */
     }
     /* ===== FIX-ORG-16b (begin): تزریق CSS رنگ برند — فقط HEX سنجیده‌شده ⇒ بدون ریسک تزریق ===== */
     if (tenantColors16b) {

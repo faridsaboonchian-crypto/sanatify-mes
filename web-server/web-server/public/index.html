@@ -846,6 +846,22 @@
             #nav .nav-gh18b .gh-chev18b { transition: none; }
         }
         /* ===== FIX-UI-18b (end) ===== */
+        /* ===== FIX-UI-18c (begin): لوگوی تنانت بزرگ‌تر و واضح‌تر — ۴۴px دسکتاپ / ۳۸px موبایل ===== */
+        #tenantLogo15a {
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+            border-radius: 10px;
+            padding: 2px;
+            background: rgba(255, 255, 255, .1);
+            box-shadow: 0 1px 5px rgba(2, 8, 20, .22);
+            margin-inline-end: 8px;
+            vertical-align: middle;
+        }
+        @media (max-width: 640px) {
+            #tenantLogo15a { width: 38px; height: 38px; border-radius: 9px; }
+        }
+        /* ===== FIX-UI-18c (end) ===== */
         #nav button[data-tab] {
             width: 100%;
             text-align: right;
@@ -3218,7 +3234,7 @@ box.innerHTML = html;
                     if (h1 && !document.getElementById('tenantLogo15a')) {
                         const img = document.createElement('img');
                         img.id = 'tenantLogo15a'; img.src = TENANT_15A.logo; img.alt = 'لوگو';
-                        img.style.cssText = 'width:30px;height:30px;border-radius:8px;object-fit:contain;margin-inline-end:8px;vertical-align:middle';
+                        img.style.cssText = 'object-fit:contain'; /* FIX-UI-18c: اندازه/ظاهر به CSS واگذار شد (۴۴px دسکتاپ / ۳۸px موبایل) */
                         h1.insertBefore(img, h1.firstChild);
                     }
                 }
