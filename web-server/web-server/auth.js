@@ -121,6 +121,7 @@ function clientIp15b(req) {
     if (xf) { const first = String(xf).split(',')[0].trim(); if (first) return first; }
     return (req.socket && req.socket.remoteAddress) || '?';
 }
+function activeSessions15c() { /* SAAS-15c: تعداد نشست‌های فعال برای آمار مصرف */ let n = 0; const now = Date.now(); for (const [, s] of sessions) { if (s.expires > now) n++; } return n; }
 function jsonRes(res, obj, code) {
     const body = JSON.stringify(obj);
     /* SEC-15b: حذف ACAO:* — فقط originهای مجاز tenant (پیش‌فرض همان‌مبدأ بدون هدر) */
@@ -466,5 +467,5 @@ module.exports = {
     handlePublic: handlePublic, enforce: enforce, requireRole: requireRole,
     setTenantBranding15a: setTenantBranding15a,
     setSecureCookie15b: setSecureCookie15b, setCorsConfig15b: setCorsConfig15b, isOriginAllowed15b: isOriginAllowed15b,
-    hashPassword: hashPassword, verifyPassword: verifyPassword, clientIp15b: clientIp15b, setAuditWriter15b: setAuditWriter15b, /* SEC-15b */
+    hashPassword: hashPassword, verifyPassword: verifyPassword, clientIp15b: clientIp15b, setAuditWriter15b: setAuditWriter15b, activeSessions15c: activeSessions15c, /* SEC-15b + SAAS-15c */
 };

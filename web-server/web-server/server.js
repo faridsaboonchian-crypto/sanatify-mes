@@ -186,7 +186,8 @@ function sanitizeInput15b(obj, depth) {
     const t = typeof obj;
     if (t === 'string') {
         let s = obj;
-        if (s.length > INPUT_MAX_STR_15B) s = s.slice(0, INPUT_MAX_STR_15B);
+        const isDataUrl15c = s.indexOf('data:image/') === 0; /* SEC-15c: dataURL لوگو از سقف رشته مستثنی */
+        if (!isDataUrl15c && s.length > INPUT_MAX_STR_15B) s = s.slice(0, INPUT_MAX_STR_15B);
         s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''); // کنترل‌کاراکترها (به‌جز \n \r \t)
         s = s.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return s;
@@ -422,6 +423,30 @@ function writeAudit15b(entry) {
     } catch (e) { /* بی‌ضرر */ }
 }
 auth.setAuditWriter15b(writeAudit15b); /* SEC-15b: مسیر واحد audit برای auth.js (لاگین/قفل) */
+// ===== SAAS-15c (begin): پنل مدیریت تنانت (admin) + آمار مصرف + میدل‌ویر رسمی ماژول =====
+function requireModule15c(req, res, moduleId) {
+    if (!checkModuleAccess15a(moduleId)) {
+        sendJson(res, { error: 'این ماژول در لایسنس شما فعال نیست — لطفاً با پشتیبانی تماس بگیرید.', code: 'MODULE_DISABLED', module: moduleId }, 403);
+        return false;
+    }
+    return true;
+}
+function writeTenantFile15c(cfg) {
+    const out = JSON.stringify(cfg, null, 2) + String.fromCharCode(10);
+    const tmp = TENANT_FILE_15A + '.tmp';
+    fs.writeFileSync(tmp, out, 'utf8');
+    fs.renameSync(tmp, TENANT_FILE_15A);
+}
+function tenantPublicShape15c(cfg) {
+    return {
+        tenant_id: cfg.tenant_id, name: cfg.name, logo: cfg.logo || '',
+        brand_colors: cfg.brand_colors || {}, active_modules: cfg.active_modules.slice(),
+        max_users: Number(cfg.max_users) || 0, max_records: Number(cfg.max_records) || 0,
+        custom_settings: cfg.custom_settings || {},
+        license: { expired: isLicenseExpired15a(cfg), expires_at: cfg.expires_at || '' },
+    };
+}
+// ===== SAAS-15c (end) =====
 // ===== SEC-15b (end) =====
 // ===== FEAT-HTTPS-11c (begin): هندلر به تابع نام‌دار استخراج شد تا بین HTTP و HTTPS مشترک باشد =====
 function appRequestHandler(req, res) {
@@ -569,6 +594,71 @@ function appRequestHandler(req, res) {
         }
     }
     // ===== SAAS-15a (گیت — end) =====
+
+    // ===== SAAS-15c (begin): endpointهای پنل سازمان — فقط admin =====
+    if (pathname === '/api/tenant/usage' && req.method === 'GET') {
+        if (!auth.requireRole(req, [])) return sendJson(res, { error: 'فقط مدیر سامانه مجاز است.' }, 403);
+        const cU15c = loadTenant15a();
+        const limU15c = checkTenantLimits15a();
+        let liveU15c = {};
+        try { liveU15c = readLive(); } catch (e) { /* noop */ }
+        const cntU15c = (k) => (Array.isArray(liveU15c[k]) ? liveU15c[k].length : 0);
+        const perModule15c = {
+            production: cntU15c('production_logs') + cntU15c('waste_logs') + cntU15c('downtime_logs') + cntU15c('billets') + cntU15c('furnace_logs') + cntU15c('rebar_bundles'),
+            quality: cntU15c('quality_inspections'),
+            inventory: cntU15c('inventory_items') + cntU15c('inventory_txns') + cntU15c('warehouse_txns'),
+            maintenance: cntU15c('maintenance_logs') + cntU15c('pm_plans'),
+            em: cntU15c('energy_logs'),
+            planning: cntU15c('production_plans') + cntU15c('plan_scenarios'),
+            finance: cntU15c('fin_docs'),
+        };
+        return sendJson(res, { ok: true, usage: {
+            users: limU15c.users, max_users: limU15c.maxUsers, records: limU15c.records, max_records: limU15c.maxRecords,
+            sessions_active: auth.activeSessions15c(),
+            license: { expired: isLicenseExpired15a(cU15c), expires_at: cU15c.expires_at || '' },
+            per_module: perModule15c,
+        } });
+    }
+    if (pathname === '/api/tenant/config' && req.method === 'PUT') {
+        if (!auth.requireRole(req, [])) return sendJson(res, { error: 'فقط مدیر سامانه مجاز است.' }, 403);
+        readBody(req).then((body15c) => {
+            try {
+                const b15c = JSON.parse(body15c || '{}');
+                const cfg15c = JSON.parse(JSON.stringify(loadTenant15a())); /* کپی عمیق — DEFAULT مشترک خراب نشود */
+                if (b15c.name != null) cfg15c.name = (String(b15c.name).slice(0, 80).trim() || 'صنعتی فای');
+                if (Array.isArray(b15c.active_modules)) {
+                    const mods15c = b15c.active_modules.filter((m) => MODULES_15A.indexOf(m) !== -1);
+                    if (!mods15c.length) return sendJson(res, { error: 'حداقل یک ماژول باید فعال بماند.' }, 400);
+                    cfg15c.active_modules = mods15c;
+                }
+                if (b15c.max_users != null) cfg15c.max_users = Math.max(0, Number(b15c.max_users) || 0);
+                if (b15c.max_records != null) cfg15c.max_records = Math.max(0, Number(b15c.max_records) || 0);
+                if (b15c.custom_settings && typeof b15c.custom_settings === 'object' && !Array.isArray(b15c.custom_settings)) {
+                    cfg15c.custom_settings = Object.assign({}, cfg15c.custom_settings, b15c.custom_settings); /* ادغام سطح‌اول — allowed_origins از دست نرود */
+                }
+                if (b15c.logo_clear) {
+                    try { ['tenant-logo.png', 'tenant-logo.jpg'].forEach((f15c) => { const p15c = path.join(PUBLIC_DIR, f15c); if (fs.existsSync(p15c)) fs.unlinkSync(p15c); }); } catch (e) { /* noop */ }
+                    cfg15c.logo = '';
+                }
+                const du15c = String(b15c.logo_dataurl || '').match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+\/=]+)$/);
+                if (du15c) {
+                    const buf15c = Buffer.from(du15c[2], 'base64');
+                    if (buf15c.length > 300 * 1024) return sendJson(res, { error: 'لوگو بیش از ۳۰۰ کیلوبایت است.' }, 400);
+                    const ext15c = du15c[1] === 'png' ? 'png' : 'jpg';
+                    fs.writeFileSync(path.join(PUBLIC_DIR, 'tenant-logo.' + ext15c), buf15c);
+                    cfg15c.logo = '/tenant-logo.' + ext15c;
+                }
+                writeTenantFile15c(cfg15c);
+                auth.setTenantBranding15a({ name: cfg15c.name, logo: cfg15c.logo || '' });
+                auditLog(req, 'tenant.update', { active_modules: cfg15c.active_modules, max_users: cfg15c.max_users, max_records: cfg15c.max_records, logo: cfg15c.logo });
+                return sendJson(res, { ok: true, tenant: tenantPublicShape15c(cfg15c) });
+            } catch (e) {
+                return sendJson(res, { error: 'خطا در ذخیرهٔ پیکربندی: ' + String(e && e.message ? e.message : e) }, 500);
+            }
+        });
+        return;
+    }
+    // ===== SAAS-15c (end) =====
 
     // ===== ✅ ADDITIVE — D3: endpoint اسنپ‌شات برای pull اپ (بدون نشست وب) =====
     if (pathname === '/api/snapshot') {
