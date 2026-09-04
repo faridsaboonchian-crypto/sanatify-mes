@@ -808,6 +808,44 @@
             border-bottom: 1px solid rgba(127, 180, 216, .25);
             padding-bottom: 4px;
         }
+        /* ===== FIX-UI-18b (begin): سایدبار آکاردئونی — سربرگ گروه = دکمهٔ جمع‌شو/بازشو با chevron ===== */
+        #nav .nav-gh18b {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(127, 180, 216, .25);
+            border-radius: 6px;
+            cursor: pointer;
+            color: #7fb4d8;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: bold;
+            margin: 14px 2px 6px;
+            padding: 6px 10px;
+            text-align: right;
+            min-height: 40px;
+            transition: background .2s ease;
+        }
+        #nav .nav-gh18b:hover { background: rgba(127, 180, 216, .12); }
+        #nav .nav-gh18b:focus-visible { outline: 2px solid #7fb4d8; outline-offset: 1px; }
+        #nav .nav-gh18b .gh-name18b { flex: 1; text-align: right; }
+        #nav .nav-gh18b .gh-chev18b {
+            font-size: 10px;
+            line-height: 1;
+            opacity: .85;
+            transition: transform .25s ease;
+        }
+        /* جمع‌شده: chevron به سمت چپ (RTL) */
+        #nav .nav-gh18b[aria-expanded="false"] .gh-chev18b { transform: rotate(90deg); }
+        #nav .nav-sub18b { overflow: hidden; transition: max-height .28s ease; }
+        @media (prefers-reduced-motion: reduce) {
+            #nav .nav-sub18b { transition: none; }
+            #nav .nav-gh18b .gh-chev18b { transition: none; }
+        }
+        /* ===== FIX-UI-18b (end) ===== */
         #nav button[data-tab] {
             width: 100%;
             text-align: right;
@@ -3193,6 +3231,94 @@ box.innerHTML = html;
             } catch (e) { /* بی‌ضرر — حالت پیش‌فرض */ }
         }
         /* ===== SAAS-15a (end) ===== */
+        /* ===== FIX-UI-18b (begin): سایدبار آکاردئونی — گروه‌های کشویی با ماندگاری localStorage (صرفاً UI — دکمه‌ها/نقش‌ها/لودرها دست‌نخورده) ===== */
+        (function initNavAccordion18b() {
+            const nav = document.getElementById('nav');
+            if (!nav || document.querySelector('.nav-gh18b')) return;
+            const LS_KEY_18B = 'sanatify.navGroups18b';
+            let saved18b = {};
+            try { saved18b = JSON.parse(localStorage.getItem(LS_KEY_18B) || '{}') || {}; } catch (e) { saved18b = {}; }
+            if (typeof saved18b !== 'object' || Array.isArray(saved18b)) saved18b = {};
+            const groups18b = [];
+            let cur18b = null;
+            Array.from(nav.children).forEach((el) => {
+                if (el.classList && el.classList.contains('nav-group')) {
+                    cur18b = { name: (el.textContent || '').trim(), headDiv: el, items: [] };
+                    groups18b.push(cur18b);
+                } else if (cur18b && el.id === 'navInstall') {
+                    cur18b = null; /* دکمهٔ «نصب اپ» بیرون گروه‌ها می‌ماند */
+                } else if (cur18b) {
+                    cur18b.items.push(el);
+                }
+            });
+            function persist18b() { try { localStorage.setItem(LS_KEY_18B, JSON.stringify(saved18b)); } catch (e) { /* بی‌ضرر */ } }
+            function activeInGroup18b(g) { return g.items.some((it) => it.classList && it.classList.contains('active') && it.style.display !== 'none'); }
+            function groupVisible18b(g) { return g.items.some((it) => it.style.display !== 'none'); }
+            function paintGroup18b(g) {
+                g.head.setAttribute('aria-expanded', g.open ? 'true' : 'false');
+                g.sub.style.maxHeight = g.open ? (g.sub.scrollHeight + 'px') : '0px';
+                if (g.open) { if (g._vt18b) { clearTimeout(g._vt18b); g._vt18b = null; } g.sub.style.visibility = ''; }
+                else { if (g._vt18b) clearTimeout(g._vt18b); g._vt18b = setTimeout(() => { if (!g.open) g.sub.style.visibility = 'hidden'; }, 320); }
+            }
+            function navAfterRole18b() {
+                groups18b.forEach((g) => {
+                    const empty = !groupVisible18b(g);
+                    g.head.style.display = empty ? 'none' : '';
+                    g.sub.style.display = empty ? 'none' : '';
+                    if (empty) return;
+                    if (!g.open && activeInGroup18b(g)) { g.open = true; saved18b[g.name] = true; persist18b(); } /* گروهِ تب فعال همیشه باز می‌ماند */
+                    paintGroup18b(g);
+                });
+            }
+            groups18b.forEach((g, i) => {
+                const head = document.createElement('button');
+                head.type = 'button';
+                head.className = 'nav-gh18b';
+                const subId = 'nav-sub18b-' + i;
+                head.setAttribute('aria-controls', subId);
+                head.setAttribute('aria-expanded', 'true');
+                head.innerHTML = '<span class="gh-name18b"></span><span class="gh-chev18b" aria-hidden="true">▾</span>';
+                head.querySelector('.gh-name18b').textContent = g.name;
+                const sub = document.createElement('div');
+                sub.className = 'nav-sub18b';
+                sub.id = subId;
+                nav.insertBefore(head, g.headDiv);
+                nav.insertBefore(sub, g.headDiv);
+                g.items.forEach((it) => sub.appendChild(it));
+                g.headDiv.parentNode.removeChild(g.headDiv);
+                g.head = head; g.sub = sub;
+                g.open = saved18b[g.name] !== false; /* پیش‌فرض: همهٔ گروه‌ها باز */
+                paintGroup18b(g);
+                head.addEventListener('click', () => {
+                    if (g.open && activeInGroup18b(g)) return; /* FIX-UI-18b: گروهِ تب فعال همیشه باز بماند */
+                    g.open = !g.open;
+                    saved18b[g.name] = g.open;
+                    persist18b();
+                    paintGroup18b(g);
+                });
+            });
+            /* کلیک روی هر تب ⇒ گروه همان تب باز بماند (فاز capture — قبل از هندلر موجود) */
+            nav.addEventListener('click', (e) => {
+                const btn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
+                if (!btn) return;
+                const g = groups18b.find((x) => x.items.indexOf(btn) !== -1);
+                if (g && !g.open) { g.open = true; saved18b[g.name] = true; persist18b(); paintGroup18b(g); }
+            }, true);
+            window.addEventListener('resize', () => { try { navAfterRole18b(); } catch (e) { /* بی‌ضرر */ } });
+            window.addEventListener('hashchange', () => { setTimeout(() => { try { navAfterRole18b(); } catch (e) { /* بی‌ضرر */ } }, 60); });
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { try { navAfterRole18b(); } catch (e) { /* بی‌ضرر */ } });
+            setTimeout(() => { try { navAfterRole18b(); } catch (e) { /* بی‌ضرر */ } }, 900); /* متریک‌های دیرهنگام فونت/ایموجی */
+            /* هر applyRoleUI (نقش/ماژول) ⇒ چیدمان گروه‌ها تازه شود */
+            try {
+                const origApplyRoleUI18b = applyRoleUI;
+                applyRoleUI = function () {
+                    const r = origApplyRoleUI18b.apply(this, arguments);
+                    try { navAfterRole18b(); } catch (e) { /* بی‌ضرر */ }
+                    return r;
+                };
+            } catch (e) { /* بی‌ضرر — بدون wrap هم آکاردئون کار می‌کند */ }
+        })();
+        /* ===== FIX-UI-18b (end) ===== */
         /* ===== SAAS-15c (begin): پنل سازمان + گیت لایسنس ===== */
         const ORG_MOD_FA_15C = { summary: 'خلاصه و شاخص‌ها', analytics: 'داشبورد تحلیلی', production: 'تولید', quality: 'کیفیت', inventory: 'انبار', maintenance: 'تعمیرات (PM/EM)', em: 'مدیریت انرژی', planning: 'برنامه‌ریزی', finance: 'مالی' };
         /* ===== FIX-ORG-16a (begin): فرم پنل سازمان حین تایپ هرگز بازسازی نمی‌شود =====
