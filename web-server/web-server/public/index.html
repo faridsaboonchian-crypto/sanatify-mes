@@ -1264,6 +1264,12 @@
         .org-usage table { width:100%; border-collapse:collapse; font-size:12.5px; }
         .org-usage td, .org-usage th { border:1px solid #e2e8f0; padding:6px 8px; text-align:right; }
         .org-usage th { background:#f8fafc; color:#0f2a43; width:55%; }
+        /* ===== FIX-ORG-16c (begin): زیرعنوان بخش‌های جدول + یادداشت راهنما ===== */
+        .org-usage tr.org-usage-sub th { background:#e2e8f0; color:#0f2a43; font-size:11px; font-weight:800; letter-spacing:.2px; width:100%; }
+        .org-usage-note { font-size:11.5px; color:#475569; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:7px 10px; margin-top:8px; line-height:1.9; }
+        body.bi-dark #tab-org .org-usage tr.org-usage-sub th { background:#0f2a43; color:#cfe3f5; }
+        body.bi-dark #tab-org .org-usage-note { background:#0b1622; border-color:#1e3a52; color:#9fb8cd; }
+        /* ===== FIX-ORG-16c (end) ===== */
         body.bi-dark #tab-org .org-card { background:#10293c; border-color:#1e3a52; }
         body.bi-dark #tab-org .org-card h3, body.bi-dark #tab-org .org-lbl { color:#dbe7f3; }
         body.bi-dark #tab-org .org-mods label { background:#0b1622; border-color:#1e3a52; color:#cfe3f5; }
@@ -3193,16 +3199,24 @@ box.innerHTML = html;
                 if (!r.ok) { const u = document.getElementById('orgUsage'); if (u) u.textContent = 'دسترسی به آمار مصرف فقط برای مدیر سامانه.'; return; }
                 const j = await r.json();
                 const us = j.usage || {};
-                const rows = [
-                    ['کاربران تعریف‌شده', (us.users || 0) + ' / ' + (us.max_users || '∞')],
-                    ['رکوردهای ذخیره‌شده', (us.records || 0) + ' / ' + (us.max_records || '∞')],
-                    ['نشست‌های فعال', us.sessions_active || 0],
+                /* ===== FIX-ORG-16c (begin): تفکیک صریح «رکورد» از «کاربر» — زیرعنوان‌ها + واحدها + یادداشت راهنما ===== */
+                const rows16c = [
+                    ['__sub', 'حساب‌های کاربری (نفر)'],
+                    ['کاربران تعریف‌شده', fa(us.users || 0) + ' نفر / سقف ' + (us.max_users ? fa(us.max_users) + ' نفر' : '∞')],
+                    ['نشست‌های فعال', fa(us.sessions_active || 0) + ' نشست'],
+                    ['__sub', 'ظرفیت ذخیره‌سازی (رکورد)'],
+                    ['رکوردهای ذخیره‌شده (کل)', groupFa(us.records || 0) + ' رکورد / سقف ' + (us.max_records ? groupFa(us.max_records) + ' رکورد' : '∞')],
                     ['وضعیت لایسنس', us.license && us.license.expired ? 'منقضی ⚠' : (us.license && us.license.expires_at ? 'معتبر تا ' + us.license.expires_at.slice(0, 10) : 'بدون محدودیت زمانی')],
+                    ['__sub', 'رکوردهای ذخیره‌شده (تعداد) به تفکیک ماژول'],
                 ];
                 const pm = us.per_module || {};
-                Object.keys(pm).forEach((k) => rows.push([ORG_MOD_FA_15C[k] || k, pm[k]]));
+                Object.keys(pm).forEach((k) => rows16c.push([ORG_MOD_FA_15C[k] || k, groupFa(pm[k]) + ' رکورد']));
                 const u = document.getElementById('orgUsage');
-                if (u) u.innerHTML = '<table>' + rows.map((r2) => '<tr><th>' + r2[0] + '</th><td>' + r2[1] + '</td></tr>').join('') + '</table>';
+                if (u) u.innerHTML = '<table>' + rows16c.map((r2) => r2[0] === '__sub'
+                    ? '<tr class="org-usage-sub"><th colspan="2">' + r2[1] + '</th></tr>'
+                    : '<tr><th>' + r2[0] + '</th><td>' + r2[1] + '</td></tr>').join('') + '</table>'
+                    + '<div class="org-usage-note">ℹ️ این اعداد تعداد رکوردهای ذخیره‌شده است، نه محدودیت کاربر؛ سقف کاربران و رکورد در فرم «سقف کاربران/سقف رکوردها» همین پنل تنظیم می‌شود.</div>';
+                /* ===== FIX-ORG-16c (end) ===== */
                 const chip = document.getElementById('orgChip');
                 if (chip) chip.textContent = 'لایسنس: ' + (us.license && us.license.expired ? 'منقضی ⚠' : 'فعال');
             } catch (e) { /* بی‌ضرر */ }
