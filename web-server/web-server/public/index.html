@@ -3901,7 +3901,19 @@ showRes();
     const BI_COLORS = { navy: '#0f2a43', teal: '#0e7490', orange: '#f97316', green: '#059669', red: '#dc2626', amber: '#d97706', gray: '#64748b' };
     const biPal = [BI_COLORS.teal, BI_COLORS.orange, BI_COLORS.green, BI_COLORS.amber, BI_COLORS.red, BI_COLORS.navy, '#7c3aed', '#0891b2'];
     const biTf = { production: 'timestamp', waste: 'timestamp', downtime: 'start_time', bundles: 'produced_at', billets: 'received_at' };
-    function biIn(ts, from) { if (!from) return true; if (!ts) return false; const d = new Date(ts); return !isNaN(d.getTime()) && d >= from; }
+    function biIn(ts, from) { if (!from) return true; if (!ts) return false; const d = biDate(ts); return !isNaN(d.getTime()) && d >= from; }
+    /* ===== FIX-AN-20b (begin): پارس تاریخ رکوردهای باندل/شمش — رکوردهای واقعی کارخانه تاریخ شمسی دارند (مثل «۱۴۰۵/۰۵/۱۴» یا «1405/06/01 10:30») و new Date() آن‌ها را نمی‌شناسد؛ در نتیجه روند تناژ سالم صفر تخت، روند راندمان مواد و روند پذیرش QC خالی می‌شد (باندل/شمش از سبدِ روز حذف می‌شدند) درحالی‌که کارت خلاصه ۸٫۶ تن نشان می‌داد (feux1In در بازهٔ «کل» پارس تاریخ را short-circuit می‌کند) و پارتوها پر بودند (timestamp توقفات/ضایعات ISO سروری است). این کمکی اول جلالی (با ارقام فارسی/لاتین + ساعت اختیاری) و خارج از بازهٔ جلالی (سال <۱۳۰۰ یا >۱۵۰۰) به new Date() برمی‌گردد؛ ISO/epoch دقیقاً مثل قبل — فقط همین سه نقطه پارس در buildBI عوض می‌شود ===== */
+    function biDate(ts) {
+        if (typeof ts === 'number') return new Date(ts);
+        const s = toEnDigits(String(ts == null ? '' : ts).trim());
+        const m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:[\sT]+(\d{1,2}):(\d{2}))?/);
+        if (!m) return new Date(ts);
+        const jy = Number(m[1]);
+        if (jy < 1300 || jy > 1500) return new Date(ts); /* گریگوریان با اسلش — مثل قبل */
+        const d = parseJalaliDateTime(m[1] + '/' + m[2] + '/' + m[3], m[4] != null ? (m[4] + ':' + m[5]) : '');
+        return d || new Date(NaN);
+    }
+    /* ===== FIX-AN-20b (end) ===== */
     function biRows(key) { return (cache[key] || []).filter((r) => biIn(r[biTf[key] || 'timestamp'], biState.from) && flt3BiOk(r)); } /* ===== FEAT-FLT-3: فیلتر شیفت/محصول پنل فیلتر روی داشبورد تحلیلی ===== */ function flt3BiOk(r) { if (activeFilter.shift !== 'all' && r.shift_id && r.shift_id !== activeFilter.shift) return false; const p = activeFilter.product; if (p === 'all') return true; if (r.product_id) return String(r.product_id) === p; const m = /^RB-(\d+)$/.exec(String(p || '')); if (m && r.rebar_size != null) return Number(r.rebar_size) === Number(m[1]); if (p === '5SP') { const g = r.rebar_grade != null ? r.rebar_grade : r.grade; if (g != null) return String(g) === '5SP'; } return true; }
     let biState = { from: null, size: 'all', gran: 'day' };
     function biBuckets() {
@@ -3920,7 +3932,7 @@ showRes();
     function biSeries(rows, tf, valFn, buckets, skipSizeFilter) {
         return buckets.map((b) => {
             let v = 0;
-            rows.forEach((r) => { const d = new Date(r[tf]); if (!isNaN(d.getTime()) && d >= b.s && d <= b.e && (skipSizeFilter || biSizeOk(r))) { const x = valFn(r); if (x !== null) v += x; } });
+            rows.forEach((r) => { const d = biDate(r[tf]); if (!isNaN(d.getTime()) && d >= b.s && d <= b.e && (skipSizeFilter || biSizeOk(r))) { const x = valFn(r); if (x !== null) v += x; } });
             return { lab: b.lab, v: Math.round(v * 100) / 100 };
         });
     }
@@ -4007,7 +4019,7 @@ showRes();
         (() => {
             const bk = biBuckets();
             const ser = bk.map((b) => {
-                const dd = bd.filter((r) => { const d = new Date(r.produced_at); return !isNaN(d.getTime()) && d >= b.s && d <= b.e && biSizeOk(r) && (r.quality_status === 'APPROVED' || r.quality_status === 'REJECTED'); });
+                const dd = bd.filter((r) => { const d = biDate(r.produced_at); return !isNaN(d.getTime()) && d >= b.s && d <= b.e && biSizeOk(r) && (r.quality_status === 'APPROVED' || r.quality_status === 'REJECTED'); });
                 return { lab: b.lab, v: dd.length ? Math.round(dd.filter((r) => r.quality_status === 'APPROVED').length / dd.length * 1000) / 10 : null };
             });
             biDraw('bi-qc', { type: 'line', data: { labels: ser.map((x) => x.lab), datasets: [{ label: '٪ پذیرش', data: ser.map((x) => x.v), borderColor: BI_COLORS.teal, backgroundColor: 'rgba(14,116,144,.14)', borderWidth: 2.5, pointRadius: 2, tension: .35, spanGaps: true }] }, options: Object.assign({}, baseOpts, { scales: { x: ax.x, y: Object.assign({}, ax.y, { max: 105 }) } }) });
