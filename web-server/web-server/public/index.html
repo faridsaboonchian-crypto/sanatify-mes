@@ -3112,6 +3112,12 @@ box.innerHTML = html;
         /* ===== SAAS-15a (end) ===== */
         /* ===== SAAS-15c (begin): پنل سازمان + گیت لایسنس ===== */
         const ORG_MOD_FA_15C = { summary: 'خلاصه و شاخص‌ها', analytics: 'داشبورد تحلیلی', production: 'تولید', quality: 'کیفیت', inventory: 'انبار', maintenance: 'تعمیرات (PM/EM)', em: 'مدیریت انرژی', planning: 'برنامه‌ریزی', finance: 'مالی' };
+        /* ===== FIX-ORG-16a (begin): فرم پنل سازمان حین تایپ هرگز بازسازی نمی‌شود =====
+           ریشهٔ باگ: loaders.org هر ۱۵ ثانیه (refreshCurrentTab) کل فرم را با openOrgPanel15c بازسازی
+           می‌کرد و مقادیر تایپ‌شده پاک می‌شد. راه‌حل: پرچم کثیف + تیک خودکار ⇒ فقط بخش آمار تازه شود. */
+        let orgFormDirty16a = false;
+        function markOrgDirty16a() { orgFormDirty16a = true; }
+        /* ===== FIX-ORG-16a (end) ===== */
         let licenseGateEl15c = null;
         function showLicenseGate15c(on) {
             try {
@@ -3172,7 +3178,18 @@ box.innerHTML = html;
             loadOrg15c();
         }
         document.addEventListener('DOMContentLoaded', function () {
-            if (loaders) loaders.org = openOrgPanel15c; /* SAAS-15c: پس از مقداردهی loaders */
+            /* ===== FIX-ORG-16a: wrappers لودر تب سازمان — تیک خودکار (autoTick) یا فرم کثیف ⇒ فقط آمار؛
+               بازسازی کامل فرم فقط با ورودِ دستی به تب در حالت تمیز (مقادیر سرور دوباره پر می‌شود) ===== */
+            if (loaders) loaders.org = function () {
+                if (autoTick || orgFormDirty16a) { loadOrg15c(); return; }
+                openOrgPanel15c();
+            };
+            /* ===== FIX-ORG-16a: هر تایپ/تغییر در هر ورودی تب سازمان ⇒ فرم کثیف — بازسازی خودکار ممنوع ===== */
+            const orgTab16a = document.getElementById('tab-org');
+            if (orgTab16a) {
+                orgTab16a.addEventListener('input', markOrgDirty16a);
+                orgTab16a.addEventListener('change', markOrgDirty16a);
+            }
             const save = document.getElementById('orgSave');
             if (save) save.addEventListener('click', async function () {
                 const msg = document.getElementById('orgMsg');
@@ -3198,6 +3215,7 @@ box.innerHTML = html;
                     if (!r.ok) { if (msg) { msg.textContent = j.error || 'خطا در ذخیره'; msg.classList.add('err'); } return; }
                     if (msg) msg.textContent = '✔ ذخیره شد — تغییرات بلافاصله برای همهٔ کاربران اعمال شد.';
                     TENANT_15A = j.tenant || TENANT_15A;
+                    orgFormDirty16a = false; /* FIX-ORG-16a: پس از ذخیرهٔ موفق فرم تمیز است */
                     applyTenant15a();
                     applyRoleUI();
                     loadOrg15c();
@@ -3207,7 +3225,7 @@ box.innerHTML = html;
             if (clr) clr.addEventListener('click', async function () {
                 try {
                     const r = await fetch('/api/tenant/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ logo_clear: true }) });
-                    if (r.ok) { const j = await r.json(); TENANT_15A = j.tenant || TENANT_15A; applyTenant15a(); const li = document.getElementById('orgLogo'); if (li) li.value = ''; loadOrg15c(); }
+                    if (r.ok) { const j = await r.json(); TENANT_15A = j.tenant || TENANT_15A; orgFormDirty16a = false; /* FIX-ORG-16a */ applyTenant15a(); const li = document.getElementById('orgLogo'); if (li) li.value = ''; loadOrg15c(); }
                 } catch (e) { /* بی‌ضرر */ }
             });
         });
