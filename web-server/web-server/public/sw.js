@@ -5,7 +5,7 @@
    (≤~۱ ثانیه حتی cold start روی LAN کند)؛ واکشی تازه در پس‌زمینه؛ پاسخ‌های redirect (جلسهٔ منقضی)
    هرگز کش نمی‌شوند؛ ارتقای نسخهٔ کش تا نصب‌های قدیمی خودبه‌خود مهاجرت کنند ===== */
 'use strict';
-var SHELL_CACHE = 'sanatify-shell-v11a1'; /* FIX-PWA-11a: ناوبری cache-first — نصب‌های قدیمی خودبه‌خود مهاجرت می‌کنند */
+var SHELL_CACHE = 'sanatify-shell-v11a2'; /* FIX-PWA-11a + REVERT-UI-18b: bump نسخه — شل‌های قدیمی (آکاردئون 18b) در نصب‌های موجود خودبه‌خود تازه می‌شوند */
 var SHELL_ASSETS = [
     '/manifest.webmanifest',
     '/icon-192.png',
