@@ -535,7 +535,8 @@ function appRequestHandler(req, res) {
     // ===== SAAS-15a (end) =====
     // ===== FEAT-PWA-8b (begin): دارایی‌های عمومی PWA بدون احراز هویت — فقط مانیفست/سرویس‌ورکر/آیکون برند (بدون هیچ دادهٔ حساس) =====
     /* ===== FIX-PWA-10c: favicon هم به لیست عمومی PWA افزوده شد ===== */
-    if (req.method === 'GET' && (pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/icon-192.png' || pathname === '/icon-512.png' || pathname === '/favicon.ico')) {
+    /* ===== FIX-AN-20a: Chart.js محلی (/vendor/chart.umd.min.js) هم عمومی شد — وگرنه 302 به /login برمی‌گشت و اسکریپت مثل CDNِ قطع parse-error می‌داد؛ کتابخانهٔ عمومی MIT است و هیچ دادهٔ حساسی ندارد ===== */
+    if (req.method === 'GET' && (pathname === '/manifest.webmanifest' || pathname === '/sw.js' || pathname === '/icon-192.png' || pathname === '/icon-512.png' || pathname === '/favicon.ico' || pathname === '/vendor/chart.umd.min.js')) {
         // ===== SAAS-15a: مانیفست/فاوآیکون پویا فقط وقتی tenant.json واقعاً موجود است — وگرنه رفتار سابق =====
         loadTenant15a();
         if (tenantCache15a) {
@@ -571,6 +572,7 @@ function appRequestHandler(req, res) {
         const h2 = { 'Cache-Control': 'no-cache' };
         if (pathname === '/manifest.webmanifest') h2['Content-Type'] = 'application/manifest+json; charset=utf-8';
         else if (pathname === '/sw.js') { h2['Content-Type'] = 'text/javascript; charset=utf-8'; h2['Service-Worker-Allowed'] = '/'; }
+        else if (pathname === '/vendor/chart.umd.min.js') h2['Content-Type'] = 'text/javascript; charset=utf-8'; /* FIX-AN-20a */
         else h2['Content-Type'] = 'image/png';
         fs.readFile(fp2, (err2, data2) => {
             if (err2) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 Not Found'); return; }

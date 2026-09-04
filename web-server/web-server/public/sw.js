@@ -5,12 +5,13 @@
    (≤~۱ ثانیه حتی cold start روی LAN کند)؛ واکشی تازه در پس‌زمینه؛ پاسخ‌های redirect (جلسهٔ منقضی)
    هرگز کش نمی‌شوند؛ ارتقای نسخهٔ کش تا نصب‌های قدیمی خودبه‌خود مهاجرت کنند ===== */
 'use strict';
-var SHELL_CACHE = 'sanatify-shell-v11a2'; /* FIX-PWA-11a + REVERT-UI-18b: bump نسخه — شل‌های قدیمی (آکاردئون 18b) در نصب‌های موجود خودبه‌خود تازه می‌شوند */
+var SHELL_CACHE = 'sanatify-shell-v11a3'; /* FIX-PWA-11a + FIX-AN-20a: bump نسخه — نصب‌های موجود PWA خودبه‌خود شل تازه می‌گیرند (index.html با Chart.js محلی + پریکش فایل /vendor/chart.umd.min.js) */
 var SHELL_ASSETS = [
     '/manifest.webmanifest',
     '/icon-192.png',
     '/icon-512.png',
     '/favicon.ico',
+    '/vendor/chart.umd.min.js' /* FIX-AN-20a: Chart.js محلی — آفلاین هم نمودارها کار کند (قبلاً نسخهٔ CDN کش اول بود) */,
     '/login',
     '/index.html' /* FIX-PWA-11a: پیش‌بارگذاری شل — cold start فوری از همان نصب اول */
 ];

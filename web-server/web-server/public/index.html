@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>سامانه یکپارچه صنعتی فای (SANATIFY) — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
-    </script>
+    <!-- ===== FIX-AN-20a (begin): Chart.js از همان سرور سرو می‌شود (self-hosted) — وابستگی نمودارها به CDN خارجی (jsdelivr) حذف شد؛ در شبکهٔ استقرار واقعی دسترسی به jsdelivr قطع/ناپایدار است و بارگذاری نشدن این فایل فقط در تب «داشبورد تحلیلی» چراغ اتصال را قرمز و پارتو را خالی می‌کرد (buildAnalytics تنها سازندهٔ نمودار بدون گارد window.Chart است) ===== -->
+    <script src="/vendor/chart.umd.min.js"></script>
+    <!-- ===== FIX-AN-20a (end) ===== -->
     <!-- ===== FEAT-PWA-8b (begin): PWA SANATIFY ===== -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0f2a43" />
