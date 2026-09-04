@@ -9,6 +9,7 @@
   "active_modules": ["summary", "analytics", "production", "quality", "inventory", "maintenance", "em", "planning", "finance"],
   "max_users": 0,
   "max_records": 0,
+  "role_caps": {},
   "license_key": "",
   "expires_at": "",
   "custom_settings": {

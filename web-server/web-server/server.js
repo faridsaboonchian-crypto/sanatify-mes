@@ -266,6 +266,7 @@ const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory
 const DEFAULT_TENANT_15A = {
     tenant_id: 'sanatify', name: 'صنعتی فای', logo: '', brand_colors: {},
     active_modules: MODULES_15A.slice(), max_users: 0, max_records: 0,
+    role_caps: {}, /* FEAT-ADMIN-17a: سقف نفرات هر نقش (۰ = بی‌سقف) */
     license_key: '', expires_at: '', custom_settings: {}
 };
 let tenantCache15a = null, tenantMtime15a = 0;
@@ -281,6 +282,7 @@ function loadTenant15a() {
         else cfg.active_modules = cfg.active_modules.filter((m) => MODULES_15A.indexOf(m) !== -1);
         if (!cfg.active_modules.length) cfg.active_modules = MODULES_15A.slice(); // پیکربندی خراب → قفل کامل نه؛ همهٔ ماژول‌ها
         if (!cfg.custom_settings || typeof cfg.custom_settings !== 'object' || Array.isArray(cfg.custom_settings)) cfg.custom_settings = {};
+        if (!cfg.role_caps || typeof cfg.role_caps !== 'object' || Array.isArray(cfg.role_caps)) cfg.role_caps = {}; /* FEAT-ADMIN-17a */
         tenantCache15a = cfg; tenantMtime15a = st.mtimeMs;
         return cfg;
     } catch (e) {
@@ -442,10 +444,18 @@ function tenantPublicShape15c(cfg) {
         tenant_id: cfg.tenant_id, name: cfg.name, logo: cfg.logo || '',
         brand_colors: cfg.brand_colors || {}, active_modules: cfg.active_modules.slice(),
         max_users: Number(cfg.max_users) || 0, max_records: Number(cfg.max_records) || 0,
+        role_caps: cfg.role_caps || {}, /* FEAT-ADMIN-17a */
         custom_settings: cfg.custom_settings || {},
         license: { expired: isLicenseExpired15a(cfg), expires_at: cfg.expires_at || '' },
     };
 }
+// ===== FEAT-ADMIN-17a (begin): ثابت‌های نقش + خوانندهٔ فایل کاربران =====
+const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer']; /* همان کلیدهای ROLE_VIEW — دست نخورده */
+const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده' };
+function readUsers17a() {
+    try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+// ===== FEAT-ADMIN-17a (end) =====
 // ===== SAAS-15c (end) =====
 // ===== SEC-15b (end) =====
 // ===== FEAT-HTTPS-11c (begin): هندلر به تابع نام‌دار استخراج شد تا بین HTTP و HTTPS مشترک باشد =====
@@ -586,7 +596,7 @@ function appRequestHandler(req, res) {
         if (modGate15a && !checkModuleAccess15a(modGate15a)) {
             return sendJson(res, { error: 'این ماژول در لایسنس شما فعال نیست — لطفاً با پشتیبانی تماس بگیرید.', code: 'MODULE_DISABLED', module: modGate15a }, 403);
         }
-        if (req.method !== 'GET') {
+        if (req.method !== 'GET' && pathname.indexOf('/api/admin/') !== 0) { /* FEAT-ADMIN-17a: مدیریت کاربران هرگز با سقف پر بلوک نمی‌شود (غیرفعال‌سازی باید همیشه ممکن باشد) — سقف‌ها داخل خود endpoint اعمال می‌شوند */
             const limGate15a = checkTenantLimits15a();
             if (!limGate15a.ok) {
                 return sendJson(res, { error: 'سقف ظرفیت لایسنس پر شده است (کاربران: ' + limGate15a.users + '/' + (limGate15a.maxUsers || '∞') + ' — رکوردها: ' + limGate15a.records + '/' + (limGate15a.maxRecords || '∞') + ') — لطفاً با پشتیبانی تماس بگیرید.', code: 'LIMIT_REACHED' }, 403);
@@ -633,6 +643,17 @@ function appRequestHandler(req, res) {
                 }
                 if (b15c.max_users != null) cfg15c.max_users = Math.max(0, Number(b15c.max_users) || 0);
                 if (b15c.max_records != null) cfg15c.max_records = Math.max(0, Number(b15c.max_records) || 0);
+                /* ===== FEAT-ADMIN-17a (begin): سقف نفرات هر نقش (role_caps) — کلیدهای نامعتبر حذف، مقدار ≥۰ ===== */
+                if (b15c.role_caps != null) {
+                    if (typeof b15c.role_caps !== 'object' || Array.isArray(b15c.role_caps)) return sendJson(res, { error: 'سقف نقش‌ها نامعتبر است.' }, 400);
+                    const rc17a = {};
+                    Object.keys(b15c.role_caps).forEach((r17a) => {
+                        if (ROLES_17A.indexOf(r17a) === -1) return; /* نقش خارج از فهرست — نادیده */
+                        rc17a[r17a] = Math.max(0, Math.floor(Number(b15c.role_caps[r17a]) || 0));
+                    });
+                    cfg15c.role_caps = rc17a;
+                }
+                /* ===== FEAT-ADMIN-17a (end) ===== */
                 /* ===== FIX-ORG-16b (begin): رنگ‌های برند از پنل — فقط HEX شش‌رقمی؛ خالی = برند پیش‌فرض ===== */
                 if (b15c.brand_colors != null) {
                     if (typeof b15c.brand_colors !== 'object' || Array.isArray(b15c.brand_colors)) return sendJson(res, { error: 'رنگ‌های برند نامعتبر است.' }, 400);
@@ -673,6 +694,161 @@ function appRequestHandler(req, res) {
         return;
     }
     // ===== SAAS-15c (end) =====
+
+    // ===== FEAT-ADMIN-17a (begin): مدیریت کاربران و نقش‌ها از پنل سازمان — فقط admin، بدون ویرایش فایل =====
+    if (pathname === '/api/admin/users' && req.method === 'GET') {
+        if (!auth.requireRole(req, [])) return sendJson(res, { error: 'فقط مدیر سامانه مجاز است.' }, 403);
+        const users17a = readUsers17a();
+        const cfg17a = loadTenant15a();
+        const roleCounts17a = {};
+        ROLES_17A.forEach((r) => { roleCounts17a[r] = 0; });
+        let activeUsers17a = 0;
+        const list17a = users17a.map((u) => {
+            const act17a = u.active !== false;
+            if (act17a) { activeUsers17a++; if (roleCounts17a[u.role] !== undefined) roleCounts17a[u.role]++; }
+            return { username: String(u.username || ''), name: String(u.name || ''), role: String(u.role || 'viewer'), active: act17a, sessions: auth.activeSessionCount17a(u.username) };
+        });
+        return sendJson(res, {
+            ok: true,
+            users: list17a,
+            role_counts: roleCounts17a,
+            role_caps: cfg17a.role_caps || {},
+            total_users: list17a.length,
+            active_users: activeUsers17a,
+            max_users: Number(cfg17a.max_users) || 0,
+        });
+    }
+    if (pathname === '/api/admin/users' && req.method === 'POST') {
+        if (!auth.requireRole(req, [])) return sendJson(res, { error: 'فقط مدیر سامانه مجاز است.' }, 403);
+        readBody(req).then((body17a) => {
+            try {
+                const b17a = JSON.parse(body17a || '{}');
+                const username17a = String(b17a.username || '').trim();
+                const name17a = String(b17a.name || '').trim().slice(0, 80);
+                const role17a = String(b17a.role || '').trim();
+                const password17a = b17a.password != null ? String(b17a.password) : '';
+                if (!/^[A-Za-z0-9._-]{3,40}$/.test(username17a)) return sendJson(res, { error: 'نام کاربری باید ۳ تا ۴۰ کاراکتر لاتین، عدد، نقطه، زیرخط یا خط تیره باشد.' }, 400);
+                if (!name17a) return sendJson(res, { error: 'نام کامل کاربر الزامی است.' }, 400);
+                if (ROLES_17A.indexOf(role17a) === -1) return sendJson(res, { error: 'نقش انتخاب‌شده نامعتبر است.' }, 400);
+                if (password17a.length < 6 || password17a.length > 128) return sendJson(res, { error: 'رمز موقت باید حداقل ۶ کاراکتر باشد.' }, 400);
+                const users17a = readUsers17a();
+                if (users17a.some((u) => String(u.username || '').toLowerCase() === username17a.toLowerCase())) return sendJson(res, { error: 'این نام کاربری قبلاً ثبت شده است.' }, 400);
+                /* سقف سراسری کاربران لایسنس (۰ = بی‌سقف) — همان شمارندهٔ موتور لایسنس */
+                const lim17a = checkTenantLimits15a();
+                if (lim17a.maxUsers > 0 && lim17a.users >= lim17a.maxUsers) {
+                    return sendJson(res, { error: 'سقف کاربران لایسنس پر است (' + lim17a.users + ' از ' + lim17a.maxUsers + ') — ابتدا سقف را در فرم پنل افزایش دهید.', code: 'MAX_USERS' }, 403);
+                }
+                /* سقف نفرات این نقش (role_caps — ۰ = بی‌سقف)؛ فقط کاربران فعال شمرده می‌شوند */
+                const cfg17a = loadTenant15a();
+                const cap17a = Number((cfg17a.role_caps || {})[role17a]) || 0;
+                if (cap17a > 0) {
+                    const inRole17a = users17a.filter((u) => u.role === role17a && u.active !== false).length;
+                    if (inRole17a >= cap17a) {
+                        return sendJson(res, { error: 'سقف نقش «' + (ROLE_FA_17A[role17a] || role17a) + '» پر است (' + inRole17a + ' نفر از ' + cap17a + ') — ابتدا سقف را افزایش دهید یا کاربری از این بخش را غیرفعال کنید.', code: 'ROLE_CAP' }, 403);
+                    }
+                }
+                /* رمز همین لحظه هش می‌شود — plaintext هرگز ذخیره/لاگ نمی‌شود */
+                users17a.push({ username: username17a, name: name17a, role: role17a, active: true, password_hash: auth.hashPassword(password17a), created_at: new Date().toISOString(), created_by: req.user.username });
+                if (!auth.writeUsers17a(users17a)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
+                auditLog(req, 'admin.user_add', { username: username17a, role: role17a, users_total: users17a.length });
+                return sendJson(res, { ok: true, username: username17a, role: role17a });
+            } catch (e) {
+                return sendJson(res, { error: 'خطا در افزودن کاربر: ' + String(e && e.message ? e.message : e) }, 500);
+            }
+        });
+        return;
+    }
+    if (pathname === '/api/admin/users' && req.method === 'PUT') {
+        if (!auth.requireRole(req, [])) return sendJson(res, { error: 'فقط مدیر سامانه مجاز است.' }, 403);
+        readBody(req).then((body17a) => {
+            try {
+                const b17a = JSON.parse(body17a || '{}');
+                const username17a = String(b17a.username || '').trim();
+                if (!username17a) return sendJson(res, { error: 'نام کاربری الزامی است.' }, 400);
+                const users17a = readUsers17a();
+                const idx17a = users17a.findIndex((u) => String(u.username || '').toLowerCase() === username17a.toLowerCase());
+                if (idx17a === -1) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
+                const u17a = users17a[idx17a];
+                const isSelf17a = username17a.toLowerCase() === String(req.user.username || '').toLowerCase();
+                const changed17a = {};
+                let deactivate17a = false, roleChanged17a = false;
+                if (b17a.name != null) {
+                    const nm17a = String(b17a.name).trim().slice(0, 80);
+                    if (!nm17a) return sendJson(res, { error: 'نام کامل نمی‌تواند خالی باشد.' }, 400);
+                    if (nm17a !== String(u17a.name || '')) { u17a.name = nm17a; changed17a.name = nm17a; }
+                }
+                if (b17a.role != null) {
+                    const role17a = String(b17a.role).trim();
+                    if (ROLES_17A.indexOf(role17a) === -1) return sendJson(res, { error: 'نقش انتخاب‌شده نامعتبر است.' }, 400);
+                    if (role17a !== String(u17a.role || '')) {
+                        if (isSelf17a) return sendJson(res, { error: 'تغییر نقش حساب خودتان مجاز نیست — از حساب مدیر دیگری استفاده کنید.' }, 400);
+                        if (u17a.role === 'admin' && u17a.active !== false) {
+                            const admins17a = users17a.filter((x) => x.role === 'admin' && x.active !== false).length;
+                            if (admins17a <= 1) return sendJson(res, { error: 'حداقل یک مدیر فعال باید باقی بماند.' }, 400);
+                        }
+                        /* سقف نقش مقصد (فقط کاربران فعال شمرده می‌شوند) */
+                        const capDst17a = Number((loadTenant15a().role_caps || {})[role17a]) || 0;
+                        if (capDst17a > 0 && u17a.active !== false) {
+                            const inDst17a = users17a.filter((x) => x.role === role17a && x.active !== false).length;
+                            if (inDst17a >= capDst17a) return sendJson(res, { error: 'سقف نقش «' + (ROLE_FA_17A[role17a] || role17a) + '» پر است (' + inDst17a + ' نفر از ' + capDst17a + ') — ابتدا سقف را افزایش دهید.', code: 'ROLE_CAP' }, 403);
+                        }
+                        u17a.role = role17a; changed17a.role = role17a; roleChanged17a = true;
+                    }
+                }
+                if (b17a.active != null) {
+                    const act17a = !!b17a.active;
+                    if (!act17a && u17a.active !== false) {
+                        if (isSelf17a) return sendJson(res, { error: 'غیرفعال‌کردن حساب خودتان مجاز نیست.' }, 400);
+                        if (u17a.role === 'admin') {
+                            const admins17a = users17a.filter((x) => x.role === 'admin' && x.active !== false).length;
+                            if (admins17a <= 1) return sendJson(res, { error: 'حداقل یک مدیر فعال باید باقی بماند.' }, 400);
+                        }
+                        u17a.active = false; changed17a.active = false; deactivate17a = true;
+                    } else if (act17a && u17a.active === false) {
+                        u17a.active = true; changed17a.active = true;
+                    }
+                }
+                if (!Object.keys(changed17a).length) return sendJson(res, { ok: true, message: 'تغییری اعمال نشد — مقادیر همان مقادیر قبلی است.' });
+                if (!auth.writeUsers17a(users17a)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
+                /* غیرفعال‌سازی/تغییر نقش ⇒ نشست‌های زندهٔ همان کاربر بسته می‌شود (خروج در درخواست بعدی) */
+                let killed17a = 0;
+                if (deactivate17a || roleChanged17a) killed17a = auth.killSessionsByUsername17a(u17a.username);
+                else if (changed17a.name) auth.refreshSessionUser17a(u17a.username, { name: changed17a.name });
+                auditLog(req, deactivate17a ? 'admin.user_deactivate' : 'admin.user_update', { username: u17a.username, changed: changed17a, sessions_killed: killed17a });
+                return sendJson(res, { ok: true, changed: changed17a, sessions_killed: killed17a });
+            } catch (e) {
+                return sendJson(res, { error: 'خطا در ویرایش کاربر: ' + String(e && e.message ? e.message : e) }, 500);
+            }
+        });
+        return;
+    }
+    if (pathname === '/api/admin/users/password' && req.method === 'POST') {
+        if (!auth.requireRole(req, [])) return sendJson(res, { error: 'فقط مدیر سامانه مجاز است.' }, 403);
+        readBody(req).then((body17a) => {
+            try {
+                const b17a = JSON.parse(body17a || '{}');
+                const username17a = String(b17a.username || '').trim();
+                const pw17a = b17a.new_password != null ? String(b17a.new_password) : '';
+                if (!username17a) return sendJson(res, { error: 'نام کاربری الزامی است.' }, 400);
+                if (pw17a.length < 6 || pw17a.length > 128) return sendJson(res, { error: 'رمز موقت جدید باید حداقل ۶ کاراکتر باشد.' }, 400);
+                const users17a = readUsers17a();
+                const u17a = users17a.find((x) => String(x.username || '').toLowerCase() === username17a.toLowerCase());
+                if (!u17a) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
+                /* هش فوری + حذف هر باقیماندهٔ plaintext (سازگار با migrate-hashes) */
+                delete u17a.password;
+                u17a.password_hash = auth.hashPassword(pw17a);
+                u17a.password_changed_at = new Date().toISOString();
+                if (!auth.writeUsers17a(users17a)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
+                const killed17a = auth.killSessionsByUsername17a(u17a.username);
+                auditLog(req, 'admin.user_reset_password', { username: u17a.username, sessions_killed: killed17a }); /* plaintext هرگز در audit نمی‌آید */
+                return sendJson(res, { ok: true, username: u17a.username, sessions_killed: killed17a });
+            } catch (e) {
+                return sendJson(res, { error: 'خطا در بازنشانی رمز: ' + String(e && e.message ? e.message : e) }, 500);
+            }
+        });
+        return;
+    }
+    // ===== FEAT-ADMIN-17a (end) =====
 
     // ===== ✅ ADDITIVE — D3: endpoint اسنپ‌شات برای pull اپ (بدون نشست وب) =====
     if (pathname === '/api/snapshot') {

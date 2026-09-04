@@ -1249,7 +1249,7 @@
         /* ===== FIX-PWA-9a (end) ===== */
         /* ===== FEAT-BI-2 (end) ===== */
         /* ===== SAAS-15c (begin): پنل سازمان + گیت لایسنس ===== */
-        .org-grid { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+        .org-grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:14px; } /* FEAT-ADMIN-17a: minmax(0,..) ضد grid-blowout جدول کاربران */
         .org-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; }
         .org-card h3 { margin:0 0 10px; font-size:14px; color:#0f2a43; }
         .org-mods { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; }
@@ -1282,7 +1282,7 @@
         .lic-gate-t { font-size:16px; font-weight:800; color:#0f2a43; margin-bottom:8px; }
         .lic-gate-s { font-size:12.5px; color:#475569; line-height:1.9; margin-bottom:14px; }
         .lic-gate-btn { display:inline-block; background:linear-gradient(135deg,#0e7490,#0f2a43); color:#fff; text-decoration:none; border-radius:10px; padding:10px 18px; font-size:13px; font-weight:800; }
-        @media (max-width:640px){ .org-grid { grid-template-columns:1fr; } }
+        @media (max-width:640px){ .org-grid { grid-template-columns:minmax(0,1fr); } }
         /* ===== FIX-ORG-16b (begin): رنگ‌های برند — ردیف انتخاب‌گر + پیش‌نمایش زنده ===== */
         .org-color-row { display:flex; gap:6px; margin-top:4px; align-items:stretch; }
         .org-color-row input[type="color"] { width:44px; height:36px; padding:2px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; cursor:pointer; flex:0 0 auto; }
@@ -1296,6 +1296,27 @@
         body.bi-dark #tab-org .org-color-preview { background:#0b1622; border-color:#1e3a52; }
         body.bi-dark #tab-org .ocp-note { color:#7fb4d8; }
         /* ===== FIX-ORG-16b (end) ===== */
+        /* ===== FEAT-ADMIN-17a (begin): کاربران و دسترسی‌ها — فرم/سقف‌ها/جدول ===== */
+        .org-users-card { grid-column:1/-1; }
+        .org-users-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr)); gap:8px 14px; align-items:end; }
+        .org-form-btns { display:flex; gap:6px; align-items:end; padding-bottom:2px; }
+        .org-lbl select.org-sel { margin-top:4px; width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:13px; background:#fff; }
+        .org-caps-title { margin:14px 0 4px; font-size:12.5px; color:#0f2a43; }
+        .org-caps { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); gap:6px; }
+        .org-cap-row { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:6px 9px; font-size:12px; color:#334155; }
+        .org-cap-row input { width:64px; padding:5px 7px; border:1px solid #cbd5e1; border-radius:7px; font-family:inherit; font-size:12.5px; background:#fff; }
+        .org-ubtn { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:7px; padding:4px 9px; cursor:pointer; font-size:12.5px; font-family:inherit; min-height:28px; }
+        .org-ubtn:hover { filter:brightness(.96); }
+        #orgUsersTbl .org-uacts { white-space:nowrap; }
+        #orgUsersWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%; } /* FIX-17a: جدول کاربران در موبایل داخل کارت اسکرول می‌شود — صفر overflow صفحه */
+        #orgUsersTbl { min-width:560px; }
+        #orgUsersTbl button { min-width:34px; }
+        body.bi-dark #tab-org .org-lbl select.org-sel { background:#0b1622; border-color:#1e3a52; color:#e6f1f9; }
+        body.bi-dark #tab-org .org-caps-title { color:#dbe7f3; }
+        body.bi-dark #tab-org .org-cap-row { background:#0b1622; border-color:#1e3a52; color:#cfe3f5; }
+        body.bi-dark #tab-org .org-cap-row input { background:#0b1622; border-color:#1e3a52; color:#e6f1f9; }
+        body.bi-dark #tab-org .org-ubtn { background:#0b1622; border-color:#1e3a52; color:#cfe3f5; }
+        /* ===== FEAT-ADMIN-17a (end) ===== */
         /* ===== SAAS-15c (end) ===== */</style>
 </head>
 
@@ -2671,6 +2692,33 @@
                         <h3>آمار مصرف</h3>
                         <div id="orgUsage" class="org-usage">در حال بارگذاری…</div>
                     </div>
+                    <div class="org-card org-users-card">
+                        <h3>👥 کاربران و دسترسی‌ها</h3>
+                        <p class="muted" style="font-size:11.5px;margin:0 0 8px">افزودن، ویرایش، غیرفعال‌سازی و بازنشانی رمز — بدون ویرایش فایل. رمزها فقط به‌صورت هش ذخیره می‌شوند.</p>
+                        <div id="orgUsersMsg" class="org-msg" role="status"></div>
+                        <div class="org-users-form">
+                            <label class="org-lbl">نام کاربری: <input id="orgUUsername" type="text" maxlength="40" autocomplete="off" dir="ltr" /></label>
+                            <label class="org-lbl">نام کامل: <input id="orgUName" type="text" maxlength="80" /></label>
+                            <label class="org-lbl">نقش: <select id="orgURole" class="org-sel"></select></label>
+                            <label class="org-lbl" id="orgUPassWrap">رمز موقت (حداقل ۶ کاراکتر — همین لحظه هش می‌شود):
+                                <span class="org-color-row"><input id="orgUPass" type="text" autocomplete="off" dir="ltr" /><button type="button" id="orgUGenPw" class="org-ubtn" title="تولید رمز موقت تصادفی">🎲</button></span>
+                            </label>
+                            <label class="org-lbl" id="orgUActiveWrap" style="display:none">وضعیت حساب:
+                                <select id="orgUActive" class="org-sel"><option value="1">فعال</option><option value="0">غیرفعال</option></select>
+                            </label>
+                            <span class="org-form-btns">
+                                <button type="button" id="orgUserSave" class="org-btn">افزودن کاربر</button>
+                                <button type="button" id="orgUserCancel" class="org-btn2" style="display:none">انصراف</button>
+                            </span>
+                        </div>
+                        <h4 class="org-caps-title">سقف نفرات هر بخش (۰ = بی‌سقف):</h4>
+                        <div id="orgRoleCaps" class="org-caps"></div>
+                        <button type="button" id="orgCapsSave" class="org-btn2">ذخیرهٔ سقف نقش‌ها</button>
+                        <div class="ocp-note" id="orgUsersTotal" style="margin-top:8px"></div>
+                        <div class="org-usage" id="orgUsersWrap" style="margin-top:6px">
+                            <table id="orgUsersTbl"></table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -3171,7 +3219,99 @@ box.innerHTML = html;
             if (n) n.textContent = (hp || ha) ? 'پیش‌نمایش: رنگ دلخواه اعمال می‌شود' : 'پیش‌نمایش برند پیش‌فرض — خالی = پیش‌فرض';
         }
         /* ===== FIX-ORG-16b (end) ===== */
-        /* ===== FIX-ORG-16a (end) ===== */
+        /* ===== FEAT-ADMIN-17a (begin): مدیریت کاربران و نقش‌ها — فقط admin، بدون ویرایش فایل ===== */
+        const ORG_ROLES_17A = [
+            { id: 'admin', fa: 'مدیر سامانه' }, { id: 'manager', fa: 'مدیر (فقط مشاهده)' }, { id: 'operator', fa: 'اپراتور' },
+            { id: 'supervisor', fa: 'سرپرست' }, { id: 'planner', fa: 'برنامه‌ریز' }, { id: 'warehouse', fa: 'انباردار' },
+            { id: 'quality', fa: 'کنترل کیفیت (سابقه)' }, { id: 'qc', fa: 'کنترل کیفیت' }, { id: 'engineering', fa: 'مهندسی/تعمیرات' },
+            { id: 'finance', fa: 'مالی' }, { id: 'viewer', fa: 'فقط مشاهده' },
+        ];
+        let orgUserMode17a = 'add', orgUserEdit17a = '', orgUsersList17a = [];
+        function orgRoleFa17a(r) { const x = ORG_ROLES_17A.find(function (y) { return y.id === r; }); return x ? x.fa : r; }
+        function orgMsg17a(text, isErr) { const m = document.getElementById('orgUsersMsg'); if (!m) return; m.textContent = text || ''; m.classList.toggle('err', !!isErr); }
+        function orgGenPw17a() {
+            const cs = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+            let a = new Uint32Array(10);
+            try { (window.crypto || window.msCrypto).getRandomValues(a); } catch (e) { for (let i = 0; i < 10; i++) a[i] = Math.floor(Math.random() * 4294967295); }
+            let p = ''; for (let i = 0; i < a.length; i++) p += cs[a[i] % cs.length];
+            return p;
+        }
+        function orgPwWrap17a() { const w = document.getElementById('orgUPassWrap'); return w || null; }
+        function orgResetUserForm17a() {
+            orgUserMode17a = 'add'; orgUserEdit17a = '';
+            const u = document.getElementById('orgUUsername'); if (u) { u.value = ''; u.disabled = false; }
+            const n = document.getElementById('orgUName'); if (n) n.value = '';
+            const r = document.getElementById('orgURole'); if (r) { r.value = 'viewer'; r.disabled = false; }
+            const w = orgPwWrap17a(); if (w) w.style.display = '';
+            const p = document.getElementById('orgUPass'); if (p) p.value = '';
+            const aw = document.getElementById('orgUActiveWrap'); if (aw) aw.style.display = 'none';
+            const sv = document.getElementById('orgUserSave'); if (sv) sv.textContent = 'افزودن کاربر';
+            const c = document.getElementById('orgUserCancel'); if (c) c.style.display = 'none';
+        }
+        function orgFillUserForm17a(username) {
+            const u = orgUsersList17a.find(function (x) { return x.username === username; });
+            if (!u) return;
+            orgUserMode17a = 'edit'; orgUserEdit17a = username;
+            const self17a = WEB_USER && WEB_USER.username === username;
+            const ui = document.getElementById('orgUUsername'); if (ui) { ui.value = username; ui.disabled = true; }
+            const n = document.getElementById('orgUName'); if (n) n.value = u.name || '';
+            const r = document.getElementById('orgURole'); if (r) { r.value = u.role || 'viewer'; r.disabled = !!self17a; }
+            const w = orgPwWrap17a(); if (w) w.style.display = 'none'; /* رمز فقط با دکمهٔ 🔑 باز می‌شود */
+            const p = document.getElementById('orgUPass'); if (p) p.value = '';
+            const aw = document.getElementById('orgUActiveWrap');
+            if (aw) { aw.style.display = ''; const a = document.getElementById('orgUActive'); if (a) { a.value = u.active ? '1' : '0'; a.disabled = !!self17a; } }
+            const sv = document.getElementById('orgUserSave'); if (sv) sv.textContent = 'ذخیرهٔ تغییرات';
+            const c = document.getElementById('orgUserCancel'); if (c) c.style.display = '';
+        }
+        function buildCaps17a(caps17a, counts17a) {
+            const box = document.getElementById('orgRoleCaps'); if (!box) return;
+            if (box.getAttribute('data-built17a') === '1') { updateCapsCounts17a(counts17a); return; }
+            box.setAttribute('data-built17a', '1');
+            box.innerHTML = ORG_ROLES_17A.map(function (r) {
+                const cap = Number((caps17a || {})[r.id]) || 0;
+                return '<div class="org-cap-row"><label>' + esc(r.fa) + ': <b id="orgRoleCnt-' + r.id + '">' + fa(Number((counts17a || {})[r.id]) || 0) + ' نفر</b></label>' +
+                    '<input type="number" min="0" step="1" value="' + cap + '" data-cap-role="' + r.id + '" aria-label="سقف ' + esc(r.fa) + '" /></div>';
+            }).join('');
+        }
+        function updateCapsCounts17a(counts17a) {
+            ORG_ROLES_17A.forEach(function (r) { const el = document.getElementById('orgRoleCnt-' + r.id); if (el) el.textContent = fa(Number((counts17a || {})[r.id]) || 0) + ' نفر'; });
+        }
+        function renderUsers17a(users17a) {
+            orgUsersList17a = users17a || [];
+            const t = document.getElementById('orgUsersTbl'); if (!t) return;
+            const self17a = WEB_USER && WEB_USER.username ? String(WEB_USER.username) : '';
+            let h = '<thead><tr><th>نام کاربری</th><th>نام کامل</th><th>نقش</th><th>وضعیت</th><th>نشست فعال</th><th>عملیات</th></tr></thead><tbody>';
+            if (!orgUsersList17a.length) h += '<tr><td colspan="6" class="empty">کاربری تعریف نشده است.</td></tr>';
+            orgUsersList17a.forEach(function (u) {
+                const self = u.username === self17a;
+                h += '<tr>' +
+                    '<td dir="ltr" style="text-align:right">' + esc(u.username) + (self ? ' <span class="ocp-note">(خود شما)</span>' : '') + '</td>' +
+                    '<td>' + esc(u.name || '-') + '</td>' +
+                    '<td>' + esc(orgRoleFa17a(u.role)) + '</td>' +
+                    '<td>' + (u.active ? '<span class="chip ok">فعال</span>' : '<span class="chip no">غیرفعال</span>') + '</td>' +
+                    '<td>' + fa(u.sessions || 0) + '</td>' +
+                    '<td class="org-uacts">' +
+                    '<button type="button" class="org-ubtn" data-act="edit" data-un="' + esc(u.username) + '" title="ویرایش نام/نقش/وضعیت">✏️</button> ' +
+                    '<button type="button" class="org-ubtn" data-act="pw" data-un="' + esc(u.username) + '" title="بازنشانی رمز با رمز موقت جدید">🔑</button> ' +
+                    (self ? '' : '<button type="button" class="org-ubtn" data-act="toggle" data-un="' + esc(u.username) + '" data-active="' + (u.active ? '1' : '0') + '" title="' + (u.active ? 'غیرفعال‌سازی (خروج فوری + مسدودی ورود)' : 'فعال‌سازی مجدد') + '">' + (u.active ? '🚫' : '✅') + '</button>') +
+                    '</td></tr>';
+            });
+            t.innerHTML = h + '</tbody>';
+        }
+        async function loadUsers17a() {
+            try {
+                const r = await fetch('/api/admin/users', { cache: 'no-store' });
+                if (!r.ok) { const t = document.getElementById('orgUsersTbl'); if (t) t.innerHTML = '<tbody><tr><td colspan="6" class="empty">دسترسی به مدیریت کاربران فقط برای مدیر سامانه.</td></tr></tbody>'; return; }
+                const j = await r.json();
+                if (!j || !j.ok) return;
+                buildCaps17a(j.role_caps, j.role_counts);
+                updateCapsCounts17a(j.role_counts);
+                renderUsers17a(j.users);
+                const tot = document.getElementById('orgUsersTotal');
+                if (tot) tot.textContent = 'کاربران تعریف‌شده: ' + fa(j.total_users) + ' (فعال: ' + fa(j.active_users) + ')' + (j.max_users ? ' / سقف ' + fa(j.max_users) + ' نفر' : ' / بی‌سقف');
+            } catch (e) { /* بی‌ضرر */ }
+        }
+        /* ===== FEAT-ADMIN-17a (end) ===== */
         let licenseGateEl15c = null;
         function showLicenseGate15c(on) {
             try {
@@ -3247,12 +3387,13 @@ box.innerHTML = html;
             if (ca16b) ca16b.value = orgHexNorm16b(bc16a.accent) || '#0e7490';
             orgPreview16b();
             loadOrg15c();
+            loadUsers17a(); /* FEAT-ADMIN-17a: کاربران/سقف نقش‌ها */
         }
         document.addEventListener('DOMContentLoaded', function () {
             /* ===== FIX-ORG-16a: wrappers لودر تب سازمان — تیک خودکار (autoTick) یا فرم کثیف ⇒ فقط آمار؛
                بازسازی کامل فرم فقط با ورودِ دستی به تب در حالت تمیز (مقادیر سرور دوباره پر می‌شود) ===== */
             if (loaders) loaders.org = function () {
-                if (autoTick || orgFormDirty16a) { loadOrg15c(); return; }
+                if (autoTick || orgFormDirty16a) { loadOrg15c(); loadUsers17a(); return; } /* FEAT-ADMIN-17a: جدول کاربران ورودی ندارد — امن برای تایپ */
                 openOrgPanel15c();
             };
             /* ===== FIX-ORG-16a: هر تایپ/تغییر در هر ورودی تب سازمان ⇒ فرم کثیف — بازسازی خودکار ممنوع ===== */
@@ -3270,6 +3411,90 @@ box.innerHTML = html;
                 orgTab16a.addEventListener('input', markOrgDirty16a);
                 orgTab16a.addEventListener('change', markOrgDirty16a);
             }
+            /* ===== FEAT-ADMIN-17a (begin): سیم‌کشی فرم کاربران ===== */
+            const roleSel17a = document.getElementById('orgURole');
+            if (roleSel17a) roleSel17a.innerHTML = ORG_ROLES_17A.map(function (r) { return '<option value="' + r.id + '">' + esc(r.fa) + '</option>'; }).join('');
+            const genPw17a = document.getElementById('orgUGenPw');
+            if (genPw17a) genPw17a.addEventListener('click', function () { const p = document.getElementById('orgUPass'); if (p) p.value = orgGenPw17a(); });
+            const uCancel17a = document.getElementById('orgUserCancel');
+            if (uCancel17a) uCancel17a.addEventListener('click', function () { orgResetUserForm17a(); orgMsg17a(''); });
+            const uSave17a = document.getElementById('orgUserSave');
+            if (uSave17a) uSave17a.addEventListener('click', async function () {
+                const username = ((document.getElementById('orgUUsername') || {}).value || '').trim();
+                const name = ((document.getElementById('orgUName') || {}).value || '').trim();
+                const role = (document.getElementById('orgURole') || {}).value || '';
+                const pwEl = document.getElementById('orgUPass');
+                const password = pwEl ? pwEl.value : '';
+                orgMsg17a('در حال ذخیره…');
+                try {
+                    if (orgUserMode17a === 'add') {
+                        if (!/^[A-Za-z0-9._-]{3,40}$/.test(username)) { orgMsg17a('نام کاربری باید ۳ تا ۴۰ کاراکتر لاتین، عدد، نقطه، زیرخط یا خط تیره باشد.', true); return; }
+                        if (!name) { orgMsg17a('نام کامل کاربر الزامی است.', true); return; }
+                        if (password.length < 6) { orgMsg17a('رمز موقت باید حداقل ۶ کاراکتر باشد.', true); return; }
+                        const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, name: name, role: role, password: password }) });
+                        const j = await r.json();
+                        if (!r.ok) { orgMsg17a(j.error || 'خطا در افزودن کاربر.', true); return; }
+                        orgMsg17a('✔ کاربر «' + username + '» با نقش «' + orgRoleFa17a(role) + '» افزوده شد — رمز موقت را در کانال امن به خودش بدهید.');
+                        orgResetUserForm17a();
+                        loadUsers17a();
+                    } else {
+                        const activeSel = document.getElementById('orgUActive');
+                        const r = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: orgUserEdit17a, name: name, role: role, active: activeSel ? activeSel.value === '1' : undefined }) });
+                        const j = await r.json();
+                        if (!r.ok) { orgMsg17a(j.error || 'خطا در ویرایش کاربر.', true); return; }
+                        let msg17a = '✔ تغییرات کاربر «' + orgUserEdit17a + '» ذخیره شد';
+                        if (j.sessions_killed) msg17a += ' (' + fa(j.sessions_killed) + ' نشست فعال بسته شد)';
+                        msg17a += '.';
+                        if (pwEl && orgPwWrap17a() && orgPwWrap17a().style.display !== 'none' && password) {
+                            const r2 = await fetch('/api/admin/users/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: orgUserEdit17a, new_password: password }) });
+                            const j2 = await r2.json();
+                            if (!r2.ok) { orgMsg17a(j2.error || 'پروفایل ذخیره شد ولی تغییر رمز خطا داشت.', true); loadUsers17a(); return; }
+                            msg17a = '✔ رمز کاربر «' + orgUserEdit17a + '» بازنشانی شد. ' + msg17a;
+                        }
+                        orgMsg17a(msg17a);
+                        orgResetUserForm17a();
+                        loadUsers17a();
+                    }
+                } catch (e) { orgMsg17a('خطا در ارتباط با سرور', true); }
+            });
+            const tbl17a = document.getElementById('orgUsersTbl');
+            if (tbl17a) tbl17a.addEventListener('click', async function (e) {
+                const b = e.target.closest('button[data-act]'); if (!b) return;
+                const un = b.getAttribute('data-un') || '';
+                const act = b.getAttribute('data-act');
+                if (act === 'edit') { orgFillUserForm17a(un); orgMsg17a('ویرایش «' + un + '» — نام/نقش/وضعیت را تغییر داده و ذخیره کنید.'); }
+                else if (act === 'pw') {
+                    orgFillUserForm17a(un);
+                    const w = orgPwWrap17a();
+                    if (w) w.style.display = '';
+                    const p = document.getElementById('orgUPass');
+                    if (p) { p.value = ''; p.focus(); }
+                    orgMsg17a('رمز موقت جدید را وارد کنید و «ذخیرهٔ تغییرات» را بزنید — نشست‌های فعال کاربر بسته می‌شود.');
+                } else if (act === 'toggle') {
+                    const makeActive = b.getAttribute('data-active') !== '1';
+                    try {
+                        const r = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: un, active: makeActive }) });
+                        const j = await r.json();
+                        if (!r.ok) { orgMsg17a(j.error || 'خطا در تغییر وضعیت کاربر.', true); return; }
+                        orgMsg17a(makeActive ? '✔ کاربر «' + un + '» فعال شد.' : '✔ کاربر «' + un + '» غیرفعال شد — نشست‌های فعال او بسته و ورودش مسدود شد (سابقهٔ audit حفظ می‌شود).');
+                        loadUsers17a();
+                    } catch (e2) { orgMsg17a('خطا در ارتباط با سرور', true); }
+                }
+            });
+            const capSave17a = document.getElementById('orgCapsSave');
+            if (capSave17a) capSave17a.addEventListener('click', async function () {
+                const caps = {};
+                document.querySelectorAll('#orgRoleCaps input[data-cap-role]').forEach(function (i) { caps[i.getAttribute('data-cap-role')] = Math.max(0, Math.floor(Number(i.value) || 0)); });
+                orgMsg17a('در حال ذخیرهٔ سقف‌ها…');
+                try {
+                    const r = await fetch('/api/tenant/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role_caps: caps }) });
+                    const j = await r.json();
+                    if (!r.ok) { orgMsg17a(j.error || 'خطا در ذخیرهٔ سقف نقش‌ها.', true); return; }
+                    TENANT_15A = j.tenant || TENANT_15A;
+                    orgMsg17a('✔ سقف نفرات بخش‌ها ذخیره شد (۰ = بی‌سقف).');
+                } catch (e) { orgMsg17a('خطا در ارتباط با سرور', true); }
+            });
+            /* ===== FEAT-ADMIN-17a (end) ===== */
             const save = document.getElementById('orgSave');
             if (save) save.addEventListener('click', async function () {
                 const msg = document.getElementById('orgMsg');

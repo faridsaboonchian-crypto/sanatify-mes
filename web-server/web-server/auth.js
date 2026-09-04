@@ -70,6 +70,44 @@ function verifyPassword(plain, stored) {
 function usersWrite15b(arr) { /* نوشتن اتمیک web-users.json — برای ارتقای خودکار per-user */
     try { const tmp = USERS_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.renameSync(tmp, USERS_FILE); return true; } catch (e) { return false; }
 }
+// ===== FEAT-ADMIN-17a (begin): مدیریت کاربران از پنل سازمان — نشست‌ها + گارد غیرفعال + نوشتن با بکاپ =====
+function sessionsOfUser17a(username) {
+    const out = []; const now = Date.now(); const un = String(username == null ? '' : username);
+    for (const [sid, s] of sessions) { if (s && s.user && s.user.username === un && s.expires > now) out.push(sid); }
+    return out;
+}
+function killSessionsByUsername17a(username) { /* غیرفعال‌سازی/تغییر نقش/بازنشانی رمز ⇒ خروج اجباری در درخواست بعدی */
+    let n = 0; sessionsOfUser17a(username).forEach((sid) => { sessions.delete(sid); n++; }); return n;
+}
+function activeSessionCount17a(username) { return sessionsOfUser17a(username).length; }
+function refreshSessionUser17a(username, patch) { /* به‌روزرسانی snapshot نام/نقش در نشست‌های زنده (بدون logout) */
+    sessionsOfUser17a(username).forEach((sid) => { const s = sessions.get(sid); if (s) s.user = Object.assign({}, s.user, patch || {}); });
+}
+function findUser17a(username) {
+    const un = String(username == null ? '' : username);
+    return loadUsers().find((x) => safeEqual(x.username, un)) || null;
+}
+function isUserInactive17a(username) { const u = findUser17a(username); return !!(u && u.active === false); }
+function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore *.bak-*) + نوشتن اتمیک — سازگار با migrate-hashes */
+    try {
+        try {
+            if (fs.existsSync(USERS_FILE)) {
+                const d = new Date();
+                const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + String(d.getSeconds()).padStart(2, '0');
+                fs.copyFileSync(USERS_FILE, USERS_FILE + '.bak-' + stamp);
+                /* نگه‌داری حداکثر ۱۰ بکاپ اخیر */
+                const dir = path.dirname(USERS_FILE);
+                const baks = fs.readdirSync(dir).filter((f) => f.indexOf('web-users.json.bak-') === 0).sort();
+                while (baks.length > 10) { try { fs.unlinkSync(path.join(dir, baks.shift())); } catch (e2) { break; } }
+            }
+        } catch (eb) { /* بکاپ اختیاری است — نوشتن اصلی ادامه می‌یابد */ }
+        const tmp = USERS_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8');
+        fs.renameSync(tmp, USERS_FILE);
+        return true;
+    } catch (e) { return false; }
+}
+// ===== FEAT-ADMIN-17a (end) =====
 // ===== SEC-15b (end) =====
 
 function parseCookies(header) {
@@ -428,6 +466,12 @@ function doLogin(req, res) {
             }
             return jsonRes(res, { ok: false, error: 'invalid' }, 401);
         }
+        /* ===== FEAT-ADMIN-17a: کاربر غیرفعال‌شده توسط مدیر ⇒ لاگین مسدود با پیام فارسی ===== */
+        if (isUserInactive17a(user.username)) {
+            audit15b({ ts: new Date().toISOString(), user: user.username, role: user.role, ip: ip15b, action: 'auth.login_inactive', endpoint: '/api/auth/login', status: 403, user_agent: String(req.headers['user-agent'] || '').slice(0, 200) });
+            console.log('[Auth] login BLOCKED (inactive) ->', user.username);
+            return jsonRes(res, { ok: false, error: 'inactive', message: 'حساب کاربری شما غیرفعال شده است — لطفاً با مدیر سامانه تماس بگیرید.' }, 403);
+        }
         /* SEC-15b: rotation — نشستِ کوکی قبلی (در صورت وجود) باطل و sid تازه صادر می‌شود (ضد fixation) */
         const oldSid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
         if (oldSid) sessions.delete(oldSid);
@@ -482,4 +526,5 @@ module.exports = {
     setTenantBranding15a: setTenantBranding15a,
     setSecureCookie15b: setSecureCookie15b, setCorsConfig15b: setCorsConfig15b, isOriginAllowed15b: isOriginAllowed15b,
     hashPassword: hashPassword, verifyPassword: verifyPassword, clientIp15b: clientIp15b, setAuditWriter15b: setAuditWriter15b, activeSessions15c: activeSessions15c, /* SEC-15b + SAAS-15c */
+    killSessionsByUsername17a: killSessionsByUsername17a, activeSessionCount17a: activeSessionCount17a, refreshSessionUser17a: refreshSessionUser17a, isUserInactive17a: isUserInactive17a, writeUsers17a: writeUsers17a, findUser17a: findUser17a, /* FEAT-ADMIN-17a */
 };
