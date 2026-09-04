@@ -1369,9 +1369,9 @@
     <main>
         <div class="filter-panel" id="filterPanel" style="display:none">
             <div class="frow">
-                <label>از تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="pf" id="filterFrom"
+                <label>از تاریخ: <input type="text" inputmode="numeric" data-jp="pf" id="filterFrom"
                         placeholder="۱۴۰۵/۰۵/۰۱" style="width:110px;text-align:center"></label>
-                <label>تا تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="pt" id="filterTo"
+                <label>تا تاریخ: <input type="text" inputmode="numeric" data-jp="pt" id="filterTo"
                         placeholder="۱۴۰۵/۰۵/۶" style="width:110px;text-align:center"></label>
                 <label>شیفت: <select id="filterShift">
                         <option value="all">همه</option>
@@ -1563,11 +1563,11 @@
                         </select>
                     </div>
                     <div class="frow" style="margin-top:8px">
-                        <label class="flbl">تاریخ شروع (شمسی): <input type="text" inputmode="numeric" data-jp="fds"
+                        <label class="flbl">تاریخ شروع: <input type="text" inputmode="numeric" data-jp="fds"
                                 id="fdStartDate" placeholder="۱۴۰۵/۰۵/۱۶"
                                 style="width:110px;text-align:center" /></label>
                         <label class="flbl">ساعت شروع: <input type="time" id="fdStartTime" class="fdate" /></label>
-                        <label class="flbl">تاریخ پایان (شمسی): <input type="text" inputmode="numeric" data-jp="fde"
+                        <label class="flbl">تاریخ پایان: <input type="text" inputmode="numeric" data-jp="fde"
                                 id="fdEndDate" placeholder="۱۴۰۵/۰۵/۱۶" style="width:110px;text-align:center" /></label>
                         <label class="flbl">ساعت پایان: <input type="time" id="fdEndTime" class="fdate" /></label>
                     </div>
@@ -1764,7 +1764,7 @@
                     <div class="frow" style="margin-top:8px">
 
                         <label class="flbl">
-                            تاریخ کار (شمسی):
+                            تاریخ کار:
 
                             <input type="text" inputmode="numeric" data-jp="fmd" id="fmDate" placeholder="۱۴۰۵/۰۵/۱۶"
                                 style="width:110px;text-align:center" />
@@ -1857,7 +1857,7 @@
                     <div class="frow" style="margin-top:8px">
 
                         <label class="flbl">
-                            آخرین انجام (شمسی):
+                            تاریخ آخرین انجام:
 
                             <input type="text" inputmode="numeric" data-jp="pllast" id="plLast" placeholder="۱۴۰۵/۰۵/۰۱"
                                 style="width:110px;text-align:center" />
@@ -1985,7 +1985,7 @@
                 <div class="filters hidden mnt-form" id="emForm">
                     <div class="mnt-form-title">ثبت انرژی کنتور (kWh)</div>
                     <div class="frow">
-                        <label>تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="emDate" id="emDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>تاریخ: <input type="text" inputmode="numeric" data-jp="emDate" id="emDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
                         <label>شیفت:
                             <select id="emShift" class="fsel">
                                 <option value="shift-morning-301">صبح</option>
@@ -2091,7 +2091,7 @@
                 <h2 id="planFormTitle">ثبت برنامهٔ تولید</h2>
                 <div class="filters" id="planForm">
                     <div class="frow">
-                        <label>تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="plDate" id="plDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>تاریخ: <input type="text" inputmode="numeric" data-jp="plDate" id="plDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
                         <label>دوره: <select id="plPeriod" class="fsel">
                             <option value="day" selected>روزانه</option>
                             <option value="shift">شیفت</option>
@@ -2123,7 +2123,7 @@
                 <h2>📅 تقویم قطعی برق</h2>
                 <div class="filters">
                     <div class="frow">
-                        <label>تاریخ شروع (شمسی): <input type="text" inputmode="numeric" data-jp="plOut" id="plOutDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>تاریخ شروع: <input type="text" inputmode="numeric" data-jp="plOut" id="plOutDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
                         <label>ساعت شروع: <input type="time" id="plOutTime" value="08:00" style="width:110px"></label>
                         <label>مدت (ساعت): <input type="number" id="plOutHours" min="0.5" max="24" step="0.5" value="4" style="width:80px"></label>
                         <label>شیفت: <select id="plOutShift" class="fsel">
@@ -2200,7 +2200,7 @@
                 <div id="finDocForm" class="panel hidden">
                     <h3>ثبت سند دستی (دوطرفه)</h3>
                     <div class="frow">
-                        <label>تاریخ (شمسی): <input type="text" inputmode="numeric" data-jp="findate" id="finDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>تاریخ: <input type="text" inputmode="numeric" data-jp="findate" id="finDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
                         <label>شرح سند: <input id="finDesc" placeholder="مثلاً فروش نقدی میلگرد سایز ۱۸" style="min-width:240px"></label>
                     </div>
                     <div id="finLines"></div>
@@ -2953,8 +2953,8 @@ function buildFilterBar(tab) {
             h += '<input type="text" class="fsearch" placeholder="جستجو در همه ستون‌ها..." value="' + esc(v.search) + '">';
             if (HAS_SHIFT[tab]) h += '<select class="fsel" data-f="shift"><option value="all">همه شیفت‌ها</option><option value="shift-morning-301"' + (v.shift === 'shift-morning-301' ? ' selected' : '') + '>شیفت صبح</option><option value="shift-night-302"' + (v.shift === 'shift-night-302' ? ' selected' : '') + '>شیفت شب</option></select>';
             if (HAS_MACHINE[tab]) h += '<select class="fsel" data-f="machine"><option value="all">همه ایستگاه‌ها</option>' + machines.map((m) => '<option value="' + esc(m) + '"' + (v.machine === m ? ' selected' : '') + '>' + esc(stationFa(m)) + '</option>').join('') + '</select>';
-            h += '<label class="flbl">از (شمسی): ' + jalaliDateInputHTML(tab + '-from', v.from) + '</label>';
-            h += '<label class="flbl">تا (شمسی): ' + jalaliDateInputHTML(tab + '-to', v.to) + '</label>';
+            h += '<label class="flbl">از تاریخ: ' + jalaliDateInputHTML(tab + '-from', v.from) + '</label>';
+            h += '<label class="flbl">تا تاریخ: ' + jalaliDateInputHTML(tab + '-to', v.to) + '</label>';
             h += '<button class="act fclear">پاک‌کردن فیلتر</button></div>';
             const bar = document.getElementById('filter-' + tab); bar.innerHTML = h; attachJalaliMasks(bar);
             bar.querySelector('.fsearch').oninput = (e) => { v.search = e.target.value; v.page = 0; renderListTab(tab, true); };
