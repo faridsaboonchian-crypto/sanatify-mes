@@ -188,11 +188,17 @@ function registerLoginFail15b(username, ip, auditFn) {
 
 // ===== SAAS-15a (begin): برندینگ تنانت روی صفحهٔ ورود — بدون tenant.json: بدون هیچ تغییر =====
 let tenantBrand15a = null;
-function escBrand15a(s) {
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+/* ===== FIX-ORG-16b (begin): رنگ‌های برند صفحهٔ ورود — فقط HEX معتبر تزریق می‌شود ===== */
+let tenantColors16b = null;
+function safeHex16b(v) { const s = String(v == null ? '' : v).trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(s) ? s : ''; }
 function setTenantBranding15a(b) {
     tenantBrand15a = (b && (b.name || b.logo)) ? { name: String(b.name || ''), logo: String(b.logo || '') } : null;
+    const c = (b && b.colors) || {};
+    const p = safeHex16b(c.primary), a = safeHex16b(c.accent);
+    tenantColors16b = (p || a) ? { primary: p, accent: a } : null;
+}
+function escBrand15a(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function loginHtml15a() {
     if (!tenantBrand15a) return LOGIN_HTML;
@@ -204,6 +210,14 @@ function loginHtml15a() {
     if (tenantBrand15a.logo) {
         html = html.replace(/<div class="brand-mark"([^>]*)>[\s\S]*?<\/div>/, '<div class="brand-mark"><img src="' + escBrand15a(tenantBrand15a.logo) + '" alt="لوگو" style="width:34px;height:34px;border-radius:8px;object-fit:contain" /></div>');
     }
+    /* ===== FIX-ORG-16b (begin): تزریق CSS رنگ برند — فقط HEX سنجیده‌شده ⇒ بدون ریسک تزریق ===== */
+    if (tenantColors16b) {
+        let css16b = '';
+        if (tenantColors16b.primary) css16b += '.card{border-top-color:' + tenantColors16b.primary + '!important}button.submit{background:linear-gradient(135deg,' + tenantColors16b.primary + ',#0f2a43)!important}';
+        if (tenantColors16b.accent) css16b += '.brand-mark{background:linear-gradient(135deg,' + tenantColors16b.accent + ',#0f2a43)!important}input:focus{border-color:' + tenantColors16b.accent + '!important}';
+        if (css16b) html = html.replace('</head>', '<style>/* FIX-ORG-16b tenant brand colors */' + css16b + '</style></head>');
+    }
+    /* ===== FIX-ORG-16b (end) ===== */
     return html;
 }
 // ===== SAAS-15a (end) =====

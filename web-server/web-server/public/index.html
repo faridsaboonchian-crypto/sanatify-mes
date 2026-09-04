@@ -1277,6 +1277,19 @@
         .lic-gate-s { font-size:12.5px; color:#475569; line-height:1.9; margin-bottom:14px; }
         .lic-gate-btn { display:inline-block; background:linear-gradient(135deg,#0e7490,#0f2a43); color:#fff; text-decoration:none; border-radius:10px; padding:10px 18px; font-size:13px; font-weight:800; }
         @media (max-width:640px){ .org-grid { grid-template-columns:1fr; } }
+        /* ===== FIX-ORG-16b (begin): رنگ‌های برند — ردیف انتخاب‌گر + پیش‌نمایش زنده ===== */
+        .org-color-row { display:flex; gap:6px; margin-top:4px; align-items:stretch; }
+        .org-color-row input[type="color"] { width:44px; height:36px; padding:2px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; cursor:pointer; flex:0 0 auto; }
+        .org-color-row input[type="text"] { flex:1; min-width:0; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:13px; background:#fff; direction:ltr; text-align:left; }
+        .org-color-preview { display:flex; align-items:center; gap:8px; margin-top:10px; padding:9px 10px; border:1px dashed #cbd5e1; border-radius:10px; background:#f8fafc; flex-wrap:wrap; }
+        .ocp-chip { display:inline-block; color:#fff; background:#0f2a43; border-radius:8px; padding:4px 12px; font-size:11.5px; font-weight:bold; }
+        #ocpChip2 { background:#0e7490; }
+        .ocp-note { font-size:10.5px; color:#64748b; }
+        body.bi-dark #tab-org .org-color-row input[type="text"] { background:#0b1622; border-color:#1e3a52; color:#e6f1f9; }
+        body.bi-dark #tab-org .org-color-row input[type="color"] { background:#0b1622; border-color:#1e3a52; }
+        body.bi-dark #tab-org .org-color-preview { background:#0b1622; border-color:#1e3a52; }
+        body.bi-dark #tab-org .ocp-note { color:#7fb4d8; }
+        /* ===== FIX-ORG-16b (end) ===== */
         /* ===== SAAS-15c (end) ===== */</style>
 </head>
 
@@ -2631,6 +2644,19 @@
                         <label class="org-lbl">سقف کاربران (۰ = بی‌سقف): <input id="orgMaxUsers" type="number" min="0" step="1" /></label>
                         <label class="org-lbl">سقف رکوردها (۰ = بی‌سقف): <input id="orgMaxRecords" type="number" min="0" step="1000" /></label>
                         <label class="org-lbl">تماس با پشتیبانی (تلفن/ایمیل): <input id="orgSupport" type="text" maxlength="100" /></label>
+                        <!-- ===== FIX-ORG-16b (begin): رنگ‌های برند + پیش‌نمایش زنده ===== -->
+                        <label class="org-lbl">رنگ اصلی (برند):
+                            <span class="org-color-row"><input id="orgColorPrimary" type="color" value="#0f2a43" aria-label="انتخاب‌گر رنگ اصلی" /><input id="orgColorPrimaryHex" type="text" maxlength="7" placeholder="خالی = پیش‌فرض (مثلاً #0f2a43)" /></span>
+                        </label>
+                        <label class="org-lbl">رنگ فرعی (اکسنت):
+                            <span class="org-color-row"><input id="orgColorAccent" type="color" value="#0e7490" aria-label="انتخاب‌گر رنگ فرعی" /><input id="orgColorAccentHex" type="text" maxlength="7" placeholder="خالی = پیش‌فرض (مثلاً #0e7490)" /></span>
+                        </label>
+                        <div id="orgColorPreview" class="org-color-preview" aria-live="polite">
+                            <span class="ocp-chip" id="ocpChip1">عنوان سرصفحه</span>
+                            <span class="ocp-chip" id="ocpChip2">تب فعال / اکسنت</span>
+                            <span class="ocp-note" id="ocpNote">پیش‌نمایش زندهٔ رنگ‌های برند — خالی = پیش‌فرض</span>
+                        </div>
+                        <!-- ===== FIX-ORG-16b (end) ===== -->
                         <label class="org-lbl">لوگو (PNG/JPG تا ۳۰۰KB): <input id="orgLogo" type="file" accept="image/png,image/jpeg" /></label>
                         <button type="button" id="orgSave" class="org-btn">ذخیرهٔ پیکربندی</button>
                         <button type="button" id="orgLogoClear" class="org-btn2">حذف لوگو</button>
@@ -3084,11 +3110,14 @@ box.innerHTML = html;
                 const c = TENANT_15A.brand_colors || {};
                 let css = '';
                 if (c.primary) css += '.brand-title{color:' + c.primary + '}#nav button[data-tab].active{color:' + c.primary + '}';
-                if (c.accent) css += '.brand-title .bt-compact{color:' + c.accent + '}';
+                if (c.accent) css += '.brand-title .bt-compact{color:' + c.accent + '}#nav button[data-tab].active{background:' + c.accent + '}'; /* FIX-ORG-16b: اکسنت روی تب فعال هدر */
                 if (css) {
                     let st = document.getElementById('tenantStyle15a');
                     if (!st) { st = document.createElement('style'); st.id = 'tenantStyle15a'; document.head.appendChild(st); }
                     st.textContent = css;
+                } else {
+                    const stOld = document.getElementById('tenantStyle15a'); /* FIX-ORG-16b: بازگشت به برند پیش‌فرض ⇒ حذف استایل تزریقی قبلی */
+                    if (stOld) stOld.textContent = '';
                 }
                 const oldLogo15c = document.getElementById('tenantLogo15a');
                 if (!TENANT_15A.logo && oldLogo15c) oldLogo15c.remove(); /* SAAS-15c: حذف لوگو با logo_clear */
@@ -3117,6 +3146,25 @@ box.innerHTML = html;
            می‌کرد و مقادیر تایپ‌شده پاک می‌شد. راه‌حل: پرچم کثیف + تیک خودکار ⇒ فقط بخش آمار تازه شود. */
         let orgFormDirty16a = false;
         function markOrgDirty16a() { orgFormDirty16a = true; }
+        /* ===== FIX-ORG-16b (begin): رنگ‌های برند — نرمال‌سازی HEX + سینک انتخاب‌گر/متن + پیش‌نمایش زنده ===== */
+        function orgHexNorm16b(v) { const t = String(v == null ? '' : v).trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(t) ? t : ''; }
+        function orgSyncColor16b(kind) {
+            const c = document.getElementById(kind === 'primary' ? 'orgColorPrimary' : 'orgColorAccent');
+            const t = document.getElementById(kind === 'primary' ? 'orgColorPrimaryHex' : 'orgColorAccentHex');
+            if (!c || !t) return;
+            const hex = orgHexNorm16b(t.value);
+            if (hex) c.value = hex;
+            orgPreview16b();
+        }
+        function orgPreview16b() {
+            const c1 = document.getElementById('ocpChip1'), c2 = document.getElementById('ocpChip2'), n = document.getElementById('ocpNote');
+            if (!c1 || !c2) return;
+            const hp = orgHexNorm16b((document.getElementById('orgColorPrimaryHex') || {}).value);
+            const ha = orgHexNorm16b((document.getElementById('orgColorAccentHex') || {}).value);
+            c1.style.background = hp || '#0f2a43'; c2.style.background = ha || '#0e7490';
+            if (n) n.textContent = (hp || ha) ? 'پیش‌نمایش: رنگ دلخواه اعمال می‌شود' : 'پیش‌نمایش برند پیش‌فرض — خالی = پیش‌فرض';
+        }
+        /* ===== FIX-ORG-16b (end) ===== */
         /* ===== FIX-ORG-16a (end) ===== */
         let licenseGateEl15c = null;
         function showLicenseGate15c(on) {
@@ -3175,6 +3223,15 @@ box.innerHTML = html;
             if (mr) mr.value = (TENANT_15A && TENANT_15A.max_records) || 0;
             const sup = document.getElementById('orgSupport');
             if (sup) sup.value = (TENANT_15A && TENANT_15A.custom_settings && TENANT_15A.custom_settings.support_contact) || '';
+            /* FIX-ORG-16b: پر کردن رنگ‌های برند از پیکربندی (خالی = پیش‌فرض) */
+            const bc16a = (TENANT_15A && TENANT_15A.brand_colors) || {};
+            const hp16b = document.getElementById('orgColorPrimaryHex'), ha16b = document.getElementById('orgColorAccentHex');
+            if (hp16b) hp16b.value = orgHexNorm16b(bc16a.primary);
+            if (ha16b) ha16b.value = orgHexNorm16b(bc16a.accent);
+            const cp16b = document.getElementById('orgColorPrimary'), ca16b = document.getElementById('orgColorAccent');
+            if (cp16b) cp16b.value = orgHexNorm16b(bc16a.primary) || '#0f2a43';
+            if (ca16b) ca16b.value = orgHexNorm16b(bc16a.accent) || '#0e7490';
+            orgPreview16b();
             loadOrg15c();
         }
         document.addEventListener('DOMContentLoaded', function () {
@@ -3186,6 +3243,15 @@ box.innerHTML = html;
             };
             /* ===== FIX-ORG-16a: هر تایپ/تغییر در هر ورودی تب سازمان ⇒ فرم کثیف — بازسازی خودکار ممنوع ===== */
             const orgTab16a = document.getElementById('tab-org');
+            /* ===== FIX-ORG-16b: سینک دوطرفهٔ انتخاب‌گر/متن رنگ + پیش‌نمایش زنده ===== */
+            ['orgColorPrimary', 'orgColorAccent'].forEach(function (id16b) {
+                const c16b = document.getElementById(id16b);
+                if (c16b) c16b.addEventListener('input', function () { const t16b = document.getElementById(id16b === 'orgColorPrimary' ? 'orgColorPrimaryHex' : 'orgColorAccentHex'); if (t16b) t16b.value = c16b.value; orgPreview16b(); });
+            });
+            ['orgColorPrimaryHex', 'orgColorAccentHex'].forEach(function (id16b) {
+                const t16b = document.getElementById(id16b);
+                if (t16b) t16b.addEventListener('input', function () { orgSyncColor16b(id16b.indexOf('Primary') !== -1 ? 'primary' : 'accent'); });
+            });
             if (orgTab16a) {
                 orgTab16a.addEventListener('input', markOrgDirty16a);
                 orgTab16a.addEventListener('change', markOrgDirty16a);
@@ -3203,6 +3269,10 @@ box.innerHTML = html;
                         max_users: Number((document.getElementById('orgMaxUsers') || {}).value) || 0,
                         max_records: Number((document.getElementById('orgMaxRecords') || {}).value) || 0,
                         custom_settings: { support_contact: (document.getElementById('orgSupport') || {}).value || '' },
+                        brand_colors: { /* FIX-ORG-16b: خالی = برند پیش‌فرض */
+                            primary: orgHexNorm16b((document.getElementById('orgColorPrimaryHex') || {}).value),
+                            accent: orgHexNorm16b((document.getElementById('orgColorAccentHex') || {}).value),
+                        },
                     };
                     const logoInput = document.getElementById('orgLogo');
                     if (logoInput && logoInput.files && logoInput.files[0]) {

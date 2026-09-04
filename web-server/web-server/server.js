@@ -345,7 +345,7 @@ function resolveTenantLogoFile15a(cfg) {
 // برندینگ صفحهٔ ورود (در auth.js اعمال می‌شود) — بدون tenant.json: null = بدون تغییر
 (function initTenantBrand15a() {
     const c = loadTenant15a();
-    auth.setTenantBranding15a(tenantCache15a ? { name: c.name, logo: c.logo || '' } : null);
+    auth.setTenantBranding15a(tenantCache15a ? { name: c.name, logo: c.logo || '', colors: c.brand_colors || {} } : null); /* FIX-ORG-16b: + رنگ‌ها */
 })();
 // ===== SAAS-15a (end) =====
 // ===== SEC-15b (begin): هدرهای امنیتی + ریت‌لیمیت + audit خودکار + IP کلاینت =====
@@ -499,7 +499,7 @@ function appRequestHandler(req, res) {
     // ===== SAAS-15a: تازه‌سازی برندینگ لاگین با mtime کش — تغییر tenant.json بدون ری‌استارت اعمال می‌شود =====
     if (req.method === 'GET' && pathname === '/login') {
         const c15aLogin = loadTenant15a();
-        auth.setTenantBranding15a(tenantCache15a ? { name: c15aLogin.name, logo: c15aLogin.logo || '' } : null);
+        auth.setTenantBranding15a(tenantCache15a ? { name: c15aLogin.name, logo: c15aLogin.logo || '', colors: c15aLogin.brand_colors || {} } : null); /* FIX-ORG-16b: + رنگ‌ها */
     }
     if (auth.handlePublic(req, res, pathname)) return;
     // ===== SAAS-15a (begin): مسیرهای عمومی تنانت — برندینگ بدون احراز هویت (بدون دادهٔ حساس) =====
@@ -633,6 +633,20 @@ function appRequestHandler(req, res) {
                 }
                 if (b15c.max_users != null) cfg15c.max_users = Math.max(0, Number(b15c.max_users) || 0);
                 if (b15c.max_records != null) cfg15c.max_records = Math.max(0, Number(b15c.max_records) || 0);
+                /* ===== FIX-ORG-16b (begin): رنگ‌های برند از پنل — فقط HEX شش‌رقمی؛ خالی = برند پیش‌فرض ===== */
+                if (b15c.brand_colors != null) {
+                    if (typeof b15c.brand_colors !== 'object' || Array.isArray(b15c.brand_colors)) return sendJson(res, { error: 'رنگ‌های برند نامعتبر است.' }, 400);
+                    const bc16b = {}, re16b = /^#[0-9a-f]{6}$/;
+                    let bcErr16b = '';
+                    ['primary', 'accent'].forEach((k16b) => {
+                        const v16b = String(b15c.brand_colors[k16b] == null ? '' : b15c.brand_colors[k16b]).trim().toLowerCase();
+                        if (v16b && !re16b.test(v16b)) { bcErr16b = 'فرمت رنگ نامعتبر است — باید کد HEX شش‌رقمی باشد (مثلاً #0e7490).'; return; }
+                        bc16b[k16b] = v16b;
+                    });
+                    if (bcErr16b) return sendJson(res, { error: bcErr16b }, 400);
+                    cfg15c.brand_colors = bc16b;
+                }
+                /* ===== FIX-ORG-16b (end) ===== */
                 if (b15c.custom_settings && typeof b15c.custom_settings === 'object' && !Array.isArray(b15c.custom_settings)) {
                     cfg15c.custom_settings = Object.assign({}, cfg15c.custom_settings, b15c.custom_settings); /* ادغام سطح‌اول — allowed_origins از دست نرود */
                 }
@@ -649,8 +663,8 @@ function appRequestHandler(req, res) {
                     cfg15c.logo = '/tenant-logo.' + ext15c;
                 }
                 writeTenantFile15c(cfg15c);
-                auth.setTenantBranding15a({ name: cfg15c.name, logo: cfg15c.logo || '' });
-                auditLog(req, 'tenant.update', { active_modules: cfg15c.active_modules, max_users: cfg15c.max_users, max_records: cfg15c.max_records, logo: cfg15c.logo });
+                auth.setTenantBranding15a({ name: cfg15c.name, logo: cfg15c.logo || '', colors: cfg15c.brand_colors || {} }); /* FIX-ORG-16b: + رنگ‌ها */
+                auditLog(req, 'tenant.update', { active_modules: cfg15c.active_modules, max_users: cfg15c.max_users, max_records: cfg15c.max_records, logo: cfg15c.logo, brand_colors: cfg15c.brand_colors || {} });
                 return sendJson(res, { ok: true, tenant: tenantPublicShape15c(cfg15c) });
             } catch (e) {
                 return sendJson(res, { error: 'خطا در ذخیرهٔ پیکربندی: ' + String(e && e.message ? e.message : e) }, 500);
