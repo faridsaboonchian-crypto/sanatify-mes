@@ -391,6 +391,7 @@ function moduleForPath15a(pathname) {
     if (pathname.indexOf('/api/planning/') === 0) return 'planning';
     if (pathname.indexOf('/api/inventory') === 0) return 'inventory';
     if (pathname.indexOf('/api/quality') === 0) return 'quality';
+    if (pathname.indexOf('/api/qcpro') === 0) return 'quality'; /* FEAT-QC-PRO-24a: کنترل کیفیت حرفه‌ای زیر همان ماژول لایسنس کیفیت */
     if (pathname.indexOf('/api/maintenance') === 0 || pathname.indexOf('/api/pm/') === 0) return 'maintenance';
     if (pathname.indexOf('/api/dashboard') === 0 || pathname.indexOf('/api/analytics') === 0) return 'analytics';
     if (pathname === '/api/summary' || pathname.indexOf('/api/summary/') === 0) return 'summary';
@@ -6380,6 +6381,319 @@ live.inventory_reservations.splice(idx, 1);
         });
     }
     // ===== FEAT-PURCHASE-22b (end) =====
+
+
+    // ================================================================
+    // ===== FEAT-QC-PRO-24a (begin): کنترل کیفیت حرفه‌ای — مستر گرید +
+    // مشخصات فنی محصول + آزمون ورودی مواد. کاملاً parallel به
+    // quality_inspections موجود ساخته شده (بدون هیچ تغییری در آن ماژول) و
+    // بدون وابستگی npm جدید. گریدهای پیش‌فرض از استانداردهای رسمی سید
+    // می‌شوند و همهٔ مقادیر min/max با CRUD قابل ویرایش‌اند:
+    //   A3 → ISIRI 3132 (ReH≥400 / Rm≥600 / A≥14٪ / P,S≤0.045)
+    //   A4 → ISIRI 8202 (آج500: ReH≥500 / Rm≥650)
+    //   5SP → GOST 5781 A-II (ReH≥392 / Rm≥586 / A≥19٪)
+    //   B500B → DIN 488/EN 10080 (ReH≥500 / Rm/Re≥1.08 / Agt≥5٪)
+    //   A615-Gr60 → ASTM A615 (ReH≥420 / Rm≥620 / C≤0.30 Mn≤1.20)
+    // نقش‌ها: qc ثبت+تأیید؛ warehouse فقط ثبت آزمون؛ engineering مشارکت
+    // در گرید/مشخصات؛ manager/finance/sales فقط‌خواندن.
+    // ================================================================
+    function qcEnsure24a(live) {
+        live.qc_grades_24 = Array.isArray(live.qc_grades_24) ? live.qc_grades_24 : [];
+        live.qc_specs_24 = Array.isArray(live.qc_specs_24) ? live.qc_specs_24 : [];
+        live.qc_incoming_24 = Array.isArray(live.qc_incoming_24) ? live.qc_incoming_24 : [];
+        live.qc_seq_24 = live.qc_seq_24 && typeof live.qc_seq_24 === 'object' ? live.qc_seq_24 : {};
+        if (live.qc_seq_24.incoming == null) live.qc_seq_24.incoming = 0;
+        return live;
+    }
+    function qcNextNo24a(live, key, prefix) { live.qc_seq_24[key] = (Number(live.qc_seq_24[key]) || 0) + 1; return prefix + '-' + String(live.qc_seq_24[key]).padStart(5, '0'); }
+    /* گریدهای پیش‌فرض استاندارد — idempotent (فقط بار اول؛ _qc_seed_24a) */
+    function qcSeedGrades24a(live) {
+        qcEnsure24a(live);
+        if (live._qc_seed_24a) return live;
+        const mk24a = (name, standard, chem, mech, diameters, notes) => ({ id: 'gr24-' + String(name).toLowerCase().replace(/[^a-z0-9]/g, ''), name, standard, chem, mech, diameters, active: true, notes: notes || '', _seed: true });
+        live.qc_grades_24.push(
+            mk24a('A3', 'ISIRI 3132',
+                { C: { min: null, max: 0.25 }, Mn: { min: 0.6, max: 1.6 }, Si: { min: 0.1, max: 0.6 }, P: { min: null, max: 0.045 }, S: { min: null, max: 0.045 }, Cu: { min: null, max: 0.4 }, N: { min: null, max: 0.012 } },
+                { ReH: { min: 400, max: null }, Rm: { min: 600, max: null }, A: { min: 14, max: null }, ratio: { min: 1.25, max: null }, bend: 'خمش 3d بدون ترک' },
+                [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32], 'میلگرد آج‌دار 400 — حداقل تسلیم ۴۰۰ و کشش ۶۰۰ مگاپاسکال (ISIRI 3132)'),
+            mk24a('A4', 'ISIRI 8202',
+                { C: { min: null, max: 0.22 }, Mn: { min: 0.7, max: 1.6 }, Si: { min: 0.15, max: 0.6 }, P: { min: null, max: 0.04 }, S: { min: null, max: 0.04 }, Cu: { min: null, max: 0.4 }, N: { min: null, max: 0.012 } },
+                { ReH: { min: 500, max: null }, Rm: { min: 650, max: null }, A: { min: 12, max: null }, ratio: { min: 1.2, max: null }, bend: 'خمش 3d' },
+                [10, 12, 14, 16, 18, 20, 22, 25, 28], 'میلگرد آج 500 (S500) — ISIRI 8202'),
+            mk24a('5SP', 'GOST 5781',
+                { C: { min: null, max: 0.3 }, Mn: { min: 0.5, max: 1.6 }, Si: { min: 0.15, max: 0.8 }, P: { min: null, max: 0.045 }, S: { min: null, max: 0.05 }, Cu: { min: null, max: 0.3 }, N: { min: null, max: 0.012 } },
+                { ReH: { min: 392, max: null }, Rm: { min: 586, max: null }, A: { min: 19, max: null }, ratio: { min: 1.15, max: null }, bend: 'خمش 3d' },
+                [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32], 'معادل A-II روسی — رایج بازار ایران'),
+            mk24a('B500B', 'DIN 488 / EN 10080',
+                { C: { min: null, max: 0.22 }, Mn: { min: 0.7, max: 1.6 }, Si: { min: 0.1, max: 0.6 }, P: { min: null, max: 0.04 }, S: { min: null, max: 0.04 }, Cu: { min: null, max: 0.4 }, N: { min: null, max: 0.012 } },
+                { ReH: { min: 500, max: null }, Rm: { min: 540, max: null }, A: { min: 8, max: null }, ratio: { min: 1.08, max: null }, bend: 'خمش و بازخم 3d' },
+                [8, 10, 12, 14, 16, 20, 25, 32], 'شکل‌پذیری بالا — Agt ≥ ۵٪ و نسبت Rm/ReH ≥ 1.08'),
+            mk24a('A615-Gr60', 'ASTM A615',
+                { C: { min: null, max: 0.3 }, Mn: { min: null, max: 1.2 }, Si: { min: null, max: 0.4 }, P: { min: null, max: 0.04 }, S: { min: null, max: 0.05 }, Cu: { min: null, max: 0.35 }, N: { min: null, max: 0.014 } },
+                { ReH: { min: 420, max: null }, Rm: { min: 620, max: null }, A: { min: 7, max: null }, ratio: { min: 1.15, max: null }, bend: 'bend test per ASTM A615' },
+                [10, 12, 14, 16, 18, 20, 22, 25, 28, 32], 'Grade 60 — ReH≥420 MPa (60 ksi)')
+        );
+        /* مشخصات فنی پیش‌فرض سایزهای رایج A3 — تلرانس جرم طولی ±۴.۵٪ (ISO 6935-2) */
+        const W24A = { 8: 0.395, 10: 0.617, 12: 0.888, 14: 1.21, 16: 1.58, 18: 2.0, 20: 2.47, 22: 2.98, 25: 3.85, 28: 4.83, 32: 6.31 };
+        [10, 12, 14, 16, 18, 20, 22, 25].forEach((s) => {
+            live.qc_specs_24.push({ id: 'ps24-' + s + '-a3', size: s, grade: 'A3', std: 'ISIRI 3132', nominal_weight_kg_m: W24A[s], tol_diameter_mm: { min: -0.4, max: 0.4 }, tol_length_mm: { min: -50, max: 50 }, tol_weight_percent: { min: -4.5, max: 4.5 }, piece_length_m: 12, active: true, _seed: true });
+        });
+        live._qc_seed_24a = { at: new Date().toISOString() };
+        return live;
+    }
+    /* ارزیابی per عنصر/ویژگی نسبت به مشخصات گرید — pass/fail با دلیل */
+    function qcEvalIncoming24a(grade, chem, mech) {
+        const rows = [];
+        const EL_FA_24A = { C: 'کربن (C)', Mn: 'منگنز (Mn)', Si: 'سیلیس (Si)', P: 'فسفر (P)', S: 'گوگرد (S)', Cu: 'مس (Cu)', N: 'نیتروژن (N)' };
+        Object.keys(EL_FA_24A).forEach((el) => {
+            const spec = (grade && grade.chem && grade.chem[el]) || null;
+            const hasSpec = !!(spec && (spec.min != null || spec.max != null));
+            const val = (chem && chem[el] != null && chem[el] !== '') ? Number(chem[el]) : null;
+            if (!hasSpec && val == null) return;
+            let ok = true, why = '';
+            if (val == null) { ok = false; why = 'نتیجهٔ آزمون ثبت نشده'; }
+            else if (hasSpec && spec.min != null && val < spec.min - 1e-9) { ok = false; why = 'کمتر از حداقل استاندارد (' + spec.min + ')'; }
+            else if (hasSpec && spec.max != null && val > spec.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر استاندارد (' + spec.max + ')'; }
+            rows.push({ kind: 'chem', el: el, label: EL_FA_24A[el], val: val, min: hasSpec ? spec.min : null, max: hasSpec ? spec.max : null, ok: ok, why: why });
+        });
+        const MECH_FA_24A = { ReH: 'تنش تسلیم ReH (MPa)', Rm: 'مقاومت کششی Rm (MPa)', A: 'ازدیاد طول A (٪)' };
+        Object.keys(MECH_FA_24A).forEach((k) => {
+            const spec = (grade && grade.mech && grade.mech[k]) || null;
+            const val = (mech && mech[k] != null && mech[k] !== '') ? Number(mech[k]) : null;
+            if (!spec && val == null) return;
+            let ok = true, why = '';
+            if (val == null) { ok = false; why = 'نتیجهٔ آزمون ثبت نشده'; }
+            else if (spec && spec.min != null && val < spec.min - 1e-9) { ok = false; why = 'کمتر از حداقل استاندارد (' + spec.min + ')'; }
+            else if (spec && spec.max != null && val > spec.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر استاندارد (' + spec.max + ')'; }
+            rows.push({ kind: 'mech', el: k, label: MECH_FA_24A[k], val: val, min: spec ? spec.min : null, max: spec ? spec.max : null, ok: ok, why: why });
+        });
+        if (mech && mech.bend != null && mech.bend !== '') rows.push({ kind: 'mech', el: 'bend', label: 'تست خمش', val: mech.bend ? 1 : 0, min: null, max: null, ok: !!mech.bend, why: mech.bend ? '' : 'خمش مغایر (ترک/شکست)' });
+        const overall = rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail';
+        return { rows: rows, overall: overall };
+    }
+    /* قرنطینهٔ خودکار ردیف‌های فیزیکی یک آزمون ردشده (رد آزمون ورودی) — روی دادهٔ انبار با مارکر، بدون تغییر API انبار */
+    function qcQuarantineRows24a(live, receiptNo, heatNumber) {
+        let n = 0;
+        (live.inventory_receipts || []).forEach((r) => {
+            if (!r || r.stock_status !== 'available') return;
+            const byReceipt = receiptNo && String(r.source_ref || '') === String(receiptNo);
+            const byHeat = heatNumber && String(r.heat_number || '') === String(heatNumber) && String(r.warehouse) === 'raw';
+            if (byReceipt || byHeat) { r.stock_status = 'quarantine'; r.qc_note_24 = 'قرنطینه QC ورودی — آزمون ردشده'; n++; }
+        });
+        return n;
+    }
+    const QC_READ_24A = ['admin', 'qc', 'quality', 'warehouse', 'engineering', 'manager', 'finance', 'sales'];
+    const QC_GRADE_W_24A = ['admin', 'qc', 'engineering'];
+    const QC_IN_REG_24A = ['admin', 'qc', 'quality', 'warehouse'];
+    const QC_IN_APR_24A = ['admin', 'qc'];
+    const QC_IN_STATUS_FA_24A = { draft: 'در انتظار تصمیم QC', approved: 'تأیید QC', rejected: 'رد QC' };
+
+    if (req.method === 'GET' && pathname === '/api/qcpro/overview') {
+        if (!auth.requireRole(req, QC_READ_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ کنترل کیفیت حرفه‌ای برای نقش شما مجاز نیست.' }, 403);
+        const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+        writeJson(LIVE_FILE, live); /* seed idempotent — فایل همیشه به‌روز */
+        const incEval = (live.qc_incoming_24 || []).map((t) => {
+            const g = (live.qc_grades_24 || []).find((x) => x.id === t.grade_id);
+            const gr = (live.purchase_receipts || []).find((r) => r.receipt_no === t.receipt_no);
+            const ev = qcEvalIncoming24a(g, t.chem, t.mech);
+            return Object.assign({}, t, { grade_name: g ? g.name : (t.grade || '—'), grade_std: g ? g.standard : '', supplier_name: gr ? gr.supplier_name : (t.supplier_name || '—'), po_no: gr ? gr.po_no : (t.po_no || ''), eval: ev, status_fa: QC_IN_STATUS_FA_24A[t.status] || t.status });
+        });
+        const kpi24a = {
+            grades_active: (live.qc_grades_24 || []).filter((g) => g.active !== false).length,
+            specs_active: (live.qc_specs_24 || []).filter((s) => s.active !== false).length,
+            tests_total: incEval.length, tests_pending: incEval.filter((t) => t.status === 'draft').length,
+            tests_approved: incEval.filter((t) => t.status === 'approved').length, tests_rejected: incEval.filter((t) => t.status === 'rejected').length,
+        };
+        return sendJson(res, {
+            ok: true, today_jalali: finIsoToJalali(new Date().toISOString()),
+            grades: live.qc_grades_24, specs: live.qc_specs_24, incoming: incEval.sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || ''))),
+            bom_ref: (live.fin_bom || []).map((b) => ({ size: b.size, std_cost: finStdCostPerTon(b, live.fin_config || {}) })),
+            receipts_ref: (live.purchase_receipts || []).slice(0, 80).map((r) => ({ receipt_no: r.receipt_no, po_no: r.po_no, supplier_name: r.supplier_name, status: r.status, lines: (r.lines || []).map((l, i) => ({ i: i, kind: l.kind, item_name: l.item_name, heat_number: l.heat_number || '', qty: l.qty })), has_test: (live.qc_incoming_24 || []).some((t) => t.receipt_no === r.receipt_no) })),
+            kpi: kpi24a,
+        });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/qcpro/grades') {
+        if (!auth.requireRole(req, QC_GRADE_W_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مدیریت مستر گرید فقط برای qc/مهندسی/مدیر مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+                const name = String(b.name || '').trim().slice(0, 30);
+                if (!name) return sendJson(res, { error: 'نام گرید الزامی است (مثال: A3).' }, 400);
+                if ((live.qc_grades_24 || []).some((g) => g.name === name)) return sendJson(res, { error: 'گریدی با نام «' + name + '» قبلاً تعریف شده است — برای تغییر از ویرایش استفاده کنید.' }, 409);
+                const chem = b.chem && typeof b.chem === 'object' ? b.chem : {};
+                const mech = b.mech && typeof b.mech === 'object' ? b.mech : {};
+                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
+                    const sp = chem[el] && typeof chem[el] === 'object' ? chem[el] : {};
+                    chem[el] = { min: sp.min == null || sp.min === '' ? null : Number(sp.min), max: sp.max == null || sp.max === '' ? null : Number(sp.max) };
+                });
+                ['ReH', 'Rm', 'A', 'ratio'].forEach((k) => {
+                    const sp = mech[k] && typeof mech[k] === 'object' ? mech[k] : {};
+                    mech[k] = { min: sp.min == null || sp.min === '' ? null : Number(sp.min), max: sp.max == null || sp.max === '' ? null : Number(sp.max) };
+                });
+                mech.bend = String(mech.bend || 'خمش 3d').slice(0, 60);
+                const dias = Array.isArray(b.diameters) ? b.diameters.map((d) => Math.round(Number(d) || 0)).filter((d) => d > 0) : [];
+                const rec = { id: 'gr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name, standard: String(b.standard || '').trim().slice(0, 60) || 'داخلی', chem: chem, mech: mech, diameters: dias, active: b.active === false ? false : true, notes: String(b.notes || '').slice(0, 300), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
+                live.qc_grades_24.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ گرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.grade.create', { name: name, standard: rec.standard });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت گرید ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'PUT' && pathname === '/api/qcpro/grades') {
+        if (!auth.requireRole(req, QC_GRADE_W_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+                const g = (live.qc_grades_24 || []).find((x) => x.id === String(b.id || ''));
+                if (!g) return sendJson(res, { error: 'گرید یافت نشد.' }, 404);
+                if (b.standard !== undefined) g.standard = String(b.standard || '').trim().slice(0, 60);
+                if (b.chem && typeof b.chem === 'object') {
+                    ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
+                        const sp = b.chem[el];
+                        if (!sp || typeof sp !== 'object') return;
+                        g.chem[el] = g.chem[el] || { min: null, max: null };
+                        if (sp.min !== undefined) g.chem[el].min = sp.min == null || sp.min === '' ? null : Number(sp.min);
+                        if (sp.max !== undefined) g.chem[el].max = sp.max == null || sp.max === '' ? null : Number(sp.max);
+                    });
+                }
+                if (b.mech && typeof b.mech === 'object') {
+                    ['ReH', 'Rm', 'A', 'ratio'].forEach((k) => {
+                        const sp = b.mech[k];
+                        if (!sp || typeof sp !== 'object') return;
+                        g.mech[k] = g.mech[k] || { min: null, max: null };
+                        if (sp.min !== undefined) g.mech[k].min = sp.min == null || sp.min === '' ? null : Number(sp.min);
+                        if (sp.max !== undefined) g.mech[k].max = sp.max == null || sp.max === '' ? null : Number(sp.max);
+                    });
+                    if (b.mech.bend !== undefined) g.mech.bend = String(b.mech.bend || '').slice(0, 60);
+                }
+                if (b.diameters !== undefined) g.diameters = Array.isArray(b.diameters) ? b.diameters.map((d) => Math.round(Number(d) || 0)).filter((d) => d > 0) : [];
+                if (b.notes !== undefined) g.notes = String(b.notes || '').slice(0, 300);
+                if (b.active !== undefined) g.active = !!b.active;
+                g.updated_by = String((req.user && (req.user.name || req.user.username)) || '');
+                g.updated_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ گرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.grade.update', { id: g.id, name: g.name, active: g.active });
+                return sendJson(res, { ok: true, record: g });
+            } catch (e) { return sendJson(res, { error: 'ویرایش گرید ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/qcpro/specs') {
+        if (!auth.requireRole(req, QC_GRADE_W_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشخصات فنی محصول فقط برای qc/مهندسی/مدیر مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+                const size = Math.round(Number(b.size) || 0);
+                if (!(size >= 6 && size <= 50)) return sendJson(res, { error: 'سایز میلگرد باید بین ۶ تا ۵۰ باشد.' }, 400);
+                const grade = String(b.grade || '').trim().slice(0, 30);
+                if (!grade) return sendJson(res, { error: 'گرید الزامی است.' }, 400);
+                const dup = (live.qc_specs_24 || []).find((s) => s.size === size && s.grade === grade && s.active !== false);
+                if (dup && !b.id) return sendJson(res, { error: 'مشخصات فنی سایز ' + size + ' گرید ' + grade + ' قبلاً ثبت شده است.' }, 409);
+                const tolD = b.tol_diameter_mm || {}, tolL = b.tol_length_mm || {}, tolW = b.tol_weight_percent || {};
+                const rec = { id: b.id ? String(b.id) : 'ps24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), size: size, grade: grade, std: String(b.std || '').trim().slice(0, 60) || 'ISIRI 3132', nominal_weight_kg_m: Number(b.nominal_weight_kg_m) || 0, tol_diameter_mm: { min: Number(tolD.min) || 0, max: Number(tolD.max) || 0 }, tol_length_mm: { min: Number(tolL.min) || 0, max: Number(tolL.max) || 0 }, tol_weight_percent: { min: Number(tolW.min) || 0, max: Number(tolW.max) || 0 }, piece_length_m: Number(b.piece_length_m) || 12, active: b.active === false ? false : true, notes: String(b.notes || '').slice(0, 300), updated_by: String((req.user && (req.user.name || req.user.username)) || ''), updated_at: new Date().toISOString() };
+                if (rec.nominal_weight_kg_m <= 0) return sendJson(res, { error: 'وزن نامی بر متر (kg/m) الزامی است.' }, 400);
+                if (dup && b.id === dup.id) live.qc_specs_24 = live.qc_specs_24.map((s) => (s.id === rec.id ? rec : s));
+                else live.qc_specs_24.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ مشخصات فنی انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.spec.upsert', { size: size, grade: grade });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت مشخصات ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/qcpro/incoming') {
+        if (!auth.requireRole(req, QC_IN_REG_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت آزمون ورودی فقط برای qc/کیفیت/انبار مجاز است (تأیید نهایی فقط qc).' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+                const receiptNo = String(b.receipt_no || '').trim().slice(0, 40);
+                const gr = (live.purchase_receipts || []).find((r) => r.receipt_no === receiptNo);
+                if (!gr) return sendJson(res, { error: 'رسید خرید با شماره «' + (receiptNo || '—') + '» یافت نشد — آزمون ورودی باید به رسید خرید (GRN) ارجاع داشته باشد.' }, 404);
+                const lineIdx = b.line_index == null || b.line_index === '' ? 0 : Math.max(0, Math.round(Number(b.line_index) || 0));
+                const line = (gr.lines || [])[lineIdx];
+                if (!line) return sendJson(res, { error: 'ردیف ' + (lineIdx + 1) + ' در رسید «' + receiptNo + '» وجود ندارد.' }, 400);
+                const heat = String(b.heat_number || line.heat_number || '').trim().slice(0, 40);
+                if (!heat) return sendJson(res, { error: 'کد هیت (Heat Number) برای آزمون ورودی الزامی است.' }, 400);
+                if ((live.qc_incoming_24 || []).some((t) => t.receipt_no === receiptNo && t.heat_number === heat && t.line_index === lineIdx)) return sendJson(res, { error: 'برای رسید ' + receiptNo + ' و هیت ' + heat + ' قبلاً آزمون ورودی ثبت شده است.' }, 409);
+                const gradeId = String(b.grade_id || '');
+                const grade = (live.qc_grades_24 || []).find((g) => g.id === gradeId);
+                if (!grade) return sendJson(res, { error: 'گرید انتخابی در مستر گرید یافت نشد.' }, 400);
+                const chem = b.chem && typeof b.chem === 'object' ? b.chem : {};
+                const mech = b.mech && typeof b.mech === 'object' ? b.mech : {};
+                const c24a = {}, m24a = {};
+                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => { if (chem[el] != null && chem[el] !== '') c24a[el] = Number(chem[el]); });
+                ['ReH', 'Rm', 'A'].forEach((k) => { if (mech[k] != null && mech[k] !== '') m24a[k] = Number(mech[k]); });
+                m24a.bend = mech.bend === true || mech.bend === 1 || mech.bend === '1';
+                const rec = {
+                    id: 'inc24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    test_no: qcNextNo24a(live, 'incoming', 'INC'),
+                    date_jalali: finIsoToJalali(new Date().toISOString()),
+                    receipt_no: receiptNo, po_no: gr.po_no, supplier_name: gr.supplier_name, line_index: lineIdx,
+                    item_name: line.item_name || line.kind, kind: line.kind || '',
+                    heat_number: heat, size: line.kind === 'rebar' ? (Number(line.size) || 0) : 0,
+                    grade_id: grade.id, grade: grade.name, quantity_ton: Number(line.qty) || 0,
+                    chem: c24a, mech: m24a,
+                    method_chem: String(b.method_chem || 'اسپکترومتری').slice(0, 60), method_mech: String(b.method_mech || 'کشش — ISO 6892-1').slice(0, 60),
+                    status: 'draft', notes: String(b.notes || '').slice(0, 400),
+                    registered_by: String((req.user && (req.user.name || req.user.username)) || ''), registered_at: new Date().toISOString(),
+                    decided_by: '', decided_at: null, quarantine_count: 0,
+                };
+                rec.eval = qcEvalIncoming24a(grade, c24a, m24a);
+                live.qc_incoming_24.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ آزمون ورودی انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.incoming.register', { test_no: rec.test_no, receipt_no: receiptNo, heat: heat, grade: grade.name, overall: rec.eval.overall });
+                return sendJson(res, { ok: true, record: Object.assign({}, rec, { eval: rec.eval }) }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت آزمون ورودی ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/qcpro/incoming/decide') {
+        if (!auth.requireRole(req, QC_IN_APR_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: تأیید/رد آزمون ورودی فقط برای کنترل کیفیت (qc) مجاز است — انبار فقط ثبت می‌کند.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+                const t = (live.qc_incoming_24 || []).find((x) => x.id === String(b.id || '') || x.test_no === String(b.id || ''));
+                if (!t) return sendJson(res, { error: 'آزمون ورودی یافت نشد.' }, 404);
+                if (t.status !== 'draft') return sendJson(res, { error: 'برای این آزمون قبلاً تصمیم گرفته شده (وضعیت: ' + (QC_IN_STATUS_FA_24A[t.status] || t.status) + ').' }, 409);
+                const decision = String(b.decision || '');
+                if (['approved', 'rejected'].indexOf(decision) === -1) return sendJson(res, { error: 'تصمیم باید «approved» یا «rejected» باشد.' }, 400);
+                t.status = decision;
+                t.decided_by = String((req.user && (req.user.name || req.user.username)) || '');
+                t.decided_at = new Date().toISOString();
+                t.decision_note = String(b.notes || '').slice(0, 300);
+                if (decision === 'rejected') {
+                    /* ===== FEAT-QC-PRO-24a: سند خودکار رد آزمون — قرنطینهٔ ردیف‌های فیزیکی همان رسید/هیت (کاهش موجودی قابل‌مصرف) ===== */
+                    t.quarantine_count = qcQuarantineRows24a(live, t.receipt_no, t.heat_number);
+                    if (!t.quarantine_count && t.heat_number) {
+                        /* رسید بدون هیت ثبت‌شده — قرنطینه بر اساس هیت در همهٔ انبارها */
+                        (live.inventory_receipts || []).forEach((r) => { if (r && r.stock_status === 'available' && String(r.heat_number || '') === String(t.heat_number)) { r.stock_status = 'quarantine'; r.qc_note_24 = 'قرنطینه QC ورودی — آزمون ردشده'; t.quarantine_count++; } });
+                    }
+                }
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ تصمیم QC انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.incoming.decide', { test_no: t.test_no, decision: decision, quarantine: t.quarantine_count || 0 });
+                return sendJson(res, { ok: true, record: t, quarantined: t.quarantine_count || 0 });
+            } catch (e) { return sendJson(res, { error: 'تصمیم QC ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    // ===== FEAT-QC-PRO-24a (end) =====
 
 
 

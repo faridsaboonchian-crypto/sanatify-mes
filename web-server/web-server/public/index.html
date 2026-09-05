@@ -1661,6 +1661,127 @@
                     <table id="tbl-quality"></table>
                 </div>
                 <div class="pager" id="pager-quality"></div>
+            <!-- ============================================================ -->
+            <!-- ===== FEAT-QC-PRO-24a (begin): کنترل کیفیت حرفه‌ای — مستر گرید + مشخصات فنی + آزمون ورودی مواد -->
+            <!-- ============================================================ -->
+            <div class="panel">
+                <h2>🏆 QC-PRO — مستر گرید استاندارد <span class="plan-engine" id="qcChip24">…</span></h2>
+                <p class="note">مشخصات شیمیایی (C/Mn/Si/P/S/Cu/N) و مکانیکی (تسلیم/کشش/ازدیاد طول/نسبت Rm/ReH) هر گرید با حداقل/حداکثر — مبنا: ISIRI 3132 (A3)، ISIRI 8202 (A4)، GOST 5781 (5SP)، DIN 488 (B500B)، ASTM A615 (Gr60). آزمون‌های ورودی با همین حدود ارزیابی می‌شوند؛ ویرایش همهٔ مقادیر با کنترل دسترسی qc/مهندسی.</p>
+                <div class="kpis" id="qcGrKpis24"></div>
+                <div class="toolbar">
+                    <button class="act" id="qcGrAdd24" style="display:none">➕ گرید جدید</button>
+                    <button class="act excel" id="qcGrXls24">اکسل گریدها 📊</button>
+                </div>
+                <div id="qcGrForm24" class="filters hidden">
+                    <div class="frow">
+                        <label>نام گرید: <input id="qcGrName24" placeholder="A3 / B500B / …" style="width:120px"></label>
+                        <label>استاندارد: <input id="qcGrStd24" placeholder="ISIRI 3132" style="width:140px"></label>
+                        <label>قطرهای مجاز (با کاما): <input id="qcGrDia24" placeholder="8,10,12,14,16" style="width:180px"></label>
+                    </div>
+                    <div class="frow"><div class="note" style="flex:1 1 100%">حدود شیمیایی (٪ وزنی — خالی = بدون حد):</div></div>
+                    <div class="frow">
+                        <label>C: <input id="qcGrCmin24" placeholder="min" style="width:64px" step="0.001"><input id="qcGrCmax24" placeholder="max" style="width:64px" step="0.001"></label>
+                        <label>Mn: <input id="qcGrMnmin24" placeholder="min" style="width:64px" step="0.001"><input id="qcGrMnmax24" placeholder="max" style="width:64px" step="0.001"></label>
+                        <label>Si: <input id="qcGrSimin24" placeholder="min" style="width:64px" step="0.001"><input id="qcGrSimax24" placeholder="max" style="width:64px" step="0.001"></label>
+                        <label>P≤: <input id="qcGrPmax24" placeholder="max" style="width:64px" step="0.001"></label>
+                        <label>S≤: <input id="qcGrSmax24" placeholder="max" style="width:64px" step="0.001"></label>
+                        <label>Cu≤: <input id="qcGrCumax24" placeholder="max" style="width:64px" step="0.001"></label>
+                        <label>N≤: <input id="qcGrNmax24" placeholder="max" style="width:64px" step="0.001"></label>
+                    </div>
+                    <div class="frow"><div class="note" style="flex:1 1 100%">حدود مکانیکی (ISO 6892-1):</div></div>
+                    <div class="frow">
+                        <label>ReH≥ (MPa): <input id="qcGrReH24" style="width:80px"></label>
+                        <label>Rm≥ (MPa): <input id="qcGrRm24" style="width:80px"></label>
+                        <label>A≥ (٪): <input id="qcGrA24" style="width:70px"></label>
+                        <label>Rm/ReH≥: <input id="qcGrRatio24" style="width:80px" step="0.01"></label>
+                        <label>الزام خمش: <input id="qcGrBend24" placeholder="خمش 3d" style="width:130px"></label>
+                    </div>
+                    <div class="frow">
+                        <label style="flex:1">یادداشت: <input id="qcGrNotes24" placeholder="اختیاری"></label>
+                    </div>
+                    <div class="toolbar">
+                        <button class="act" id="qcGrSave24" style="background:#15803d">ذخیرهٔ گرید</button>
+                        <button class="act" id="qcGrCancel24">بستن</button>
+                        <span class="note" id="qcGrMsg24"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:360px;overflow-y:auto"><table id="tbl-qc-grades24"></table></div>
+            </div>
+            <div class="panel">
+                <h2>📐 مشخصات فنی محصول — سایز / گرید / تلرانس‌ها</h2>
+                <p class="note">تلرانس ابعادی (قطر/طول) و جرم طولی (±۴.۵٪ طبق ISO 6935-2) + وزن نامی kg/m؛ ستون «بهای استاندارد BOM» اتصال به مالی (فاز ۸) است — فقط نمایش، بدون تغییر BOM.</p>
+                <div class="toolbar">
+                    <button class="act" id="qcSpAdd24" style="display:none">➕ مشخصات جدید</button>
+                    <button class="act excel" id="qcSpXls24">اکسل مشخصات 📊</button>
+                </div>
+                <div id="qcSpForm24" class="filters hidden">
+                    <div class="frow">
+                        <label>سایز: <select id="qcSpSize24" class="fsel" style="width:90px"></select></label>
+                        <label>گرید: <input id="qcSpGrade24" placeholder="A3" style="width:90px"></label>
+                        <label>استاندارد: <input id="qcSpStd24" style="width:130px"></label>
+                        <label>وزن نامی (kg/m): <input id="qcSpW24" style="width:100px" step="0.001"></label>
+                        <label>طول شاخه (m): <input id="qcSpLen24" style="width:80px" value="12"></label>
+                    </div>
+                    <div class="frow">
+                        <label>تلرانس قطر (±mm): <input id="qcSpDia24" style="width:80px" value="0.4" step="0.1"></label>
+                        <label>تلرانس طول (−mm): <input id="qcSpLenTol24" style="width:80px" value="50"></label>
+                        <label>تلرانس وزن (±٪): <input id="qcSpWTol24" style="width:80px" value="4.5" step="0.1"></label>
+                        <label style="flex:1">یادداشت: <input id="qcSpNotes24" placeholder="اختیاری"></label>
+                    </div>
+                    <div class="toolbar">
+                        <button class="act" id="qcSpSave24" style="background:#15803d">ذخیرهٔ مشخصات</button>
+                        <button class="act" id="qcSpCancel24">بستن</button>
+                        <span class="note" id="qcSpMsg24"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:320px;overflow-y:auto"><table id="tbl-qc-specs24"></table></div>
+            </div>
+            <div class="panel">
+                <h2>🔬 آزمون ورودی مواد — Heat Number + اسپکترومتری / کشش</h2>
+                <p class="note">هر آزمون به رسید خرید (GRN) + کد هیت ارجاع دارد؛ نتایج شیمیایی/مکانیکی per عنصر با مشخصات گرید مقایسه و pass/fail می‌شود؛ تأیید QC = شمش قابل‌مصرف، رد QC = قرنطینهٔ خودکار ردیف‌های فیزیکی (ستون «مسدود» تب انبار). نقش‌ها: انبار/کیفیت ثبت می‌کنند، تأیید/رد فقط کنترل کیفیت (qc).</p>
+                <div class="kpis" id="qcInKpis24"></div>
+                <div class="toolbar">
+                    <button class="act" id="qcInAdd24" style="display:none">➕ ثبت آزمون ورودی</button>
+                    <button class="act excel" id="qcInXls24">اکسل آزمون‌ها 📊</button>
+                </div>
+                <div id="qcInForm24" class="filters hidden">
+                    <div class="frow">
+                        <label>رسید خرید (GRN): <select id="qcInRcpt24" class="fsel" style="min-width:210px"></select></label>
+                        <label>ردیف: <select id="qcInLine24" class="fsel" style="width:70px"></select></label>
+                        <label>کد هیت: <input id="qcInHeat24" placeholder="HT-1405-…" style="width:130px"></label>
+                        <label>گرید: <select id="qcInGrade24" class="fsel" style="min-width:130px"></select></label>
+                    </div>
+                    <div class="frow"><div class="note" style="flex:1 1 100%">آنالیز شیمیایی — اسپکترومتری (٪ وزنی):</div></div>
+                    <div class="frow">
+                        <label>C: <input id="qcInC24" style="width:70px" step="0.001"></label>
+                        <label>Mn: <input id="qcInMn24" style="width:70px" step="0.001"></label>
+                        <label>Si: <input id="qcInSi24" style="width:70px" step="0.001"></label>
+                        <label>P: <input id="qcInP24" style="width:70px" step="0.001"></label>
+                        <label>S: <input id="qcInS24" style="width:70px" step="0.001"></label>
+                        <label>Cu: <input id="qcInCu24" style="width:70px" step="0.001"></label>
+                        <label>N: <input id="qcInN24" style="width:70px" step="0.001"></label>
+                    </div>
+                    <div class="frow"><div class="note" style="flex:1 1 100%">آزمون مکانیکی — کشش (ISO 6892-1):</div></div>
+                    <div class="frow">
+                        <label>ReH (MPa): <input id="qcInReH24" style="width:90px"></label>
+                        <label>Rm (MPa): <input id="qcInRm24" style="width:90px"></label>
+                        <label>A (٪): <input id="qcInA24" style="width:70px" step="0.1"></label>
+                        <label>تست خمش: <select id="qcInBend24" class="fsel" style="width:140px"><option value="1">مطابق</option><option value="0">مغایر</option></select></label>
+                    </div>
+                    <div class="frow">
+                        <label style="flex:1">یادداشت: <input id="qcInNotes24" placeholder="اختیاری"></label>
+                    </div>
+                    <div id="qcInEval24" class="note" style="flex:1 1 100%;margin:2px 0 0"></div>
+                    <div class="toolbar">
+                        <button class="act" id="qcInSave24" style="background:#15803d">ثبت آزمون</button>
+                        <button class="act" id="qcInCancel24">بستن</button>
+                        <span class="note" id="qcInMsg24"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:430px;overflow-y:auto"><table id="tbl-qc-incoming24"></table></div>
+            </div>
+            <!-- ===== FEAT-QC-PRO-24a (end) ===== -->
+
             </div>
         </section>
         <section id="tab-genealogy" class="hidden">
@@ -4120,7 +4241,7 @@ box.innerHTML = html;
         })();
         /* ===== SAAS-15c (end) ===== */
         let WEB_ROLE = 'viewer';        const ROLE_CAN = { production: ['admin', 'operator'], waste: ['admin', 'operator'], downtime: ['admin', 'operator', 'engineering'], quality: ['admin', 'quality', 'qc'], warehouse: ['admin', 'warehouse'], maintenance: ['admin', 'engineering'] }; /* SEC-AUDIT-13c: سرپرست = خواندن تولید + شروع اجرا (ثبت‌ها با سرور هم‌تراز شد — قبلاً دکمه می‌دید و ۴۰۳ می‌گرفت) */        const ROLE_VIEW = {            admin: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance', 'sales', 'purchase'], /* FEAT-FIN-13b + FEAT-SALES-21a: +تب فروش + FEAT-PURCHASE-22a: +تب خرید */
-            owner: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance', 'sales', 'purchase'], /* SEC-LIC-24: مالک سیستم = همهٔ تب‌ها مثل admin */            manager: ['summary', 'analytics', 'planning', 'finance', 'sales', 'purchase'], /* FEAT-SALES-21a: +فروش فقط‌خواندن + FEAT-PURCHASE-22a: +خرید فقط‌خواندن */ /* FEAT-FIN-13b: مدیریت فقط‌خواندن */ operator: ['production', 'waste', 'downtime'], /* SEC-AUDIT-13c: برنامه‌ریزی از اپراتور گرفته شد */ supervisor: ['production', 'waste', 'downtime', 'maintenance', 'planning'], planner: ['summary', 'analytics', 'planning'], warehouse: ['warehouse', 'sales', 'purchase'], /* FEAT-SALES-21a: +ثبت حوالهٔ فروش + FEAT-PURCHASE-22a: +ثبت رسید خرید */ quality: ['quality'], qc: ['quality'], engineering: ['downtime', 'maintenance'], finance: ['summary', 'warehouse', 'finance', 'sales', 'purchase'], /* FEAT-FIN-13b: مالی + خواندن انبار/خلاصه + FEAT-SALES-21a + FEAT-PURCHASE-22a: +خرید فقط‌خواندن */ sales: ['sales'], /* FEAT-SALES-21a: واحد فروش — ثبت و تأیید */ purchase: ['purchase'], /* FEAT-PURCHASE-22a: واحد خرید — ثبت و تأیید */        };        async function loadRole() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' });                if (r.ok) { const j = await r.json(); if (j.ok && j.user) { WEB_ROLE = j.user.role || 'viewer'; WEB_USER = j.user; const fp = document.getElementById('fpBy'); if (fp) fp.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); const fq = document.getElementById('fqBy'); if (fq) fq.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); } }            } catch (e) { /* بی‌ضرر */ }            applyRoleUI();        }        function applyRoleUI() {            const can = (tab) =>                WEB_ROLE === 'admin' || WEB_ROLE === 'owner' || /* SEC-LIC-24: مالک = دسترسی کامل */                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            /* ===== FEAT-SALES-21a (begin): دسترسی دکمه‌های فروش ===== */            const salW21a = WEB_ROLE === 'admin' || WEB_ROLE === 'sales';            ['salCustAdd', 'salPriceAdd', 'salOrderAdd'].forEach(function (id21a) { const el21a = document.getElementById(id21a); if (el21a) el21a.style.display = salW21a ? '' : 'none'; });            const salX21a = document.getElementById('salExitAdd'); if (salX21a) salX21a.style.display = (salW21a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-SALES-21a (end) ===== */            /* ===== FEAT-PURCHASE-22a (begin): دسترسی دکمه‌های خرید ===== */            const purW22a = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purSupAdd', 'purReqAdd', 'purQuoteAdd', 'purPOAdd'].forEach(function (id22a) { const el22a = document.getElementById(id22a); if (el22a) el22a.style.display = purW22a ? '' : 'none'; });            const purR22a = document.getElementById('purRcptAdd'); if (purR22a) purR22a.style.display = (purW22a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-PURCHASE-22b (begin): دکمه‌های فاکتور/پرداخت — فقط واحد خرید ===== */            const purWB22b = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purInvAdd22b', 'purPayAdd22b'].forEach(function (id22b) { const el22b = document.getElementById(id22b); if (el22b) el22b.style.display = purWB22b ? '' : 'none'; });            /* ===== FEAT-PURCHASE-22b (end) ===== */            /* ===== FEAT-PURCHASE-22a (end) ===== */            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        ((button.dataset.tab === 'org' ? (WEB_ROLE === 'admin' || WEB_ROLE === 'owner') : view.indexOf(button.dataset.tab) !== -1) /* SEC-LIC-24 */ && moduleEnabled15a(button.dataset.tab)) /* SAAS-15a + SAAS-15c */                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                ((currentTab !== 'org' && view.indexOf(currentTab) === -1) || !moduleEnabled15a(currentTab)) /* SAAS-15a + SAAS-15c */            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
+            owner: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance', 'sales', 'purchase'], /* SEC-LIC-24: مالک سیستم = همهٔ تب‌ها مثل admin */            manager: ['summary', 'analytics', 'planning', 'finance', 'sales', 'purchase', 'quality'], /* FEAT-QC-PRO-24a: +کیفیت فقط‌خواندن */ /* FEAT-SALES-21a: +فروش فقط‌خواندن + FEAT-PURCHASE-22a: +خرید فقط‌خواندن */ /* FEAT-FIN-13b: مدیریت فقط‌خواندن */ operator: ['production', 'waste', 'downtime'], /* SEC-AUDIT-13c: برنامه‌ریزی از اپراتور گرفته شد */ supervisor: ['production', 'waste', 'downtime', 'maintenance', 'planning'], planner: ['summary', 'analytics', 'planning'], warehouse: ['warehouse', 'sales', 'purchase', 'quality'], /* FEAT-QC-PRO-24a: +ثبت آزمون ورودی */ /* FEAT-SALES-21a: +ثبت حوالهٔ فروش + FEAT-PURCHASE-22a: +ثبت رسید خرید */ quality: ['quality'], qc: ['quality'], engineering: ['downtime', 'maintenance', 'quality'], /* FEAT-QC-PRO-24a: +کیفیت فقط‌خواندن */ finance: ['summary', 'warehouse', 'finance', 'sales', 'purchase'], /* FEAT-FIN-13b: مالی + خواندن انبار/خلاصه + FEAT-SALES-21a + FEAT-PURCHASE-22a: +خرید فقط‌خواندن */ sales: ['sales'], /* FEAT-SALES-21a: واحد فروش — ثبت و تأیید */ purchase: ['purchase'], /* FEAT-PURCHASE-22a: واحد خرید — ثبت و تأیید */        };        async function loadRole() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' });                if (r.ok) { const j = await r.json(); if (j.ok && j.user) { WEB_ROLE = j.user.role || 'viewer'; WEB_USER = j.user; const fp = document.getElementById('fpBy'); if (fp) fp.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); const fq = document.getElementById('fqBy'); if (fq) fq.textContent = 'ثبت‌کننده: ' + (j.user.name || j.user.username); } }            } catch (e) { /* بی‌ضرر */ }            applyRoleUI();        }        function applyRoleUI() {            const can = (tab) =>                WEB_ROLE === 'admin' || WEB_ROLE === 'owner' || /* SEC-LIC-24: مالک = دسترسی کامل */                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            /* ===== FEAT-SALES-21a (begin): دسترسی دکمه‌های فروش ===== */            const salW21a = WEB_ROLE === 'admin' || WEB_ROLE === 'sales';            ['salCustAdd', 'salPriceAdd', 'salOrderAdd'].forEach(function (id21a) { const el21a = document.getElementById(id21a); if (el21a) el21a.style.display = salW21a ? '' : 'none'; });            const salX21a = document.getElementById('salExitAdd'); if (salX21a) salX21a.style.display = (salW21a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-SALES-21a (end) ===== */            /* ===== FEAT-PURCHASE-22a (begin): دسترسی دکمه‌های خرید ===== */            const purW22a = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purSupAdd', 'purReqAdd', 'purQuoteAdd', 'purPOAdd'].forEach(function (id22a) { const el22a = document.getElementById(id22a); if (el22a) el22a.style.display = purW22a ? '' : 'none'; });            const purR22a = document.getElementById('purRcptAdd'); if (purR22a) purR22a.style.display = (purW22a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-PURCHASE-22b (begin): دکمه‌های فاکتور/پرداخت — فقط واحد خرید ===== */            const purWB22b = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purInvAdd22b', 'purPayAdd22b'].forEach(function (id22b) { const el22b = document.getElementById(id22b); if (el22b) el22b.style.display = purWB22b ? '' : 'none'; });            /* ===== FEAT-PURCHASE-22b (end) ===== */            /* ===== FEAT-PURCHASE-22a (end) ===== */            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        ((button.dataset.tab === 'org' ? (WEB_ROLE === 'admin' || WEB_ROLE === 'owner') : view.indexOf(button.dataset.tab) !== -1) /* SEC-LIC-24 */ && moduleEnabled15a(button.dataset.tab)) /* SAAS-15a + SAAS-15c */                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                ((currentTab !== 'org' && view.indexOf(currentTab) === -1) || !moduleEnabled15a(currentTab)) /* SAAS-15a + SAAS-15c */            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
                         view[0] +
                         '"]'                    );                if (first) {                    first.click();                } else {                    document                        .querySelectorAll(                            'main > section'                        )                        .forEach(                            section =>                                section.classList                                    .add('hidden')                        );                }            }        }        window.__roleReady = loadRole(); /* SEC-AUDIT-13c */
         loadTenantConfig15a(); /* SAAS-15a: برندینگ + گیت ماژولی */        document.getElementById('applyFilter').addEventListener('click', () => {            activeFilter = { from: readJalaliValue(document, 'pf'), to: readJalaliValue(document, 'pt'), shift: document.getElementById('filterShift').value, product: document.getElementById('filterProduct').value };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('clearFilter').addEventListener('click', () => {            ['pf', 'pt'].forEach((p) => { document.querySelectorAll('input[data-jp="' + p + '"]').forEach((el) => { el.value = ''; }); });            document.getElementById('filterShift').value = 'all'; document.getElementById('filterProduct').value = 'all';            activeFilter = { from: '', to: '', shift: 'all', product: 'all' };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('btnAddProduction').addEventListener('click', () => { document.getElementById('formProduction').classList.toggle('hidden'); document.getElementById('fpMsg').textContent = ''; });        document.getElementById('fpCancel').addEventListener('click', () => { document.getElementById('formProduction').classList.add('hidden'); });        document.getElementById('fpSave').addEventListener('click', async () => {            const msg = document.getElementById('fpMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', product_id: document.getElementById('fpProduct').value, shift_id: document.getElementById('fpShift').value, good_quantity: Number(document.getElementById('fpQty').value), pallet_count: Number(document.getElementById('fpPallets').value) || 0, machine_id: 'st-pack', heat_number: document.getElementById('fpHeat').value.trim(), description: document.getElementById('fpDesc').value.trim() };            try {                const r = await fetch('/api/entry/production', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formProduction').classList.add('hidden');                ['fpQty', 'fpPallets', 'fpDesc', 'fpHeat'].forEach((id) => { document.getElementById(id).value = ''; });                await loadProduction(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت تولید با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddWaste').addEventListener('click', () => { document.getElementById('formWaste').classList.toggle('hidden'); document.getElementById('fwMsg').textContent = ''; });        document.getElementById('fwCancel').addEventListener('click', () => { document.getElementById('formWaste').classList.add('hidden'); });        document.getElementById('fwSave').addEventListener('click', async () => {            const msg = document.getElementById('fwMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', machine_id: document.getElementById('fwStation').value, waste_type: document.getElementById('fwType').value, reason_id: document.getElementById('fwReason').value, shift_id: document.getElementById('fwShift').value, quantity: Number(document.getElementById('fwQty').value), description: document.getElementById('fwDesc').value.trim() };            try {                const r = await fetch('/api/entry/waste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formWaste').classList.add('hidden');                ['fwQty', 'fwDesc'].forEach((id) => { document.getElementById(id).value = ''; });                await loadWaste(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت ضایعات با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddDowntime').addEventListener('click', () => { document.getElementById('formDowntime').classList.toggle('hidden'); document.getElementById('fdMsg').textContent = ''; });        document.getElementById('fdCancel').addEventListener('click', () => { document.getElementById('formDowntime').classList.add('hidden'); });        document.getElementById('fdSave').addEventListener('click', async () => {            const msg = document.getElementById('fdMsg'); msg.textContent = '';            const sd = readJalaliValue(document, 'fds'), ed = readJalaliValue(document, 'fde');            if (!sd || !ed) { msg.textContent = 'تاریخ شمسی را کامل وارد کنید (مثال: ۱۴۰۵/۰۵/۱۶).'; return; }            const start = parseJalaliDateTime(sd, document.getElementById('fdStartTime').value);            const end = parseJalaliDateTime(ed, document.getElementById('fdEndTime').value);            if (!start || !end) { msg.textContent = 'تاریخ یا ساعت نامعتبر است.'; return; }            const body = { reason_id: document.getElementById('fdReason').value, is_unplanned: Number(document.getElementById('fdType').value), shift_id: document.getElementById('fdShift').value, start_time: start.toISOString(), end_time: end.toISOString(), machine_id: document.getElementById('fdStation').value, description: document.getElementById('fdDesc').value.trim() };            try {                const r = await fetch('/api/entry/downtime', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formDowntime').classList.add('hidden');                ['fdStartTime', 'fdEndTime', 'fdDesc'].forEach((id) => { document.getElementById(id).value = ''; });                document.querySelectorAll('#formDowntime input[data-jp]').forEach((el) => { el.value = ''; });                await loadDowntime(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت توقف با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddQuality').addEventListener('click', () => { document.getElementById('formQuality').classList.toggle('hidden'); document.getElementById('fqMsg').textContent = ''; });        document.getElementById('fqCancel').addEventListener('click', () => { document.getElementById('formQuality').classList.add('hidden'); });        document.getElementById('fqSave').addEventListener('click', async () => {            const msg = document.getElementById('fqMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', heat_number: document.getElementById('fqHeat').value.trim(), rebar_size: Number(document.getElementById('fqSize').value), yield_strength: Number(document.getElementById('fqPressure').value), tensile_strength: Number(document.getElementById('fqLining').value), elongation_percent: Number(document.getElementById('fqDrop').value) || 0, /* ===== FEAT-QC-3: ارسال فیلدهای دستگاه ===== */ sample_length_mm: Number(document.getElementById('fqLen').value) || 0, sample_weight_g: Number(document.getElementById('fqWt').value) || 0, nominal_diameter_mm: Number(document.getElementById('fqDia').value) || 0, section_area_mm2: Number(document.getElementById('fqArea').value) || 0, yield_kgf: Number(document.getElementById('fqYkgf').value) || 0, kg_per_m: Number(document.getElementById('fqKgM').value) || 0, rib_diameter_mm: Number(document.getElementById('fqRibD').value) || 0, nafi_diameter_mm: Number(document.getElementById('fqNafi').value) || 0 /* FIX-QC-3b: نافی */, ratio_rm_reh: Number(document.getElementById('fqRatio').value) || 0, bend_test_passed: Number(document.getElementById('fqLeak').value), visual_inspection: Number(document.getElementById('fqVisual').value), description: document.getElementById('fqDesc').value.trim() };            try {                const r = await fetch('/api/entry/quality', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formQuality').classList.add('hidden');                ['fqHeat', 'fqPressure', 'fqLining', 'fqDrop', 'fqDesc', 'fqLen', 'fqWt', 'fqRibD', 'fqNafi'].forEach((id) => { document.getElementById(id).value = ''; });                await loadQuality(); lastOkAt = Date.now(); setLiveStatus(true); alert('آزمون QC با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        // ===== REVERT-STEEL-2: ارزیابی زندهٔ QC در فرم (هم‌تراز مانیتور دستگاه تست کشش) =====
@@ -7378,6 +7499,388 @@ showRes();
     /* ===== FEAT-GL-23b (end) ===== */
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
     loaders.finance = function () { return loadAll(); }; /* FEAT-FIN-13b: ورود به تب مالی */
+// ===== FEAT-QC-PRO-24a (begin): کلاینت کنترل کیفیت حرفه‌ای — مستر گرید + مشخصات فنی + آزمون ورودی مواد =====
+(function () {
+    let qcData24 = null;
+    const qcEl24 = (id) => document.getElementById(id);
+    function qcCan24(list) { return WEB_ROLE === 'admin' || WEB_ROLE === 'owner' || list.indexOf(WEB_ROLE) !== -1; }
+    const qcGradeW24 = () => qcCan24(['qc', 'engineering']);
+    const qcInReg24 = () => qcCan24(['qc', 'quality', 'warehouse']);
+    const qcInApr24 = () => qcCan24(['qc']);
+    function qcMsg24(id, text, isErr) { const el = qcEl24(id); if (!el) return; el.textContent = text || ''; el.style.color = isErr ? '#b91c1c' : ''; }
+    function qcNum24(v) { const n = Number(String(v == null ? '' : v).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)).replace(/[,\s]/g, '')); return isNaN(n) ? null : n; }
+    const QC_W_KGM_24 = { 8: 0.395, 10: 0.617, 12: 0.888, 14: 1.21, 16: 1.58, 18: 2.0, 20: 2.47, 22: 2.98, 25: 3.85, 28: 4.83, 32: 6.31 };
+    async function qcLoad24() {
+        const chip = qcEl24('qcChip24'); if (chip) chip.textContent = 'در حال بارگذاری…';
+        try {
+            const r = await fetch('/api/qcpro/overview', { cache: 'no-store' });
+            if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || ('HTTP ' + r.status)); }
+            qcData24 = await r.json();
+            qcRender24();
+            if (chip) chip.textContent = 'برخط ✅';
+        } catch (e) {
+            if (chip) chip.textContent = 'خطا در دریافت';
+            qcRender24();
+        }
+    }
+    function qcGradeById24(id) { return ((qcData24 && qcData24.grades) || []).find((g) => g.id === id) || null; }
+    /* ارزیابی زندهٔ فرم آزمون ورودی — همان منطق سرور (per عنصر) */
+    function qcEvalLocal24(grade, chem, mech) {
+        const rows = [];
+        ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
+            const sp = grade && grade.chem && grade.chem[el];
+            const hasSpec = sp && (sp.min != null || sp.max != null);
+            const val = qcNum24(chem[el]);
+            if (!hasSpec && val == null) return;
+            let ok = true, why = '';
+            if (val == null) { ok = false; why = 'ثبت نشده'; }
+            else if (hasSpec && sp.min != null && val < sp.min) { ok = false; why = 'کمتر از حداقل ' + sp.min; }
+            else if (hasSpec && sp.max != null && val > sp.max) { ok = false; why = 'بیشتر از حداکثر ' + sp.max; }
+            rows.push({ label: el, val: val, min: hasSpec ? sp.min : null, max: hasSpec ? sp.max : null, ok: ok, why: why });
+        });
+        ['ReH', 'Rm', 'A'].forEach((k) => {
+            const sp = grade && grade.mech && grade.mech[k];
+            const val = qcNum24(mech[k]);
+            if (!sp && val == null) return;
+            let ok = true, why = '';
+            if (val == null) { ok = false; why = 'ثبت نشده'; }
+            else if (sp && sp.min != null && val < sp.min) { ok = false; why = 'کمتر از حداقل ' + sp.min; }
+            rows.push({ label: k, val: val, min: sp ? sp.min : null, max: null, ok: ok, why: why });
+        });
+        const bend = mech.bend === '1';
+        rows.push({ label: 'خمش', val: bend ? 'مطابق' : 'مغایر', min: null, max: null, ok: bend, why: bend ? '' : 'مغایر' });
+        return { rows: rows, overall: rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail' };
+    }
+    function qcEvalText24(ev) {
+        return ev.rows.map((r) => r.label + ': ' + (r.val == null ? '—' : r.val) + (r.min != null ? ' (حداقل ' + r.min : '') + (r.max != null ? (r.min != null ? '، حداکثر ' : ' (حداکثر ') + r.max : '') + (r.min != null || r.max != null ? ')' : '') + ' → ' + (r.ok ? 'مطابق ✓' : 'مغایر ✗ ' + r.why)).join(' | ');
+    }
+    function qcApplyRole24() {
+        const gAdd = qcEl24('qcGrAdd24'); if (gAdd) gAdd.style.display = qcGradeW24() ? '' : 'none';
+        const sAdd = qcEl24('qcSpAdd24'); if (sAdd) sAdd.style.display = qcGradeW24() ? '' : 'none';
+        const iAdd = qcEl24('qcInAdd24'); if (iAdd) iAdd.style.display = qcInReg24() ? '' : 'none';
+    }
+    function qcRender24() { qcRenderGrades24(); qcRenderSpecs24(); qcRenderIncoming24(); qcFillSelects24(); qcApplyRole24(); }
+    /* ---------- مستر گرید ---------- */
+    let qcGrEdit24 = '';
+    function qcRenderGrades24() {
+        const el = qcEl24('tbl-qc-grades24'); if (!el) return;
+        const rows = (qcData24 && qcData24.grades) || [];
+        const kEl = qcEl24('qcGrKpis24');
+        if (kEl) {
+            const act = rows.filter((g) => g.active !== false).length;
+            kEl.innerHTML = [
+                { l: 'گریدهای فعال', v: fa(act) },
+                { l: 'کل گریدها', v: fa(rows.length) },
+                { l: 'مشخصات فنی فعال', v: fa(((qcData24 && qcData24.specs) || []).filter((s) => s.active !== false).length) },
+            ].map((k) => '<div class="kpi"><div class="kl">' + k.l + '</div><div class="kv">' + k.v + '</div></div>').join('');
+        }
+        const chemSum = (g) => ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].map((e2) => { const sp = g.chem && g.chem[e2]; if (!sp || (sp.min == null && sp.max == null)) return ''; return e2 + (sp.min != null ? '≥' + sp.min : '') + (sp.max != null ? '≤' + sp.max : ''); }).filter(Boolean).join(' — ');
+        const mechSum = (g) => { const m = g.mech || {}; const parts = []; if (m.ReH && m.ReH.min != null) parts.push('ReH≥' + m.ReH.min); if (m.Rm && m.Rm.min != null) parts.push('Rm≥' + m.Rm.min); if (m.A && m.A.min != null) parts.push('A≥' + m.A.min + '٪'); if (m.ratio && m.ratio.min != null) parts.push('Rm/ReH≥' + m.ratio.min); if (m.bend) parts.push(m.bend); return parts.join(' — '); };
+        let html = '<thead><tr><th>گرید</th><th>استاندارد</th><th>حدود شیمیایی</th><th>حدود مکانیکی</th><th>قطرهای مجاز</th><th>وضعیت</th>' + (qcGradeW24() ? '<th>عملیات</th>' : '') + '</tr></thead><tbody>';
+        if (!rows.length) html += '<tr><td colspan="7" class="empty">گریدی ثبت نشده است.</td></tr>';
+        rows.forEach((g) => {
+            html += '<tr><td><b>' + esc(g.name) + '</b></td><td>' + esc(g.standard || '—') + '</td><td style="max-width:270px;font-size:11px">' + esc(chemSum(g) || '—') + '</td><td style="max-width:240px;font-size:11px">' + esc(mechSum(g) || '—') + '</td><td>' + toFaDigits((g.diameters || []).join('، ')) + '</td>'
+                + '<td><span class="chip ' + (g.active !== false ? 'ok' : 'no') + '">' + (g.active !== false ? 'فعال' : 'غیرفعال') + '</span></td>'
+                + (qcGradeW24() ? '<td style="white-space:nowrap"><button class="act" data-qcgredit="' + esc(g.id) + '">ویرایش</button> <button class="act" data-qcgrtog="' + esc(g.id) + '">' + (g.active !== false ? 'غیرفعال' : 'فعال') + '</button></td>' : '') + '</tr>';
+        });
+        el.innerHTML = html + '</tbody>';
+        el.querySelectorAll('button[data-qcgredit]').forEach((b) => b.addEventListener('click', () => qcGrFillEdit24(b.dataset.qcgredit)));
+        el.querySelectorAll('button[data-qcgrtog]').forEach((b) => b.addEventListener('click', async () => {
+            const g = qcGradeById24(b.dataset.qcgrtog); if (!g) return;
+            if (!confirm((g.active !== false ? 'غیرفعال‌سازی' : 'فعال‌سازی') + ' گرید «' + g.name + '»؟')) return;
+            try {
+                const r = await fetch('/api/qcpro/grades', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: g.id, active: g.active === false }) });
+                const j = await r.json(); if (!r.ok) { alert(j.error || 'خطا'); return; }
+                toast('گرید «' + g.name + '» بروزرسانی شد.', 'ok');
+                await qcLoad24();
+            } catch (e) { alert('خطا: ' + e.message); }
+        }));
+    }
+    const QC_GR_CHEM_FIELDS_24 = [['qcGrCmin24', 'C', 'min'], ['qcGrCmax24', 'C', 'max'], ['qcGrMnmin24', 'Mn', 'min'], ['qcGrMnmax24', 'Mn', 'max'], ['qcGrSimin24', 'Si', 'min'], ['qcGrSimax24', 'Si', 'max'], ['qcGrPmax24', 'P', 'max'], ['qcGrSmax24', 'S', 'max'], ['qcGrCumax24', 'Cu', 'max'], ['qcGrNmax24', 'N', 'max']];
+    function qcGrFillEdit24(id) {
+        const g = qcGradeById24(id); if (!g) return;
+        qcGrEdit24 = id;
+        qcEl24('qcGrName24').value = g.name || ''; qcEl24('qcGrName24').disabled = true; /* نام گرید پس از ثبت ثابت است (ارجاع آزمون‌ها) */
+        qcEl24('qcGrStd24').value = g.standard || '';
+        qcEl24('qcGrDia24').value = (g.diameters || []).join(',');
+        QC_GR_CHEM_FIELDS_24.forEach((p) => { const sp = (g.chem || {})[p[1]] || {}; qcEl24(p[0]).value = sp[p[2]] == null ? '' : sp[p[2]]; });
+        const m = g.mech || {};
+        qcEl24('qcGrReH24').value = m.ReH && m.ReH.min != null ? m.ReH.min : '';
+        qcEl24('qcGrRm24').value = m.Rm && m.Rm.min != null ? m.Rm.min : '';
+        qcEl24('qcGrA24').value = m.A && m.A.min != null ? m.A.min : '';
+        qcEl24('qcGrRatio24').value = m.ratio && m.ratio.min != null ? m.ratio.min : '';
+        qcEl24('qcGrBend24').value = m.bend || 'خمش 3d';
+        qcEl24('qcGrNotes24').value = g.notes || '';
+        qcEl24('qcGrForm24').classList.remove('hidden');
+        qcMsg24('qcGrMsg24', 'ویرایش گرید: ' + g.name);
+    }
+    function qcGrCollect24() {
+        const mx = (id) => ({ min: null, max: qcNum24(qcEl24(id).value) });
+        const mm = (id1, id2) => ({ min: qcNum24(qcEl24(id1).value), max: qcNum24(qcEl24(id2).value) });
+        return {
+            name: qcEl24('qcGrName24').value.trim(),
+            standard: qcEl24('qcGrStd24').value.trim(),
+            diameters: qcEl24('qcGrDia24').value.split(/[,\s،]+/).map((x) => qcNum24(x)).filter((x) => x > 0),
+            chem: { C: mm('qcGrCmin24', 'qcGrCmax24'), Mn: mm('qcGrMnmin24', 'qcGrMnmax24'), Si: mm('qcGrSimin24', 'qcGrSimax24'), P: mx('qcGrPmax24'), S: mx('qcGrSmax24'), Cu: mx('qcGrCumax24'), N: mx('qcGrNmax24') },
+            mech: { ReH: { min: qcNum24(qcEl24('qcGrReH24').value), max: null }, Rm: { min: qcNum24(qcEl24('qcGrRm24').value), max: null }, A: { min: qcNum24(qcEl24('qcGrA24').value), max: null }, ratio: { min: qcNum24(qcEl24('qcGrRatio24').value), max: null }, bend: qcEl24('qcGrBend24').value.trim() },
+            notes: qcEl24('qcGrNotes24').value.trim(),
+        };
+    }
+    /* ---------- مشخصات فنی محصول ---------- */
+    let qcSpEdit24 = '';
+    function qcRenderSpecs24() {
+        const el = qcEl24('tbl-qc-specs24'); if (!el) return;
+        const rows = (qcData24 && qcData24.specs) || [];
+        const bom = {};
+        ((qcData24 && qcData24.bom_ref) || []).forEach((b) => { bom[String(b.size)] = b.std_cost; });
+        let html = '<thead><tr><th>سایز</th><th>گرید</th><th>استاندارد</th><th>وزن نامی (kg/m)</th><th>تلرانس قطر (mm)</th><th>تلرانس طول (mm)</th><th>تلرانس وزن (٪)</th><th>طول شاخه (m)</th><th>بهای استاندارد BOM (ریال/تن)</th><th>وضعیت</th>' + (qcGradeW24() ? '<th>عملیات</th>' : '') + '</tr></thead><tbody>';
+        if (!rows.length) html += '<tr><td colspan="11" class="empty">مشخصات فنی ثبت نشده است.</td></tr>';
+        rows.forEach((s) => {
+            html += '<tr><td><b>' + toFaDigits(s.size) + '</b></td><td>' + esc(s.grade) + '</td><td>' + esc(s.std || '—') + '</td><td>' + fa(s.nominal_weight_kg_m) + '</td>'
+                + '<td>' + toFaDigits('±' + (s.tol_diameter_mm ? s.tol_diameter_mm.max : 0)) + '</td><td>' + toFaDigits('−' + (s.tol_length_mm ? Math.abs(s.tol_length_mm.min) : 0)) + '</td><td>' + toFaDigits('±' + (s.tol_weight_percent ? s.tol_weight_percent.max : 0)) + '</td><td>' + fa(s.piece_length_m) + '</td>'
+                + '<td>' + (bom[String(s.size)] ? groupFa(bom[String(s.size)]) : '—') + '</td>'
+                + '<td><span class="chip ' + (s.active !== false ? 'ok' : 'no') + '">' + (s.active !== false ? 'فعال' : 'غیرفعال') + '</span></td>'
+                + (qcGradeW24() ? '<td><button class="act" data-qcspedit="' + esc(s.id) + '">ویرایش</button></td>' : '') + '</tr>';
+        });
+        el.innerHTML = html + '</tbody>';
+        el.querySelectorAll('button[data-qcspedit]').forEach((b) => b.addEventListener('click', () => {
+            const s = ((qcData24 && qcData24.specs) || []).find((x) => x.id === b.dataset.qcspedit); if (!s) return;
+            qcSpEdit24 = s.id;
+            qcEl24('qcSpSize24').value = String(s.size); qcEl24('qcSpSize24').disabled = true;
+            qcEl24('qcSpGrade24').value = s.grade || '';
+            qcEl24('qcSpStd24').value = s.std || '';
+            qcEl24('qcSpW24').value = s.nominal_weight_kg_m || '';
+            qcEl24('qcSpLen24').value = s.piece_length_m || 12;
+            qcEl24('qcSpDia24').value = s.tol_diameter_mm ? s.tol_diameter_mm.max : 0.4;
+            qcEl24('qcSpLenTol24').value = s.tol_length_mm ? Math.abs(s.tol_length_mm.min) : 50;
+            qcEl24('qcSpWTol24').value = s.tol_weight_percent ? s.tol_weight_percent.max : 4.5;
+            qcEl24('qcSpNotes24').value = s.notes || '';
+            qcEl24('qcSpForm24').classList.remove('hidden');
+            qcMsg24('qcSpMsg24', 'ویرایش مشخصات سایز ' + s.size + ' — ' + s.grade);
+        }));
+    }
+    /* ---------- آزمون ورودی مواد ---------- */
+    function qcRenderIncoming24() {
+        const el = qcEl24('tbl-qc-incoming24'); if (!el) return;
+        const rows = (qcData24 && qcData24.incoming) || [];
+        const kEl = qcEl24('qcInKpis24');
+        if (kEl && qcData24 && qcData24.kpi) {
+            const k = qcData24.kpi;
+            kEl.innerHTML = [
+                { l: 'کل آزمون‌های ورودی', v: fa(k.tests_total || 0) },
+                { l: 'در انتظار تصمیم QC', v: fa(k.tests_pending || 0), c: k.tests_pending ? 'amber' : '' },
+                { l: 'تأییدشده', v: fa(k.tests_approved || 0), c: 'green' },
+                { l: 'ردشده', v: fa(k.tests_rejected || 0), c: k.tests_rejected ? 'red' : '' },
+            ].map((x) => '<div class="kpi"><div class="kl">' + x.l + '</div><div class="kv ' + (x.c || '') + '">' + x.v + '</div></div>').join('');
+        }
+        let html = '<thead><tr><th>شماره</th><th>تاریخ</th><th>رسید / PO</th><th>تأمین‌کننده</th><th>کد هیت</th><th>گرید</th><th>تناژ (تن)</th><th>نتیجهٔ آزمون</th><th>وضعیت</th><th>ثبت‌کننده / تصمیم</th>' + (qcInApr24() ? '<th>عملیات</th>' : '') + '</tr></thead><tbody>';
+        if (!rows.length) html += '<tr><td colspan="11" class="empty">آزمون ورودی‌ای ثبت نشده است.</td></tr>';
+        rows.forEach((t) => {
+            const ev = t.eval || { rows: [], overall: 'fail' };
+            const chip = ev.overall === 'pass' ? '<span class="chip ok">مطابق ✓</span>' : '<span class="chip no">مغایر ✗</span>';
+            html += '<tr><td><b>' + esc(t.test_no) + '</b></td><td>' + toFaDigits(t.date_jalali || '—') + '</td><td>' + esc(t.receipt_no) + '<br><span style="font-size:10px;color:#64748b">' + esc(t.po_no || '—') + '</span></td><td>' + esc(t.supplier_name || '—') + '</td><td>' + esc(t.heat_number) + '</td><td>' + esc(t.grade_name || t.grade || '—') + '<br><span style="font-size:10px;color:#64748b">' + esc(t.grade_std || '') + '</span></td><td>' + purFmt24(t.quantity_ton) + '</td><td>' + chip + '<button class="act" data-qcindet="' + esc(t.id) + '" style="margin-right:4px">جزئیات</button></td>'
+                + '<td><span class="chip ' + (t.status === 'approved' ? 'ok' : (t.status === 'rejected' ? 'no' : 'wait')) + '">' + esc(t.status_fa || t.status) + '</span>' + (t.status === 'rejected' && t.quarantine_count ? '<br><span style="font-size:10px;color:#b91c1c">قرنطینه: ' + fa(t.quarantine_count) + ' ردیف</span>' : '') + '</td>'
+                + '<td style="font-size:11px">' + esc(t.registered_by || '—') + (t.decided_by ? '<br>→ ' + esc(t.decided_by) : '') + '</td>'
+                + (qcInApr24() && t.status === 'draft' ? '<td style="white-space:nowrap"><button class="act" data-qcinok="' + esc(t.id) + '" style="background:#15803d">تأیید</button> <button class="act" data-qcinno="' + esc(t.id) + '" style="background:#b91c1c">رد</button></td>' : '') + '</tr>';
+            html += '<tr id="qcindetr-' + esc(t.id) + '" class="hidden"><td colspan="' + (qcInApr24() ? 11 : 10) + '" style="background:rgba(14,116,144,0.06);font-size:11px;line-height:1.9"><b>ارزیابی per عنصر (' + esc(t.method_chem || 'اسپکترومتری') + ' / ' + esc(t.method_mech || 'کشش') + '):</b><br>' + esc(qcEvalText24(ev)) + (t.notes ? '<br><b>یادداشت:</b> ' + esc(t.notes) : '') + (t.decision_note ? '<br><b>توضیح تصمیم:</b> ' + esc(t.decision_note) : '') + '</td></tr>';
+        });
+        el.innerHTML = html + '</tbody>';
+        el.querySelectorAll('button[data-qcindet]').forEach((b) => b.addEventListener('click', () => {
+            const row = qcEl24('qcindetr-' + b.dataset.qcindet); if (row) row.classList.toggle('hidden');
+        }));
+        el.querySelectorAll('button[data-qcinok]').forEach((b) => b.addEventListener('click', () => qcDecide24(b.dataset.qcinok, 'approved')));
+        el.querySelectorAll('button[data-qcinno]').forEach((b) => b.addEventListener('click', () => qcDecide24(b.dataset.qcinno, 'rejected')));
+    }
+    function purFmt24(n) { return fa(Math.round((Number(n) || 0) * 1000) / 1000); }
+    async function qcDecide24(id, decision) {
+        const t = ((qcData24 && qcData24.incoming) || []).find((x) => x.id === id); if (!t) return;
+        let note = '';
+        if (decision === 'rejected') { note = prompt('دلیل رد آزمون (در رکورد ثبت می‌شود):', (t.eval && t.eval.overall === 'fail' ? 'عدم انطباق نتایج با مشخصات گرید ' + (t.grade_name || '') : '')) || ''; if (!note) return; }
+        else { if (!confirm('تأیید QC آزمون ' + t.test_no + '؟ شمش هیت ' + t.heat_number + ' قابل‌مصرف می‌شود.')) return; }
+        try {
+            const r = await fetch('/api/qcpro/incoming/decide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, decision: decision, notes: note }) });
+            const j = await r.json();
+            if (!r.ok) { alert(j.error || 'خطا'); return; }
+            if (decision === 'rejected' && j.quarantined) toast('آزمون رد شد — ' + fa(j.quarantined) + ' ردیف فیزیکی به قرنطینه رفت (ستون «مسدود» تب انبار).', 'err');
+            else toast('آزمون تأیید شد — شمش هیت ' + (t.heat_number || '') + ' قابل‌مصرف است.', 'ok');
+            await qcLoad24();
+        } catch (e) { alert('خطا: ' + e.message); }
+    }
+    function qcFillSelects24() {
+        /* گریدها */
+        const gs = qcEl24('qcInGrade24');
+        if (gs) {
+            const cur = gs.value;
+            gs.innerHTML = '<option value="">— انتخاب گرید —</option>' + (((qcData24 && qcData24.grades) || []).filter((g) => g.active !== false).map((g) => '<option value="' + esc(g.id) + '">' + esc(g.name) + ' (' + esc(g.standard || '') + ')</option>').join(''));
+            if (cur) gs.value = cur;
+        }
+        /* رسیدهای خرید دارای هیت */
+        const rs = qcEl24('qcInRcpt24');
+        if (rs) {
+            const cur = rs.value;
+            const opts = (((qcData24 && qcData24.receipts_ref) || [])).map((r) => '<option value="' + esc(r.receipt_no) + '">' + esc(r.receipt_no) + ' — ' + esc(r.supplier_name || '') + (r.has_test ? ' ✓آزمون‌دار' : '') + '</option>').join('');
+            rs.innerHTML = '<option value="">— انتخاب رسید خرید —</option>' + opts;
+            if (cur) rs.value = cur;
+            qcInFillLines24();
+        }
+        /* سایزهای مشخصات فنی */
+        const ss = qcEl24('qcSpSize24');
+        if (ss && !ss.options.length) {
+            ss.innerHTML = [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32].map((s) => '<option value="' + s + '">سایز ' + fa(s) + '</option>').join('');
+        }
+    }
+    function qcInFillLines24() {
+        const rs = qcEl24('qcInRcpt24'), ls = qcEl24('qcInLine24');
+        if (!rs || !ls) return;
+        const rc = ((qcData24 && qcData24.receipts_ref) || []).find((x) => x.receipt_no === rs.value);
+        ls.innerHTML = (rc && rc.lines ? rc.lines : []).map((l) => '<option value="' + l.i + '">' + fa(l.i + 1) + ' — ' + esc(l.item_name || l.kind) + (l.heat_number ? ' (هیت ' + esc(l.heat_number) + ')' : '') + ' — ' + purFmt24(l.qty) + '</option>').join('');
+        qcInHeatFromLine24();
+    }
+    function qcInHeatFromLine24() {
+        const rs = qcEl24('qcInRcpt24'), ls = qcEl24('qcInLine24'), hs = qcEl24('qcInHeat24');
+        if (!rs || !ls || !hs) return;
+        const rc = ((qcData24 && qcData24.receipts_ref) || []).find((x) => x.receipt_no === rs.value);
+        const line = rc && rc.lines ? rc.lines[Number(ls.value) || 0] : null;
+        if (line && line.heat_number) hs.value = line.heat_number;
+    }
+    function qcInEvalPreview24() {
+        const g = qcGradeById24(qcEl24('qcInGrade24') ? qcEl24('qcInGrade24').value : '');
+        const box = qcEl24('qcInEval24'); if (!box) return;
+        if (!g) { box.textContent = 'برای پیش‌نمایش ارزیابی، گرید را انتخاب کنید.'; return; }
+        const chem = { C: qcEl24('qcInC24').value, Mn: qcEl24('qcInMn24').value, Si: qcEl24('qcInSi24').value, P: qcEl24('qcInP24').value, S: qcEl24('qcInS24').value, Cu: qcEl24('qcInCu24').value, N: qcEl24('qcInN24').value };
+        const mech = { ReH: qcEl24('qcInReH24').value, Rm: qcEl24('qcInRm24').value, A: qcEl24('qcInA24').value, bend: qcEl24('qcInBend24').value };
+        const ev = qcEvalLocal24(g, chem, mech);
+        box.innerHTML = '<b>پیش‌نمایش ارزیابی نسبت به گرید ' + esc(g.name) + ' (' + esc(g.standard || '') + '):</b> ' + (ev.overall === 'pass' ? '<span style="color:#15803d">مطابق ✓</span>' : '<span style="color:#b91c1c">مغایر ✗</span>') + ' — ' + esc(qcEvalText24(ev));
+    }
+    /* ---------- وایرینگ ---------- */
+    function qcWire24() {
+        const on = (id, ev, fn) => { const el = qcEl24(id); if (el) el.addEventListener(ev, fn); };
+        on('qcGrAdd24', 'click', () => {
+            qcGrEdit24 = '';
+            qcEl24('qcGrName24').disabled = false; qcEl24('qcGrName24').value = '';
+            qcEl24('qcGrStd24').value = ''; qcEl24('qcGrDia24').value = '';
+            QC_GR_CHEM_FIELDS_24.forEach((p) => { qcEl24(p[0]).value = ''; });
+            ['qcGrReH24', 'qcGrRm24', 'qcGrA24', 'qcGrRatio24', 'qcGrNotes24'].forEach((id) => { qcEl24(id).value = ''; });
+            qcEl24('qcGrBend24').value = 'خمش 3d';
+            qcEl24('qcGrForm24').classList.remove('hidden');
+            qcMsg24('qcGrMsg24', 'گرید جدید — حدود را از استاندارد مرجع وارد کنید.');
+        });
+        on('qcGrCancel24', 'click', () => qcEl24('qcGrForm24').classList.add('hidden'));
+        on('qcGrSave24', 'click', async () => {
+            const payload = qcGrCollect24();
+            if (!payload.name) { qcMsg24('qcGrMsg24', 'نام گرید الزامی است.', true); return; }
+            try {
+                const r = await fetch('/api/qcpro/grades', { method: qcGrEdit24 ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(qcGrEdit24 ? Object.assign({ id: qcGrEdit24 }, payload) : payload) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24('qcGrMsg24', j.error || 'خطا', true); return; }
+                toast('گرید «' + payload.name + '» ذخیره شد.', 'ok');
+                qcEl24('qcGrForm24').classList.add('hidden');
+                await qcLoad24();
+            } catch (e) { qcMsg24('qcGrMsg24', 'خطا: ' + e.message, true); }
+        });
+        on('qcSpAdd24', 'click', () => {
+            qcSpEdit24 = '';
+            const ss = qcEl24('qcSpSize24'); if (ss) { ss.disabled = false; if (!ss.options.length) ss.innerHTML = [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32].map((s) => '<option value="' + s + '">سایز ' + fa(s) + '</option>').join(''); ss.value = '16'; }
+            qcEl24('qcSpGrade24').value = 'A3'; qcEl24('qcSpStd24').value = 'ISIRI 3132';
+            qcEl24('qcSpW24').value = QC_W_KGM_24[16] || ''; qcEl24('qcSpLen24').value = '12';
+            qcEl24('qcSpDia24').value = '0.4'; qcEl24('qcSpLenTol24').value = '50'; qcEl24('qcSpWTol24').value = '4.5';
+            qcEl24('qcSpNotes24').value = '';
+            qcEl24('qcSpForm24').classList.remove('hidden');
+            qcMsg24('qcSpMsg24', '');
+        });
+        on('qcSpSize24', 'change', () => { const s = Number(qcEl24('qcSpSize24').value); if (QC_W_KGM_24[s]) qcEl24('qcSpW24').value = QC_W_KGM_24[s]; });
+        on('qcSpCancel24', 'click', () => qcEl24('qcSpForm24').classList.add('hidden'));
+        on('qcSpSave24', 'click', async () => {
+            const d = qcNum24(qcEl24('qcSpDia24').value) || 0, lt = Math.abs(qcNum24(qcEl24('qcSpLenTol24').value) || 0), wt = qcNum24(qcEl24('qcSpWTol24').value) || 0;
+            const payload = {
+                size: qcNum24(qcEl24('qcSpSize24').value), grade: qcEl24('qcSpGrade24').value.trim(), std: qcEl24('qcSpStd24').value.trim(),
+                nominal_weight_kg_m: qcNum24(qcEl24('qcSpW24').value), piece_length_m: qcNum24(qcEl24('qcSpLen24').value) || 12,
+                tol_diameter_mm: { min: -d, max: d }, tol_length_mm: { min: -lt, max: 0 }, tol_weight_percent: { min: -wt, max: wt },
+                notes: qcEl24('qcSpNotes24').value.trim(),
+            };
+            if (qcSpEdit24) payload.id = qcSpEdit24;
+            try {
+                const r = await fetch('/api/qcpro/specs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24('qcSpMsg24', j.error || 'خطا', true); return; }
+                toast('مشخصات فنی سایز ' + fa(payload.size) + ' ذخیره شد.', 'ok');
+                qcEl24('qcSpForm24').classList.add('hidden');
+                await qcLoad24();
+            } catch (e) { qcMsg24('qcSpMsg24', 'خطا: ' + e.message, true); }
+        });
+        on('qcInAdd24', 'click', () => {
+            qcEl24('qcInForm24').classList.remove('hidden');
+            qcMsg24('qcInMsg24', '');
+            qcInEvalPreview24();
+        });
+        on('qcInCancel24', 'click', () => qcEl24('qcInForm24').classList.add('hidden'));
+        on('qcInRcpt24', 'change', qcInFillLines24);
+        on('qcInLine24', 'change', qcInHeatFromLine24);
+        on('qcInGrade24', 'change', qcInEvalPreview24);
+        ['qcInC24', 'qcInMn24', 'qcInSi24', 'qcInP24', 'qcInS24', 'qcInCu24', 'qcInN24', 'qcInReH24', 'qcInRm24', 'qcInA24', 'qcInBend24'].forEach((id) => on(id, 'input', qcInEvalPreview24));
+        on('qcInBend24', 'change', qcInEvalPreview24);
+        on('qcInSave24', 'click', async () => {
+            const payload = {
+                receipt_no: qcEl24('qcInRcpt24').value, line_index: qcNum24(qcEl24('qcInLine24').value) || 0,
+                heat_number: qcEl24('qcInHeat24').value.trim(), grade_id: qcEl24('qcInGrade24').value,
+                chem: { C: qcEl24('qcInC24').value, Mn: qcEl24('qcInMn24').value, Si: qcEl24('qcInSi24').value, P: qcEl24('qcInP24').value, S: qcEl24('qcInS24').value, Cu: qcEl24('qcInCu24').value, N: qcEl24('qcInN24').value },
+                mech: { ReH: qcEl24('qcInReH24').value, Rm: qcEl24('qcInRm24').value, A: qcEl24('qcInA24').value, bend: qcEl24('qcInBend24').value === '1' },
+                notes: qcEl24('qcInNotes24').value.trim(),
+            };
+            if (!payload.receipt_no) { qcMsg24('qcInMsg24', 'انتخاب رسید خرید الزامی است.', true); return; }
+            if (!payload.grade_id) { qcMsg24('qcInMsg24', 'انتخاب گرید الزامی است.', true); return; }
+            if (!payload.heat_number) { qcMsg24('qcInMsg24', 'کد هیت (Heat Number) الزامی است.', true); return; }
+            try {
+                const r = await fetch('/api/qcpro/incoming', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24('qcInMsg24', j.error || 'خطا', true); return; }
+                toast('آزمون ورودی ' + j.record.test_no + ' ثبت شد — ' + (j.record.eval.overall === 'pass' ? 'پیش‌ارزیابی: مطابق ✓' : 'پیش‌ارزیابی: مغایر ✗') + ' (تأیید نهایی با qc).', j.record.eval.overall === 'pass' ? 'ok' : 'err');
+                qcEl24('qcInForm24').classList.add('hidden');
+                await qcLoad24();
+            } catch (e) { qcMsg24('qcInMsg24', 'خطا: ' + e.message, true); }
+        });
+        /* خروجی اکسل — گریدها (فرمت طولانی per عنصر) */
+        on('qcGrXls24', 'click', () => {
+            const rows = [];
+            (((qcData24 && qcData24.grades) || [])).forEach((g) => {
+                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
+                    const sp = g.chem && g.chem[el]; if (!sp || (sp.min == null && sp.max == null)) return;
+                    rows.push({ grade: g.name, std: g.standard, kind: 'شیمیایی', el: el, min: sp.min == null ? '' : sp.min, max: sp.max == null ? '' : sp.max, active: g.active !== false ? 'فعال' : 'غیرفعال' });
+                });
+                ['ReH', 'Rm', 'A', 'ratio'].forEach((k) => {
+                    const sp = g.mech && g.mech[k]; if (!sp || (sp.min == null && sp.max == null)) return;
+                    rows.push({ grade: g.name, std: g.standard, kind: 'مکانیکی', el: k, min: sp.min == null ? '' : sp.min, max: sp.max == null ? '' : sp.max, active: g.active !== false ? 'فعال' : 'غیرفعال' });
+                });
+            });
+            downloadXls('مستر_گرید', [{ label: 'گرید', key: 'grade' }, { label: 'استاندارد', key: 'std' }, { label: 'نوع', key: 'kind' }, { label: 'عنصر/ویژگی', key: 'el' }, { label: 'حداقل', key: 'min' }, { label: 'حداکثر', key: 'max' }, { label: 'وضعیت', key: 'active' }], rows, 'مستر گرید استاندارد — کنترل کیفیت حرفه‌ای');
+        });
+        /* خروجی اکسل — مشخصات فنی */
+        on('qcSpXls24', 'click', () => {
+            const bom = {}; ((qcData24 && qcData24.bom_ref) || []).forEach((b) => { bom[String(b.size)] = b.std_cost; });
+            const rows = (((qcData24 && qcData24.specs) || [])).map((s) => ({ size: s.size, grade: s.grade, std: s.std, w: s.nominal_weight_kg_m, dia: '±' + (s.tol_diameter_mm ? s.tol_diameter_mm.max : 0), len: '−' + (s.tol_length_mm ? Math.abs(s.tol_length_mm.min) : 0), wt: '±' + (s.tol_weight_percent ? s.tol_weight_percent.max : 0), pl: s.piece_length_m, bom: bom[String(s.size)] || '', active: s.active !== false ? 'فعال' : 'غیرفعال' }));
+            downloadXls('مشخصات_فنی_محصول', [{ label: 'سایز', key: 'size' }, { label: 'گرید', key: 'grade' }, { label: 'استاندارد', key: 'std' }, { label: 'وزن نامی (kg/m)', key: 'w' }, { label: 'تلرانس قطر (mm)', key: 'dia' }, { label: 'تلرانس طول (mm)', key: 'len' }, { label: 'تلرانس وزن (٪)', key: 'wt' }, { label: 'طول شاخه (m)', key: 'pl' }, { label: 'بهای استاندارد BOM (ریال/تن)', key: 'bom' }, { label: 'وضعیت', key: 'active' }], rows, 'مشخصات فنی محصول — سایز/گرید/تلرانس‌ها');
+        });
+        /* خروجی اکسل — آزمون‌های ورودی */
+        on('qcInXls24', 'click', () => {
+            const rows = (((qcData24 && qcData24.incoming) || [])).map((t) => {
+                const c = t.chem || {}, m = t.mech || {};
+                return { no: t.test_no, date: t.date_jalali, rc: t.receipt_no, po: t.po_no, sup: t.supplier_name, heat: t.heat_number, grade: t.grade_name || t.grade, qty: t.quantity_ton, C: c.C, Mn: c.Mn, Si: c.Si, P: c.P, S: c.S, Cu: c.Cu, N: c.N, ReH: m.ReH, Rm: m.Rm, A: m.A, bend: m.bend ? 'مطابق' : 'مغایر', overall: t.eval && t.eval.overall === 'pass' ? 'مطابق' : 'مغایر', status: t.status_fa, reg: t.registered_by, dec: t.decided_by, q: t.quarantine_count || '' };
+            });
+            downloadXls('آزمون_ورودی_مواد', [{ label: 'شماره', key: 'no' }, { label: 'تاریخ', key: 'date' }, { label: 'رسید', key: 'rc' }, { label: 'PO', key: 'po' }, { label: 'تأمین‌کننده', key: 'sup' }, { label: 'کد هیت', key: 'heat' }, { label: 'گرید', key: 'grade' }, { label: 'تناژ (تن)', key: 'qty' }, { label: 'C٪', key: 'C' }, { label: 'Mn٪', key: 'Mn' }, { label: 'Si٪', key: 'Si' }, { label: 'P٪', key: 'P' }, { label: 'S٪', key: 'S' }, { label: 'Cu٪', key: 'Cu' }, { label: 'N٪', key: 'N' }, { label: 'ReH (MPa)', key: 'ReH' }, { label: 'Rm (MPa)', key: 'Rm' }, { label: 'A٪', key: 'A' }, { label: 'خمش', key: 'bend' }, { label: 'نتیجهٔ کلی', key: 'overall' }, { label: 'وضعیت', key: 'status' }, { label: 'ثبت‌کننده', key: 'reg' }, { label: 'تصمیم', key: 'dec' }, { label: 'ردیف قرنطینه', key: 'q' }], rows, 'آزمون ورودی مواد — Heat Number + اسپکترومتری/کشش');
+        });
+    }
+    try { qcWire24(); } catch (e) { /* بی‌ضرر */ }
+    /* بارگذاری QC-PRO هنگام ورود به تب کیفیت — wrap افزایندهٔ loadQuality + به‌روزرسانی loaders
+       (deferred — پس از مقداردهی کامل اسکریپت، تا loaders در TDZ نیفتد) */
+    function qcWrapLoader24() {
+        try {
+            const origLQ24 = loaders.quality; /* loadQuality یک const است — wrap روی loaders.quality (الگوی sales/finance) */
+            loaders.quality = async function () { await origLQ24(); try { await qcLoad24(); } catch (e) { /* بی‌ضرر */ } };
+        } catch (e) { /* بی‌ضرر */ }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', qcWrapLoader24); else setTimeout(qcWrapLoader24, 0);
+})();
+// ===== FEAT-QC-PRO-24a (end) =====
 })();
 // ===== FEAT-FIN-13b (end) =====
 // ===== FEAT-PWA-8b (begin): ثبت سرویس‌ورکر + بنر نصب دوستانه (Android: beforeinstallprompt — iOS: راهنمای Share → Add to Home Screen) =====
