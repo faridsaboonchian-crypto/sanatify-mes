@@ -1638,6 +1638,149 @@ function appRequestHandler(req, res) {
         return (live.fin_docs || []).filter((d) => (!fromPid || String(d.period_id) >= fromPid) && (!toPid || String(d.period_id) <= toPid));
     }
 
+    // ===== FEAT-GL-23a (begin): ابزارهای GL — تراز آزمایشی چندستونی / گردش حساب / دفتر کل / برگشت و تعدیل سند (فقط گزارش و ابزار حسابداری — هیچ endpoint عملیاتی تغییر نمی‌کند) =====
+    const GL_LEVEL_LEN_23A = { 1: 1, 2: 3, 3: 6, 4: 9 };
+    function glJTs23a(dJ, hour) {
+        const iso = planJalaliToTs(String(dJ || ''), hour == null ? 12 : hour);
+        if (!iso) return null;
+        const t = Date.parse(iso);
+        return isNaN(t) ? null : t;
+    }
+    function glNormRange23a(from, to) {
+        const fd = finDigitsEn(String(from || '')).trim();
+        const td = finDigitsEn(String(to || '')).trim();
+        const fOk = fd && glJTs23a(fd, 0) != null, tOk = td && glJTs23a(td, 23) != null;
+        return { from: fOk ? fd : null, to: tOk ? td : null, valid: (!fd || fOk) && (!td || tOk) };
+    }
+    /* تفکیک اسناد: افتتاحیه (قبل از از تاریخ) + گردش دوره [از..تا] — مبنای ماندهٔ اول/پایان دوره */
+    function glSplitDocs23a(live, from, to) {
+        const fT = from ? glJTs23a(from, 0) : null;
+        const tT = to ? glJTs23a(to, 23) : null;
+        const opening = [], turn = [];
+        (live.fin_docs || []).forEach((d) => {
+            const ts = glJTs23a(d.date_jalali, 12);
+            if (ts == null) return;
+            if (fT != null && ts < fT) { opening.push(d); return; }
+            if (tT == null || ts <= tT) turn.push(d);
+        });
+        return { opening: opening, turn: turn };
+    }
+    /* رولاپ کد حساب در سطح خواسته‌شده (گروه/کل/معین/تفضیلی) با پیشوند کد */
+    function glKeyOf23a(code, level) {
+        const len = GL_LEVEL_LEN_23A[Number(level)] || 6;
+        const c = String(code || '');
+        return c.length <= len ? c : c.slice(0, len);
+    }
+    function glAgg23a(docs, level) {
+        const m = new Map();
+        docs.forEach((d) => (d.lines || []).forEach((ln) => {
+            const k = glKeyOf23a(ln.account_code, level);
+            if (!k) return;
+            let r = m.get(k);
+            if (!r) { r = { code: k, debit: 0, credit: 0 }; m.set(k, r); }
+            r.debit += Number(ln.debit) || 0;
+            r.credit += Number(ln.credit) || 0;
+        }));
+        return m;
+    }
+    function glAccTitleMap23a(live) {
+        const t = {};
+        (live.fin_accounts || []).forEach((a) => { t[String(a.code)] = a; });
+        return t;
+    }
+    /* تراز آزمایشی چندستونی: ماندهٔ اول دوره (بدهکار/بستانکار) + گردش (بدهکار/بستانکار) + ماندهٔ پایان دوره (بدهکار/بستانکار) */
+    function glTrialBalance23a(live, from, to, level, includeZero) {
+        const split = glSplitDocs23a(live, from, to);
+        const aggOb = glAgg23a(split.opening, level), aggTb = glAgg23a(split.turn, level);
+        const titles = glAccTitleMap23a(live);
+        const codes = new Set([].concat(Array.from(aggOb.keys()), Array.from(aggTb.keys())));
+        if (includeZero) (live.fin_accounts || []).forEach((a) => { if (Number(a.level) === Number(level) && a.active !== false) codes.add(String(a.code)); });
+        const rows = Array.from(codes).sort().map((code) => {
+            const ob = aggOb.get(code) || { debit: 0, credit: 0 }, tb = aggTb.get(code) || { debit: 0, credit: 0 };
+            const obBal = Math.round(ob.debit - ob.credit), tBal = Math.round(tb.debit - tb.credit);
+            const cbBal = obBal + tBal;
+            const acc = titles[code];
+            return {
+                code: code, title: acc ? acc.title : '—', type: acc ? acc.type : null,
+                ob_debit: obBal > 0 ? obBal : 0, ob_credit: obBal < 0 ? -obBal : 0,
+                debit: Math.round(tb.debit), credit: Math.round(tb.credit),
+                cb_debit: cbBal > 0 ? cbBal : 0, cb_credit: cbBal < 0 ? -cbBal : 0
+            };
+        });
+        /* چک توازن per ردیف: نمایش همزمان ماندهٔ بدهکار و بستانکار در یک ردیف = ناهنجاری (علامت قرمز) */
+        rows.forEach((r) => { r.ok = !(r.ob_debit > 0 && r.ob_credit > 0) && !(r.cb_debit > 0 && r.cb_credit > 0); });
+        const tot = rows.reduce((a, r) => ({
+            ob_debit: a.ob_debit + r.ob_debit, ob_credit: a.ob_credit + r.ob_credit,
+            debit: a.debit + r.debit, credit: a.credit + r.credit,
+            cb_debit: a.cb_debit + r.cb_debit, cb_credit: a.cb_credit + r.cb_credit
+        }), { ob_debit: 0, ob_credit: 0, debit: 0, credit: 0, cb_debit: 0, cb_credit: 0 });
+        const balanced = tot.ob_debit === tot.ob_credit && tot.debit === tot.credit && tot.cb_debit === tot.cb_credit;
+        const badRows = rows.filter((r) => !r.ok).length;
+        return {
+            from: from || null, to: to || null, level: Number(level), level_fa: FIN_LEVEL_FA[Number(level)] || String(level),
+            rows: rows, totals: tot, balanced: balanced && badRows === 0,
+            unbalanced_rows: badRows,
+            check_note: balanced ? 'توازن کامل: در هر سه بخش جمع بدهکار = جمع بستانکار است.' : '⚠ عدم توازن — دادهٔ دفتر با دستکاری خارجی تغییر کرده است؛ با پشتیبانی تماس بگیرید.',
+            opening_docs: split.opening.length, turnover_docs: split.turn.length
+        };
+    }
+    /* گردش حساب یک حساب (با تطبیق پیشوندی در سطوح پایین‌تر) + ماندهٔ تجمعی per ردیف */
+    function glStatementOf23a(live, acc, from, to, docsOverride) {
+        const level = Number(acc.level) || 3;
+        const match = (code) => level >= 4 ? String(code) === String(acc.code) : glKeyOf23a(code, level) === String(acc.code);
+        const split = docsOverride || glSplitDocs23a(live, from, to);
+        const accLineSum = (doc) => { let d = 0, c = 0; (doc.lines || []).forEach((ln) => { if (match(ln.account_code)) { d += Number(ln.debit) || 0; c += Number(ln.credit) || 0; } }); return { debit: d, credit: c }; };
+        const ob = accLineSumAll(split.opening, accLineSum);
+        const rows = [];
+        let run = ob.balance;
+        split.turn.slice().sort((a, b) => (glJTs23a(a.date_jalali, 12) - glJTs23a(b.date_jalali, 12)) || ((a.doc_no || 0) - (b.doc_no || 0))).forEach((d) => {
+            const s = accLineSum(d);
+            if (!s.debit && !s.credit) return;
+            run = Math.round(run + s.debit - s.credit);
+            rows.push({
+                doc_no: d.doc_no, doc_no_fa: d.doc_no_fa, date_jalali: d.date_jalali, desc: d.desc || '',
+                source: d.source, debit: Math.round(s.debit), credit: Math.round(s.credit),
+                running: run, running_side: run >= 0 ? 'بدهکار' : 'بستانکار', locked: !!d.locked
+            });
+        });
+        const totD = rows.reduce((s, r) => s + r.debit, 0), totC = rows.reduce((s, r) => s + r.credit, 0);
+        const closing = Math.round(ob.balance + totD - totC);
+        return {
+            account: { id: acc.id, code: acc.code, title: acc.title, level: level, level_fa: FIN_LEVEL_FA[level] || level, type: acc.type, type_fa: FIN_TYPE_FA[acc.type] || acc.type },
+            opening: { debit: ob.debit, credit: ob.credit, balance: ob.balance, side: ob.balance >= 0 ? 'بدهکار' : 'بستانکار' },
+            rows: rows, totals: { debit: Math.round(totD), credit: Math.round(totC) },
+            closing: { balance: closing, side: closing >= 0 ? 'بدهکار' : 'بستانکار' }
+        };
+    }
+    function accLineSumAll(docs, fn) {
+        let d = 0, c = 0;
+        docs.forEach((doc) => { const s = fn(doc); d += s.debit; c += s.credit; });
+        d = Math.round(d); c = Math.round(c);
+        return { debit: d, credit: c, balance: Math.round(d - c) };
+    }
+    /* دفتر کل: همان ساختار گردش حساب برای همهٔ حساب‌های فعال دارای گردش/مانده در بازه */
+    function glGeneralLedger23a(live, from, to, level, includeZero) {
+        const split = glSplitDocs23a(live, from, to);
+        const titles = glAccTitleMap23a(live);
+        const codes = new Set();
+        const collect = (docs) => docs.forEach((d) => (d.lines || []).forEach((ln) => { const k = glKeyOf23a(ln.account_code, level); if (k) codes.add(k); }));
+        collect(split.opening); collect(split.turn);
+        if (includeZero) (live.fin_accounts || []).forEach((a) => { if (Number(a.level) === Number(level) && a.active !== false) codes.add(String(a.code)); });
+        const accounts = Array.from(codes).sort().map((code) => {
+            const acc = titles[code] || { id: null, code: code, title: '—', level: Number(level), type: null };
+            return glStatementOf23a(live, acc, from, to, split);
+        }).filter((a) => a.rows.length || a.opening.balance !== 0 || includeZero);
+        const totD = accounts.reduce((s, a) => s + a.totals.debit, 0), totC = accounts.reduce((s, a) => s + a.totals.credit, 0);
+        return { from: from || null, to: to || null, level: Number(level), level_fa: FIN_LEVEL_FA[Number(level)] || String(level), accounts: accounts, totals: { debit: totD, credit: totC, balanced: totD === totC }, account_count: accounts.length };
+    }
+    /* هش سبک برای ref_id تعدیل — تلاش دوباره با همان اقلام = همان سند (idempotent) */
+    function glCorrHash23a(s) {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+        return h.toString(36);
+    }
+    // ===== FEAT-GL-23a (end) =====
+
     if (req.method === 'GET' && pathname === '/api/fin/overview') {
         if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز: ماژول مالی برای نقش شما فعال نیست.' }, 403);
         const live = readLive();
@@ -1942,6 +2085,100 @@ function appRequestHandler(req, res) {
         }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
         return;
     }
+
+    // ===== FEAT-GL-23a (begin): endpointهای گزارش GL + برگشت/تعدیل سند (گزارش‌گیری فقط — اسناد عملیاتی دست نمی‌خورند) =====
+    if (req.method === 'GET' && pathname === '/api/fin/reports/trial-balance') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const q = new URL(req.url, 'http://x').searchParams;
+        const rng = glNormRange23a(q.get('from'), q.get('to'));
+        if (!rng.valid) return sendJson(res, { error: 'بازهٔ شمسی نامعتبر است (نمونه درست: ۱۴۰۵/۰۱/۰۱).' }, 400);
+        const level = Math.min(4, Math.max(1, Number(finDigitsEn(q.get('level'))) || 3));
+        const includeZero = q.get('include_zero') === '1' || q.get('include_zero') === 'true';
+        const out = glTrialBalance23a(live, rng.from, rng.to, level, includeZero);
+        return sendJson(res, Object.assign({ ok: true, generated_at: new Date().toISOString() }, out));
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/reports/statement') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const q = new URL(req.url, 'http://x').searchParams;
+        const rng = glNormRange23a(q.get('from'), q.get('to'));
+        if (!rng.valid) return sendJson(res, { error: 'بازهٔ شمسی نامعتبر است (نمونه درست: ۱۴۰۵/۰۱/۰۱).' }, 400);
+        const sel = finDigitsEn(String(q.get('account') || '')).trim();
+        if (!sel) return sendJson(res, { error: 'انتخاب حساب الزامی است.' }, 400);
+        const acc = (live.fin_accounts || []).find((a) => a.id === sel || String(a.code) === sel);
+        if (!acc) return sendJson(res, { error: 'حساب یافت نشد.' }, 404);
+        if (Number(acc.level) < 2) return sendJson(res, { error: 'گردش حساب در سطح گروه معنا ندارد — سطح کل/معین/تفضیلی را انتخاب کنید.' }, 400);
+        const out = glStatementOf23a(live, acc, rng.from, rng.to);
+        return sendJson(res, Object.assign({ ok: true, from: rng.from, to: rng.to, generated_at: new Date().toISOString() }, out));
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/reports/generalledger') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const q = new URL(req.url, 'http://x').searchParams;
+        const rng = glNormRange23a(q.get('from'), q.get('to'));
+        if (!rng.valid) return sendJson(res, { error: 'بازهٔ شمسی نامعتبر است (نمونه درست: ۱۴۰۵/۰۱/۰۱).' }, 400);
+        const level = Math.min(4, Math.max(2, Number(finDigitsEn(q.get('level'))) || 3));
+        const includeZero = q.get('include_zero') === '1' || q.get('include_zero') === 'true';
+        const out = glGeneralLedger23a(live, rng.from, rng.to, level, includeZero);
+        return sendJson(res, Object.assign({ ok: true, generated_at: new Date().toISOString() }, out));
+    }
+    /* resolve سند برای برگشت/تعدیل — با doc_id یا doc_no (فارسی/لاتین) */
+    const glFindDoc23a = (live, b) => {
+        const id = String(b.doc_id || '').trim();
+        const no = Number(finDigitsEn(String(b.doc_no || ''))) || 0;
+        const noFa = String(b.doc_no || '').trim();
+        return (live.fin_docs || []).find((d) => (id && d.id === id) || (no && d.doc_no === no) || (noFa && d.doc_no_fa === noFa)) || null;
+    };
+    if (req.method === 'POST' && pathname === '/api/fin/docs/reverse') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: برگشت سند فقط برای واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            const orig = glFindDoc23a(live, b);
+            if (!orig) return sendJson(res, { error: 'سند یافت نشد.' }, 404);
+            if (orig.source === 'gl_correction') return sendJson(res, { error: 'برگشتِ سند اصلاحی/برگشتی مجاز نیست — سند اصلی را برگشت بزنید.' }, 409);
+            if (orig.reversed_by) return sendJson(res, { error: 'این سند قبلاً برگشت خورده است (سند برگشت: ' + orig.reversed_by + ').' }, 409);
+            if (orig.locked) return sendJson(res, { error: 'این سند قفل شده است و قابل برگشت مجدد نیست.' }, 409);
+            const dateJ = finDigitsEn(String(b.date_jalali || '')).trim() || finIsoToJalali(new Date().toISOString());
+            const desc = ('برگشت سند ' + orig.doc_no_fa + (orig.desc ? ' — ' + orig.desc : '')).slice(0, 220);
+            const lines = (orig.lines || []).map((ln) => ({ account_id: ln.account_id, debit: Number(ln.credit) || 0, credit: Number(ln.debit) || 0, cost_center_id: ln.cost_center_id || null, note: ('برگشت — ' + (ln.note || '')).slice(0, 140) }));
+            try {
+                const r = finPostDoc(live, { source: 'gl_correction', ref_module: 'gl', ref_id: 'reverse:' + orig.id, date_jalali: dateJ, desc: desc, lines: lines, created_by: String((req.user && (req.user.name || req.user.username)) || '') });
+                if (r.dup) return sendJson(res, { error: 'این سند قبلاً برگشت خورده است (سند برگشت: ' + r.doc.doc_no_fa + ').' }, 409);
+                orig.locked = true; orig.reversed_by = r.doc.doc_no_fa; orig.reversed_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+                auditLog(req, 'fin.doc.reverse', { original: orig.doc_no_fa, reversal: r.doc.doc_no_fa, total: r.doc.total });
+                return sendJson(res, { ok: true, doc: r.doc, original: { doc_no_fa: orig.doc_no_fa, locked: true, reversed_by: orig.reversed_by } });
+            } catch (e) { return sendJson(res, { error: e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    if (req.method === 'POST' && pathname === '/api/fin/docs/correct') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: تعدیل سند فقط برای واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            const orig = glFindDoc23a(live, b);
+            if (!orig) return sendJson(res, { error: 'سند یافت نشد.' }, 404);
+            if (orig.source === 'gl_correction') return sendJson(res, { error: 'تعدیلِ سند اصلاحی مجاز نیست — سند اصلی را تعدیل کنید.' }, 409);
+            if (orig.locked || orig.reversed_by) return sendJson(res, { error: 'این سند برگشت خورده و قفل است (سند برگشت: ' + (orig.reversed_by || '—') + ') — تعدیل مجاز نیست.' }, 409);
+            if (!Array.isArray(b.lines) || !b.lines.length) return sendJson(res, { error: 'ردیف‌های تعدیل ارسال نشده است.' }, 400);
+            const dateJ = finDigitsEn(String(b.date_jalali || '')).trim() || finIsoToJalali(new Date().toISOString());
+            const canon = JSON.stringify(b.lines.map((ln) => ({ a: ln.account_id, d: Math.round(Number(finDigitsEn(ln.debit)) || 0), c: Math.round(Number(finDigitsEn(ln.credit)) || 0) })));
+            const desc = ('تعدیل سند ' + orig.doc_no_fa + (b.desc ? ' — ' + String(b.desc).slice(0, 120) : '')).slice(0, 220);
+            try {
+                const r = finPostDoc(live, { source: 'gl_correction', ref_module: 'gl', ref_id: 'correct:' + orig.id + ':' + glCorrHash23a(canon), date_jalali: dateJ, desc: desc, lines: b.lines, created_by: String((req.user && (req.user.name || req.user.username)) || '') });
+                if (r.dup) return sendJson(res, { ok: true, duplicate: true, doc: r.doc, note: 'این تعدیل قبلاً ثبت شده است (سند ' + r.doc.doc_no_fa + ') — تکرار سند جدید نساخت.' });
+                orig.corrected_by = Array.isArray(orig.corrected_by) ? orig.corrected_by.concat([r.doc.doc_no_fa]) : [r.doc.doc_no_fa];
+                if (!writeJson(LIVE_FILE, live)) return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+                auditLog(req, 'fin.doc.correct', { original: orig.doc_no_fa, correction: r.doc.doc_no_fa, total: r.doc.total });
+                return sendJson(res, { ok: true, doc: r.doc, original: { doc_no_fa: orig.doc_no_fa, corrected_by: orig.corrected_by } });
+            } catch (e) { return sendJson(res, { error: e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    // ===== FEAT-GL-23a (end) =====
     // ===== FEAT-FIN-13b (end) =====
 
     /* ===== endpointهای برنامه‌ریزی ===== */

@@ -2276,6 +2276,49 @@
                     <button class="act excel" id="finVatXls">اکسل VAT/فصلی</button>
                 </div>
             </div>
+            <!-- ===== FEAT-GL-23a (begin): ابزارهای GL — تراز آزمایشی / گردش حساب / دفتر کل / برگشت و تعدیل سند ===== -->
+            <div class="panel">
+                <h2>⚖️ ابزارهای حسابداری GL <span class="plan-engine" id="glChip">GL</span></h2>
+                <p class="note">تراز آزمایشی چندستونی (ماندهٔ اول دوره / گردش بدهکار / گردش بستانکار / ماندهٔ پایان دوره) با چک توازن جمع کل و ردیف؛ گردش حساب با ماندهٔ تجمعی per ردیف؛ دفتر کل همهٔ حساب‌های فعال بازه. برگشت = سند معکوس با ارجاع به اصلی + قفل سند اصلی؛ تعدیل = سند تفاضلی با ارجاع؛ هر دو idempotent با source «gl_correction». طبق اصول حسابداری حذف فیزیکی سند وجود ندارد — اصلاح فقط با سند.</p>
+                <div class="frow">
+                    <label>از تاریخ: <input type="text" inputmode="numeric" data-jp="glfrom" id="glFrom" placeholder="۱۴۰۵/۰۱/۰۱" style="width:110px;text-align:center"></label>
+                    <label>تا تاریخ: <input type="text" inputmode="numeric" data-jp="glto" id="glTo" placeholder="۱۴۰۵/۰۶/۳۱" style="width:110px;text-align:center"></label>
+                    <label>سطح: <select id="glLevel" class="fsel"><option value="2">کل (۳ رقم)</option><option value="3" selected>معین (۶ رقم)</option><option value="4">تفضیلی (۹ رقم)</option></select></label>
+                    <label class="chk"><input type="checkbox" id="glZero"> شامل حساب‌های صفر</label>
+                </div>
+                <div class="frow">
+                    <label>جست‌وجوی حساب: <input id="glAccSearch" placeholder="نام یا کد حساب…" style="min-width:150px"></label>
+                    <label>حساب: <select id="glAccSel" class="fsel" style="min-width:260px"></select></label>
+                    <button class="act" id="glTbBtn">⚖️ تراز آزمایشی</button>
+                    <button class="act" id="glStmtBtn">📘 گردش حساب</button>
+                    <button class="act" id="glLdBtn">📚 دفتر کل</button>
+                </div>
+                <div class="tablewrap" style="max-height:460px;overflow-y:auto"><div id="glOutBox"><p class="note">ابتدا بازهٔ شمسی را انتخاب و یکی از سه گزارش را بسازید.</p></div></div>
+                <div class="toolbar">
+                    <button class="act excel" id="glTbXls">اکسل تراز آزمایشی</button>
+                    <button class="act" id="glTbPrint">چاپ تراز آزمایشی</button>
+                    <button class="act excel" id="glStmtXls">اکسل گردش حساب</button>
+                    <button class="act" id="glStmtPrint">چاپ گردش حساب</button>
+                    <button class="act excel" id="glLdXls">اکسل دفتر کل</button>
+                    <button class="act" id="glLdPrint">چاپ دفتر کل</button>
+                    <span class="note" id="glMsg"></span>
+                </div>
+                <div id="glCorrForm" class="filters hidden" style="margin-top:10px;border:1px dashed #94a3b8;border-radius:10px;padding:10px">
+                    <h3>🛠 تعدیل سند <span id="glCorrDocNo" style="color:#b91c1c"></span> — سند تفاضلی با ارجاع به سند اصلی</h3>
+                    <div class="frow">
+                        <label>تاریخ: <input type="text" inputmode="numeric" data-jp="glcorr" id="glCorrDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
+                        <label>شرح تکمیلی: <input id="glCorrDesc" placeholder="دلیل تعدیل…" style="min-width:220px"></label>
+                    </div>
+                    <div id="glCorrLines"></div>
+                    <div class="frow">
+                        <button class="act" id="glCorrSave">ثبت سند تعدیل</button>
+                        <button class="act" id="glCorrCancel">انصراف</button>
+                        <span class="note" id="glCorrBalance"></span>
+                    </div>
+                    <div class="note" id="glCorrMsg"></div>
+                </div>
+            </div>
+            <!-- ===== FEAT-GL-23a (end) ===== -->
             <div class="panel">
                 <h2>🔒 دوره‌های مالی (پرچم بستن ماه)</h2>
                 <div class="tablewrap" style="max-height:340px;overflow-y:auto"><div id="finPeriodsTable"></div></div>
@@ -6978,7 +7021,239 @@ showRes();
             downloadXls('VAT_فصلی_169', [{ label: 'شرح', key: 'k' }, { label: 'مقدار', key: 'v' }], rows, 'خلاصهٔ مالیات بر ارزش افزوده و گزارش فصلی مادهٔ ۱۶۹');
         });
     }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+    
+    /* ===== FEAT-GL-23a (begin): ابزارهای GL — تراز آزمایشی/گردش حساب/دفتر کل + برگشت/تعدیل سند ===== */
+    const glFSRC_23a = { manual: 'دستی', auto_billet: 'شمش', auto_energy: 'انرژی', auto_production: 'تولید', auto_waste: 'ضایعات', sales: 'فروش', purchase: 'خرید', gl_correction: 'برگشت/تعدیل' };
+    const glS_23a = { tb: null, stmt: null, ld: null, corrDoc: null };
+    function glSideCls_23a(side) { return side === 'بستانکار' ? 'fin-var-ok' : ''; }
+    function glReadRange_23a() {
+        const from = readJalaliValue(document, 'glfrom'), to = readJalaliValue(document, 'glto');
+        if (!from || !to) { toast('بازهٔ شمسی را کامل وارد کنید (نمونه: ۱۴۰۵/۰۱/۰۱).', 'err'); return null; }
+        return { from: from, to: to };
+    }
+    function glFillAccSel_23a() {
+        const sel = $('glAccSel'); if (!sel) return;
+        const q = numFa($('glAccSearch').value || '').trim().toLowerCase();
+        const list = st.accounts.filter((a) => Number(a.level) >= 2 && a.active !== false)
+            .filter((a) => !q || a.title.toLowerCase().indexOf(q) !== -1 || String(a.code).indexOf(q) !== -1);
+        const cur = sel.value;
+        sel.innerHTML = ['<option value="">— انتخاب حساب (کل/معین/تفضیلی) —</option>'].concat(list.slice(0, 400).map((a) => '<option value="' + a.id + '">' + toFaDigits(a.code) + ' — ' + esc(a.title) + '</option>')).join('');
+        if (cur && list.some((a) => a.id === cur)) sel.value = cur;
+    }
+    function glHead_23a(kind, label) {
+        const org = (st.tenantName || 'سازمان');
+        return '<div style="text-align:center;margin-bottom:8px"><b style="font-size:15px">' + esc(org) + '</b><div>' + esc(label) + ' — بازه ' + toFaDigits(glS_23a.range.from) + ' تا ' + toFaDigits(glS_23a.range.to) + '</div><div style="color:#64748b;font-size:11px">تاریخ گزارش: ' + jToday() + '</div></div>';
+    }
+    function glMoney_23a(v) { return v ? rls(v, '') : '<span style="color:#94a3b8">—</span>'; }
+    function renderTB_23a(j) {
+        glS_23a.tb = j; glS_23a.kind = 'tb';
+        const box = $('glOutBox'); if (!box) return;
+        let h = '<div class="' + (j.balanced ? 'note fin-bal-ok' : 'note fin-bal-no') + '" role="status">' + (j.balanced ? '✅ ' : '❌ ') + esc(j.check_note) + ' (سطح: ' + esc(j.level_fa) + ' — اسناد افتتاحیه: ' + toFaDigits(j.opening_docs) + ' / گردش دوره: ' + toFaDigits(j.turnover_docs) + ')</div>';
+        h += glHead_23a('tb', 'تراز آزمایشی ' + esc(j.level_fa));
+        h += '<table><thead><tr><th rowspan="2">کد</th><th rowspan="2">حساب</th><th colspan="2">ماندهٔ اول دوره</th><th colspan="2">گردش دوره</th><th colspan="2">ماندهٔ پایان دوره</th><th rowspan="2">وضعیت</th></tr><tr><th>بدهکار</th><th>بستانکار</th><th>بدهکار</th><th>بستانکار</th><th>بدهکار</th><th>بستانکار</th></tr></thead><tbody>';
+        j.rows.forEach((r) => {
+            h += '<tr' + (r.ok ? '' : ' style="background:rgba(220,38,38,.12)"') + '><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td>'
+                + '<td>' + glMoney_23a(r.ob_debit) + '</td><td>' + glMoney_23a(r.ob_credit) + '</td>'
+                + '<td>' + glMoney_23a(r.debit) + '</td><td>' + glMoney_23a(r.credit) + '</td>'
+                + '<td><b>' + glMoney_23a(r.cb_debit) + '</b></td><td><b>' + glMoney_23a(r.cb_credit) + '</b></td>'
+                + '<td>' + (r.ok ? '<span class="chip ok">متوازن</span>' : '<span class="chip no">نامتوازن</span>') + '</td></tr>';
+        });
+        const t = j.totals;
+        h += '<tr class="tot"><td colspan="2"><b>جمع کل</b></td><td><b>' + rls(t.ob_debit, '') + '</b></td><td><b>' + rls(t.ob_credit, '') + '</b></td><td><b>' + rls(t.debit, '') + '</b></td><td><b>' + rls(t.credit, '') + '</b></td><td><b>' + rls(t.cb_debit, '') + '</b></td><td><b>' + rls(t.cb_credit, '') + '</b></td><td>' + (j.balanced ? '✅' : '❌') + '</td></tr>';
+        box.innerHTML = h + '</tbody></table>';
+    }
+    function renderStmt_23a(j) {
+        glS_23a.stmt = j; glS_23a.kind = 'stmt';
+        const box = $('glOutBox'); if (!box) return;
+        let h = glHead_23a('stmt', 'گردش حساب: ' + toFaDigits(j.account.code) + ' — ' + esc(j.account.title));
+        h += '<p class="note">ماندهٔ اول دوره: <b>' + rls(Math.abs(j.opening.balance)) + '</b> (' + esc(j.opening.side) + ') | جمع گردش: بدهکار ' + rls(j.totals.debit) + ' / بستانکار ' + rls(j.totals.credit) + ' | ماندهٔ پایان: <b>' + rls(Math.abs(j.closing.balance)) + '</b> (' + esc(j.closing.side) + ')</p>';
+        if (!j.rows.length) { box.innerHTML = h + '<p class="note">در این بازه گردشی برای این حساب ثبت نشده است.</p>'; return; }
+        h += '<table><thead><tr><th>تاریخ</th><th>سند</th><th>شرح</th><th>منبع</th><th>بدهکار (ریال)</th><th>بستانکار (ریال)</th><th>مانده (ریال)</th><th>ماهیت</th></tr></thead><tbody>';
+        j.rows.forEach((r) => {
+            h += '<tr><td>' + toFaDigits(r.date_jalali) + '</td><td>' + toFaDigits(r.doc_no_fa) + (r.locked ? ' 🔒' : '') + '</td><td style="text-align:right">' + esc(r.desc || '') + '</td><td>' + esc(glFSRC_23a[r.source] || r.source) + '</td><td>' + glMoney_23a(r.debit) + '</td><td>' + glMoney_23a(r.credit) + '</td><td><b>' + rls(Math.abs(r.running), '') + '</b></td><td>' + esc(r.running_side) + '</td></tr>';
+        });
+        h += '<tr class="tot"><td colspan="4"><b>جمع گردش دوره</b></td><td><b>' + rls(j.totals.debit, '') + '</b></td><td><b>' + rls(j.totals.credit, '') + '</b></td><td colspan="2"><b>مانده: ' + rls(Math.abs(j.closing.balance)) + ' (' + esc(j.closing.side) + ')</b></td></tr>';
+        box.innerHTML = h + '</tbody></table>';
+    }
+    function renderLd_23a(j) {
+        glS_23a.ld = j; glS_23a.kind = 'ld';
+        const box = $('glOutBox'); if (!box) return;
+        let h = '<div class="' + (j.totals.balanced ? 'note fin-bal-ok' : 'note fin-bal-no') + '">' + (j.totals.balanced ? '✅' : '❌') + ' دفتر کل ' + esc(j.level_fa) + ' — ' + toFaDigits(j.account_count) + ' حساب فعال در بازه | جمع گردش: بدهکار ' + rls(j.totals.debit) + ' / بستانکار ' + rls(j.totals.credit) + '</div>';
+        h += glHead_23a('ld', 'دفتر کل ' + esc(j.level_fa));
+        if (!j.accounts.length) { box.innerHTML = h + '<p class="note">در این بازه گردشی ثبت نشده است.</p>'; return; }
+        h += '<details class="fin-doc" open><summary>نمای کلی — گردش per حساب</summary><table class="fin-lines"><thead><tr><th>کد</th><th>حساب</th><th>ماندهٔ اول</th><th>گردش بدهکار</th><th>گردش بستانکار</th><th>ماندهٔ پایان</th><th>ماهیت</th></tr></thead><tbody>';
+        j.accounts.forEach((a) => { h += '<tr><td>' + toFaDigits(a.account.code) + '</td><td>' + esc(a.account.title) + '</td><td>' + rls(Math.abs(a.opening.balance), '') + '</td><td>' + glMoney_23a(a.totals.debit) + '</td><td>' + glMoney_23a(a.totals.credit) + '</td><td><b>' + rls(Math.abs(a.closing.balance), '') + '</b></td><td>' + esc(a.closing.side) + '</td></tr>'; });
+        h += '</tbody></table></details>';
+        j.accounts.forEach((a) => {
+            if (!a.rows.length) return;
+            h += '<details class="fin-doc"><summary>' + toFaDigits(a.account.code) + ' — ' + esc(a.account.title) + ' <b>| مانده: ' + rls(Math.abs(a.closing.balance)) + ' (' + esc(a.closing.side) + ')</b></summary>';
+            h += '<table class="fin-lines"><thead><tr><th>تاریخ</th><th>سند</th><th>شرح</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th><th>ماهیت</th></tr></thead><tbody>';
+            a.rows.forEach((r) => { h += '<tr><td>' + toFaDigits(r.date_jalali) + '</td><td>' + toFaDigits(r.doc_no_fa) + '</td><td style="text-align:right">' + esc((r.desc || '').slice(0, 90)) + '</td><td>' + glMoney_23a(r.debit) + '</td><td>' + glMoney_23a(r.credit) + '</td><td>' + rls(Math.abs(r.running), '') + '</td><td>' + esc(r.running_side) + '</td></tr>'; });
+            h += '</tbody></table></details>';
+        });
+        box.innerHTML = h;
+    }
+    function glTbBody_23a(j) {
+        let h = '<table><thead><tr><th>کد</th><th>حساب</th><th>ماندهٔ اول بدهکار</th><th>ماندهٔ اول بستانکار</th><th>گردش بدهکار</th><th>گردش بستانکار</th><th>ماندهٔ پایان بدهکار</th><th>ماندهٔ پایان بستانکار</th></tr></thead><tbody>';
+        j.rows.forEach((r) => { h += '<tr><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.title) + '</td><td>' + (r.ob_debit || '') + '</td><td>' + (r.ob_credit || '') + '</td><td>' + (r.debit || '') + '</td><td>' + (r.credit || '') + '</td><td>' + (r.cb_debit || '') + '</td><td>' + (r.cb_credit || '') + '</td></tr>'; });
+        const t = j.totals;
+        h += '<tr><td colspan="2"><b>جمع کل</b></td><td><b>' + t.ob_debit + '</b></td><td><b>' + t.ob_credit + '</b></td><td><b>' + t.debit + '</b></td><td><b>' + t.credit + '</b></td><td><b>' + t.cb_debit + '</b></td><td><b>' + t.cb_credit + '</b></td></tr>';
+        return h + '</tbody></table><p>' + (j.balanced ? '✅ تراز است' : '❌ نامتوازن') + '</p>';
+    }
+    function glPrint_23a(title, inner) {
+        const w = window.open('', '_blank', 'width=980,height=1000');
+        if (!w) { toast('پنجرهٔ چاپ توسط مرورگر مسدود شد.', 'err'); return; }
+        w.document.write('<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + title + '</title><style>@page{size:A4;margin:12mm}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:20px}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th{background:#0f2a43;color:#fff;padding:5px 6px;border:1px solid #94a3b8}td{border:1px solid #94a3b8;padding:4px 6px;text-align:center}.sign{display:flex;gap:40px;margin-top:36px;font-size:12px}.sign>div{flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555}@media print{.noprint{display:none}}</style></head><body>' + inner + '<div class="sign"><div>تهیه‌کننده — واحد مالی</div><div>مدیر مالی</div><div>مدیرعامل</div></div><script>setTimeout(function(){window.print()},400)<\/script></body></html>');
+        w.document.close();
+    }
+    function glAugDocs_23a() {
+        const box = $('finDocsTable'); if (!box) return;
+        const det = box.querySelectorAll('details.fin-doc');
+        const docs = st.docs || [];
+        det.forEach((el, i) => {
+            if (el.querySelector('[data-gl-actions]')) return;
+            const d = docs[i]; if (!d) return;
+            const foot = document.createElement('div');
+            foot.setAttribute('data-gl-actions', '1');
+            foot.style.cssText = 'padding:6px 0 2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+            let h = '';
+            if (d.reversed_by) h += '<span class="chip no">برگشت شده ← ' + esc(d.reversed_by) + ' 🔒</span>';
+            else if (d.locked) h += '<span class="chip no">قفل‌شده 🔒</span>';
+            if ((d.corrected_by || []).length) h += '<span class="chip">تعدیل: ' + d.corrected_by.map(esc).join('، ') + '</span>';
+            if (canWrite() && d.source !== 'gl_correction' && !d.locked && !d.reversed_by) {
+                h += '<button class="act" data-gl-rev="' + d.id + '">↩️ برگشت سند</button>';
+                h += '<button class="act" data-gl-corr="' + d.id + '">🛠 تعدیل سند</button>';
+            }
+            foot.innerHTML = h;
+            el.appendChild(foot);
+        });
+    }
+    const glOrigRenderDocs_23a = renderDocs;
+    renderDocs = function () { glOrigRenderDocs_23a(); glAugDocs_23a(); glFillAccSel_23a(); }; /* FIX: پر کردن انتخاب حساب پس از بارگذاری داده‌های مالی */
+    function glCorrBal_23a() {
+        const el = $('glCorrBalance'); if (!el) return;
+        let d = 0, c = 0, any = false;
+        for (let i = 0; i < 4; i++) { const a = $('glLnAcc' + i); if (!a || !a.value) continue; any = true; d += Number($('glLnD' + i).value) || 0; c += Number($('glLnC' + i).value) || 0; }
+        if (!any) { el.textContent = ''; el.className = 'note'; return; }
+        if (d === c && d > 0) { el.textContent = '✅ تراز است — جمع: ' + rls(d) + ' ریال'; el.className = 'note fin-bal-ok'; }
+        else { el.textContent = '❌ عدم توازن — بدهکار ' + rls(d) + ' / بستانکار ' + rls(c); el.className = 'note fin-bal-no'; }
+    }
+    function glBuildCorrLines_23a() {
+        const box = $('glCorrLines'); if (!box) return;
+        const opts = ['<option value="">— انتخاب حساب —</option>'].concat(st.accounts.filter((a) => Number(a.level) >= 3 && a.active !== false).map((a) => '<option value="' + a.id + '">' + toFaDigits(a.code) + ' — ' + esc(a.title) + '</option>')).join('');
+        const ccOpts = ['<option value="">—</option>'].concat((st.cc || []).map((c) => '<option value="' + c.id + '">' + esc(c.title) + '</option>')).join('');
+        let h = '<table class="fin-lines"><thead><tr><th>حساب (معین/تفضیلی)</th><th>بدهکار (ریال)</th><th>بستانکار (ریال)</th><th>مرکز هزینه</th></tr></thead><tbody>';
+        for (let i = 0; i < 4; i++) h += '<tr><td><select id="glLnAcc' + i + '" class="fsel" style="min-width:190px">' + opts + '</select></td><td><input type="number" min="0" id="glLnD' + i + '" class="fin-inp fin-wcell"></td><td><input type="number" min="0" id="glLnC' + i + '" class="fin-inp fin-wcell"></td><td><select id="glLnCc' + i + '" class="fsel">' + ccOpts + '</select></td></tr>';
+        box.innerHTML = h + '</tbody></table>';
+        for (let i = 0; i < 4; i++) { $('glLnD' + i).addEventListener('input', glCorrBal_23a); $('glLnC' + i).addEventListener('input', glCorrBal_23a); }
+        glCorrBal_23a();
+    }
+    function glOpenCorr_23a(docId) {
+        const d = (st.docs || []).find((x) => x.id === docId); if (!d) return;
+        glS_23a.corrDoc = d;
+        $('glCorrDocNo').textContent = d.doc_no_fa + ' — ' + (d.desc || '');
+        $('glCorrDate').value = jToday(); $('glCorrDesc').value = ''; $('glCorrMsg').textContent = '';
+        glBuildCorrLines_23a();
+        const f = $('glCorrForm'); f.classList.remove('hidden');
+        try { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+    }
+    try {
+        $('glAccSearch').addEventListener('input', glFillAccSel_23a);
+        $('glTbBtn').addEventListener('click', async () => {
+            const r = glReadRange_23a(); if (!r) return;
+            glS_23a.range = r; $('glMsg').textContent = 'در حال ساخت تراز آزمایشی…';
+            try { const j = await jf('/api/fin/reports/trial-balance?from=' + encodeURIComponent(numFa(r.from)) + '&to=' + encodeURIComponent(numFa(r.to)) + '&level=' + encodeURIComponent($('glLevel').value) + '&include_zero=' + ($('glZero').checked ? '1' : '0')); renderTB_23a(j); $('glMsg').textContent = ''; }
+            catch (e) { $('glMsg').textContent = e.message; $('glMsg').className = 'note fin-bal-no'; }
+        });
+        $('glStmtBtn').addEventListener('click', async () => {
+            const r = glReadRange_23a(); if (!r) return;
+            const acc = $('glAccSel').value;
+            if (!acc) { toast('حساب را انتخاب کنید.', 'err'); return; }
+            glS_23a.range = r; $('glMsg').textContent = 'در حال ساخت گردش حساب…';
+            try { const j = await jf('/api/fin/reports/statement?account=' + encodeURIComponent(acc) + '&from=' + encodeURIComponent(numFa(r.from)) + '&to=' + encodeURIComponent(numFa(r.to))); renderStmt_23a(j); $('glMsg').textContent = ''; }
+            catch (e) { $('glMsg').textContent = e.message; $('glMsg').className = 'note fin-bal-no'; }
+        });
+        $('glLdBtn').addEventListener('click', async () => {
+            const r = glReadRange_23a(); if (!r) return;
+            glS_23a.range = r; $('glMsg').textContent = 'در حال ساخت دفتر کل…';
+            try { const j = await jf('/api/fin/reports/generalledger?from=' + encodeURIComponent(numFa(r.from)) + '&to=' + encodeURIComponent(numFa(r.to)) + '&level=' + encodeURIComponent($('glLevel').value) + '&include_zero=' + ($('glZero').checked ? '1' : '0')); renderLd_23a(j); $('glMsg').textContent = ''; }
+            catch (e) { $('glMsg').textContent = e.message; $('glMsg').className = 'note fin-bal-no'; }
+        });
+        $('glTbXls').addEventListener('click', () => {
+            if (!glS_23a.tb) { toast('ابتدا تراز آزمایشی را بسازید.', 'err'); return; }
+            const j = glS_23a.tb;
+            const rows = j.rows.map((r) => ({ code: toFaDigits(r.code), t: r.title, obd: r.ob_debit || '', obc: r.ob_credit || '', d: r.debit || '', c: r.credit || '', cbd: r.cb_debit || '', cbc: r.cb_credit || '', ok: r.ok ? 'متوازن' : 'نامتوازن' }))
+                .concat([{ code: '', t: 'جمع کل', obd: j.totals.ob_debit, obc: j.totals.ob_credit, d: j.totals.debit, c: j.totals.credit, cbd: j.totals.cb_debit, cbc: j.totals.cb_credit, ok: j.balanced ? 'متوازن' : 'نامتوازن' }]);
+            downloadXls('تراز_آزمایشی', [{ label: 'کد', key: 'code' }, { label: 'حساب', key: 't' }, { label: 'ماندهٔ اول بدهکار', key: 'obd' }, { label: 'ماندهٔ اول بستانکار', key: 'obc' }, { label: 'گردش بدهکار', key: 'd' }, { label: 'گردش بستانکار', key: 'c' }, { label: 'ماندهٔ پایان بدهکار', key: 'cbd' }, { label: 'ماندهٔ پایان بستانکار', key: 'cbc' }, { label: 'وضعیت', key: 'ok' }], rows, 'تراز آزمایشی ' + j.level_fa + ' — ' + (glS_23a.range ? toFaDigits(glS_23a.range.from) + ' تا ' + toFaDigits(glS_23a.range.to) : ''));
+        });
+        $('glStmtXls').addEventListener('click', () => {
+            if (!glS_23a.stmt) { toast('ابتدا گردش حساب را بسازید.', 'err'); return; }
+            const j = glS_23a.stmt;
+            const rows = j.rows.map((r) => ({ date: toFaDigits(r.date_jalali), doc: toFaDigits(r.doc_no_fa), desc: r.desc || '', src: glFSRC_23a[r.source] || r.source, d: r.debit || '', c: r.credit || '', run: Math.abs(r.running), side: r.running_side }));
+            downloadXls('گردش_حساب_' + j.account.code, [{ label: 'تاریخ', key: 'date' }, { label: 'شمارهٔ سند', key: 'doc' }, { label: 'شرح', key: 'desc' }, { label: 'منبع', key: 'src' }, { label: 'بدهکار', key: 'd' }, { label: 'بستانکار', key: 'c' }, { label: 'مانده', key: 'run' }, { label: 'ماهیت', key: 'side' }], rows, 'گردش حساب ' + toFaDigits(j.account.code) + ' — ' + j.account.title);
+        });
+        $('glLdXls').addEventListener('click', () => {
+            if (!glS_23a.ld) { toast('ابتدا دفتر کل را بسازید.', 'err'); return; }
+            const j = glS_23a.ld; const rows = [];
+            j.accounts.forEach((a) => a.rows.forEach((r) => rows.push({ code: toFaDigits(a.account.code), t: a.account.title, date: toFaDigits(r.date_jalali), doc: toFaDigits(r.doc_no_fa), desc: (r.desc || '').slice(0, 90), d: r.debit || '', c: r.credit || '', run: Math.abs(r.running), side: r.running_side })));
+            downloadXls('دفتر_کل', [{ label: 'کد', key: 'code' }, { label: 'حساب', key: 't' }, { label: 'تاریخ', key: 'date' }, { label: 'سند', key: 'doc' }, { label: 'شرح', key: 'desc' }, { label: 'بدهکار', key: 'd' }, { label: 'بستانکار', key: 'c' }, { label: 'مانده', key: 'run' }, { label: 'ماهیت', key: 'side' }], rows, 'دفتر کل ' + j.level_fa + ' — همهٔ حساب‌های فعال بازه');
+        });
+        $('glTbPrint').addEventListener('click', () => { if (!glS_23a.tb) { toast('ابتدا تراز آزمایشی را بسازید.', 'err'); return; } glPrint_23a('تراز آزمایشی', glHead_23a('tb', 'تراز آزمایشی ' + glS_23a.tb.level_fa) + glTbBody_23a(glS_23a.tb)); });
+        $('glStmtPrint').addEventListener('click', () => {
+            if (!glS_23a.stmt) { toast('ابتدا گردش حساب را بسازید.', 'err'); return; }
+            const j = glS_23a.stmt;
+            let h = glHead_23a('stmt', 'گردش حساب: ' + toFaDigits(j.account.code) + ' — ' + esc(j.account.title));
+            h += '<table><thead><tr><th>تاریخ</th><th>سند</th><th>شرح</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th><th>ماهیت</th></tr></thead><tbody>';
+            j.rows.forEach((r) => { h += '<tr><td>' + toFaDigits(r.date_jalali) + '</td><td>' + toFaDigits(r.doc_no_fa) + '</td><td style="text-align:right">' + esc((r.desc || '').slice(0, 90)) + '</td><td>' + (r.debit || '') + '</td><td>' + (r.credit || '') + '</td><td>' + Math.abs(r.running) + '</td><td>' + esc(r.running_side) + '</td></tr>'; });
+            glPrint_23a('گردش حساب', h + '</tbody></table>');
+        });
+        $('glLdPrint').addEventListener('click', () => {
+            if (!glS_23a.ld) { toast('ابتدا دفتر کل را بسازید.', 'err'); return; }
+            const j = glS_23a.ld;
+            let h = glHead_23a('ld', 'دفتر کل ' + esc(j.level_fa));
+            h += '<table><thead><tr><th>کد</th><th>حساب</th><th>تاریخ</th><th>سند</th><th>شرح</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th></tr></thead><tbody>';
+            j.accounts.forEach((a) => a.rows.forEach((r) => { h += '<tr><td>' + toFaDigits(a.account.code) + '</td><td>' + esc(a.account.title) + '</td><td>' + toFaDigits(r.date_jalali) + '</td><td>' + toFaDigits(r.doc_no_fa) + '</td><td style="text-align:right">' + esc((r.desc || '').slice(0, 60)) + '</td><td>' + (r.debit || '') + '</td><td>' + (r.credit || '') + '</td><td>' + Math.abs(r.running) + '</td></tr>'; }));
+            glPrint_23a('دفتر کل', h + '</tbody></table>');
+        });
+        $('finDocsTable').addEventListener('click', async (e) => {
+            const rb = e.target.closest('[data-gl-rev]');
+            if (rb) {
+                const doc = (st.docs || []).find((x) => x.id === rb.getAttribute('data-gl-rev'));
+                if (!doc) return;
+                if (!confirm('برگشت کامل سند ' + doc.doc_no_fa + '؟ سند معکوس با ارجاع به همین سند ساخته می‌شود و سند اصلی قفل خواهد شد.')) return;
+                try { const j = await jf('/api/fin/docs/reverse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doc_id: doc.id }) }); toast('سند برگشت ' + toFaDigits(j.doc.doc_no_fa) + ' ثبت شد ✅ — سند اصلی قفل شد.'); await reloadDocs(); }
+                catch (e2) { toast(e2.message, 'err'); }
+                return;
+            }
+            const cb = e.target.closest('[data-gl-corr]');
+            if (cb) glOpenCorr_23a(cb.getAttribute('data-gl-corr'));
+        });
+        $('glCorrCancel').addEventListener('click', () => $('glCorrForm').classList.add('hidden'));
+        $('glCorrSave').addEventListener('click', async () => {
+            const msg = $('glCorrMsg'); msg.textContent = ''; msg.className = 'note';
+            if (!glS_23a.corrDoc) { msg.textContent = 'سند اصلی انتخاب نشده است.'; return; }
+            const dateJ = readJalaliValue(document, 'glcorr');
+            if (!dateJ) { msg.textContent = 'تاریخ شمسی تعدیل را کامل وارد کنید.'; msg.className = 'note fin-bal-no'; return; }
+            const lines = [];
+            for (let i = 0; i < 4; i++) { const a = $('glLnAcc' + i); if (!a || !a.value) continue; lines.push({ account_id: a.value, debit: Number($('glLnD' + i).value) || 0, credit: Number($('glLnC' + i).value) || 0, cost_center_id: $('glLnCc' + i).value || null }); }
+            if (!lines.length) { msg.textContent = 'حداقل یک ردیف تعدیل وارد کنید.'; msg.className = 'note fin-bal-no'; return; }
+            const d = lines.reduce((s, r) => s + r.debit, 0), c = lines.reduce((s, r) => s + r.credit, 0);
+            if (d !== c || d <= 0) { msg.textContent = 'سند تعدیل تراز نیست — بدهکار و بستانکار باید برابر و بزرگ‌تر از صفر باشند.'; msg.className = 'note fin-bal-no'; return; }
+            try {
+                const j = await jf('/api/fin/docs/correct', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doc_id: glS_23a.corrDoc.id, date_jalali: dateJ, desc: $('glCorrDesc').value.trim(), lines: lines }) });
+                toast(j.duplicate ? j.note : ('سند تعدیل ' + toFaDigits(j.doc.doc_no_fa) + ' ثبت شد ✅'));
+                $('glCorrForm').classList.add('hidden');
+                await reloadDocs();
+            } catch (e2) { msg.textContent = e2.message; msg.className = 'note fin-bal-no'; }
+        });
+        /* مقدار اولیهٔ بازه: ابتدای سال شمسی جاری تا امروز */
+        const glToday_23a = jToday();
+        $('glFrom').value = toFaDigits(String(numFa(glToday_23a)).slice(0, 4)) + '/۰۱/۰۱';
+        $('glTo').value = glToday_23a;
+        glFillAccSel_23a();
+    } catch (glE23a) { /* تب مالی در این نقش نیست — بی‌ضرر */ }
+    /* ===== FEAT-GL-23a (end) ===== */
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
     loaders.finance = function () { return loadAll(); }; /* FEAT-FIN-13b: ورود به تب مالی */
 })();
 // ===== FEAT-FIN-13b (end) =====
