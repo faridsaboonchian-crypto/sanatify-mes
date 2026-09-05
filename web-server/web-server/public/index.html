@@ -2319,6 +2319,25 @@
                 </div>
             </div>
             <!-- ===== FEAT-GL-23a (end) ===== -->
+            <!-- ===== FEAT-GL-23b (begin): ارزیابی موجودی — میانگین موزون + NRV ===== -->
+            <div class="panel">
+                <h2>📦 ارزیابی موجودی — میانگین موزون + NRV <span class="plan-engine" id="glValChip">استاندارد ۸</span></h2>
+                <p class="note">میانگین موزون متحرک per کالا (هر ورود میانگین جدید، هر خروج بهای میانگین جاری بدون تغییر میانگین)؛ ارزیابی نهایی = اقل بهای تمام‌شده و خالص ارزش فروش (استاندارد ۸ ایران — LIFO ممنوع). اگر NRV کمتر از میانگین باشد، کاهش ارزش علامت‌گذاری و فقط «پیشنهاد سند» داده می‌شود — اجرای خودکار ممنوع. کارت «موجودی ریالی» ترازنامه از همین محاسبه پر می‌شود.</p>
+                <div class="toolbar">
+                    <button class="act" id="glValBtn">📦 محاسبهٔ ارزیابی موجودی</button>
+                    <label>مبنای نمایش مقایسه: <select id="glValBasis" class="fsel"><option value="avg">میانگین موزون (فعال)</option><option value="std">مقایسه با بهای استاندارد</option><option value="fifo">FIFO (به‌زودی — فقط زیرساخت)</option></select></label>
+                    <button class="act excel" id="glValXls">اکسل ارزش موجودی</button>
+                    <button class="act excel" id="glValWhXls">اکسل per انبار/گروه</button>
+                    <span class="note" id="glValMsg"></span>
+                </div>
+                <div class="kpis" id="glValKpis"></div>
+                <div class="tablewrap" style="max-height:460px;overflow-y:auto"><div id="glValTable"><p class="note">دکمهٔ «محاسبهٔ ارزیابی موجودی» را بزنید.</p></div></div>
+                <h3 style="margin-top:14px">🏭 ارزش موجودی per انبار</h3>
+                <div class="tablewrap" style="max-height:260px;overflow-y:auto"><div id="glValWhTable"><p class="note">—</p></div></div>
+                <h3 style="margin-top:14px">🗂 ارزش موجودی per گروه کالا</h3>
+                <div class="tablewrap" style="max-height:260px;overflow-y:auto"><div id="glValCatTable"><p class="note">—</p></div></div>
+            </div>
+            <!-- ===== FEAT-GL-23b (end) ===== -->
             <div class="panel">
                 <h2>🔒 دوره‌های مالی (پرچم بستن ماه)</h2>
                 <div class="tablewrap" style="max-height:340px;overflow-y:auto"><div id="finPeriodsTable"></div></div>
@@ -7253,6 +7272,110 @@ showRes();
         glFillAccSel_23a();
     } catch (glE23a) { /* تب مالی در این نقش نیست — بی‌ضرر */ }
     /* ===== FEAT-GL-23a (end) ===== */
+
+    /* ===== FEAT-GL-23b (begin): ارزیابی موجودی — میانگین موزون + NRV + اتصال ترازنامه ===== */
+    const glVal_23b = { data: null, basis: 'avg' };
+    function glValRender_23b() {
+        const j = glVal_23b.data; if (!j) return;
+        const box = $('glValTable'), kp = $('glValKpis'); if (!box) return;
+        const t = j.totals;
+        if (kp) kp.innerHTML = [
+            { l: 'موجودی ریالی (میانگین موزون)', v: rls(t.value_rial), c: 'green' },
+            { l: 'ارزش دفتری با اعمال NRV (اقل)', v: rls(t.carrying_rial), c: '' },
+            { l: 'کاهش ارزش NRV (ریال)', v: rls(t.write_down_rial), c: t.write_down_rial > 0 ? 'red' : 'green' },
+            { l: 'کالاهای دارای موجودی', v: toFaDigits(t.items_with_stock), c: '' },
+            { l: 'اقلام زیر NRV', v: toFaDigits(t.nrv_flags), c: t.nrv_flags > 0 ? 'amber' : 'green' }
+        ].map((k) => '<div class="kpi ' + k.c + '"><div class="v">' + k.v + '</div><div class="l">' + esc(k.l) + '</div></div>').join('');
+        let h = '<table><thead><tr><th>کد</th><th>کالا</th><th>واحد</th><th>گروه</th><th>مقدار</th><th>میانگین (ریال)</th><th>' + (glVal_23b.basis === 'std' ? 'استاندارد (ریال)' : (glVal_23b.basis === 'fifo' ? 'FIFO (ریال)' : 'میانگین (ریال)')) + '</th><th>ارزش کل (ریال)</th><th>NRV (ریال)</th><th>کاهش ارزش</th><th>ذخیره NRV</th></tr></thead><tbody>';
+        j.rows.forEach((r) => {
+            const alt = glVal_23b.basis === 'std' ? (r.alt.std_rial_per_unit == null ? '—' : rls(r.alt.std_rial_per_unit, '')) : (glVal_23b.basis === 'fifo' ? (r.alt.fifo_rial_per_unit == null ? '—' : rls(r.alt.fifo_rial_per_unit, '')) : rls(r.avg_cost_rial_per_unit, ''));
+            const sugg = r.suggestion ? '<details style="margin-top:4px"><summary style="cursor:pointer;color:#b91c1c">پیشنهاد سند کاهش</summary><div class="note">بدهکار: ' + esc(r.suggestion.lines[0].account) + ' «' + esc(r.suggestion.lines[0].title) + '» ' + rls(r.suggestion.lines[0].debit) + ' ریال<br>بستانکار: ' + esc(r.suggestion.lines[1].account) + ' «' + esc(r.suggestion.lines[1].title) + '» ' + rls(r.suggestion.lines[1].credit) + ' ریال<br>' + esc(r.suggestion.note) + ' <button class="act" data-nrv-doc="' + esc(r.item_id) + '">درج در فرم سند دستی</button></div></details>' : '';
+            h += '<tr' + (r.write_down_needed ? ' style="background:rgba(217,119,6,.10)"' : '') + '><td>' + toFaDigits(r.code) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.category) + '</td><td>' + dec(r.qty) + '</td><td>' + rls(r.avg_cost_rial_per_unit, '') + '</td><td>' + alt + '</td><td><b>' + rls(r.value_rial, '') + '</b></td>'
+                + '<td><input type="number" min="0" class="fin-inp fin-wcell" style="width:130px" data-nrv-inp="' + esc(r.item_id) + '" value="' + (r.nrv.price_rial_per_unit == null ? '' : r.nrv.price_rial_per_unit) + '"></td>'
+                + '<td>' + (r.write_down_needed ? '<span class="chip no">' + rls(r.write_down_rial) + '</span>' : '<span class="chip ok">—</span>') + '</td>'
+                + '<td>' + (canWrite() ? '<button class="act" data-nrv-save="' + esc(r.item_id) + '">ذخیره</button>' : '<span class="chip">فقط واحد مالی</span>') + sugg + '</td></tr>';
+        });
+        h += '<tr class="tot"><td colspan="7"><b>جمع کل (موجودی ریالی ترازنامه)</b></td><td><b>' + rls(t.value_rial, '') + '</b></td><td>' + (t.write_down_rial > 0 ? 'اعمال NRV: ' + rls(t.carrying_rial, '') : '—') + '</td><td><b>' + (t.write_down_rial > 0 ? rls(t.write_down_rial, '') : '—') + '</b></td><td></td></tr>';
+        box.innerHTML = h + '</tbody></table><p class="note">' + esc(j.method) + (j.alt_note ? ' — ' + esc(j.alt_note) : '') + '</p>';
+        box.querySelectorAll('[data-nrv-save]').forEach((b) => b.addEventListener('click', async () => {
+            const id = b.getAttribute('data-nrv-save');
+            const inp = box.querySelector('[data-nrv-inp="' + id + '"]');
+            try { const j2 = await jf('/api/fin/valuation/nrv', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: id, price_rial_per_unit: inp && inp.value !== '' ? numFa(inp.value) : null }) }); toast(j2.cleared ? 'NRV حذف شد ✅' : 'NRV ذخیره شد ✅'); glValLoad_23b(); }
+            catch (e) { toast(e.message, 'err'); }
+        }));
+        box.querySelectorAll('[data-nrv-doc]').forEach((b) => b.addEventListener('click', () => {
+            const id = b.getAttribute('data-nrv-doc');
+            const r = (glVal_23b.data.rows || []).find((x) => x.item_id === id);
+            if (!r || !r.suggestion) return;
+            const findAcc = (code) => (st.accounts.find((a) => a.code === code) || {}).id || '';
+            const dAcc = findAcc(r.suggestion.lines[0].account), cAcc = findAcc(r.suggestion.lines[1].account);
+            if (!dAcc || !cAcc) { toast('حساب‌های کاهش ارزش یافت نشد — ابتدا NRV را ذخیره کنید تا حساب‌ها ساخته شوند.', 'err'); return; }
+            buildDocForm();
+            $('finDocForm').classList.remove('hidden');
+            $('finDate').value = jToday();
+            $('finDesc').value = r.suggestion.desc;
+            $('finLnAcc0').value = dAcc; $('finLnD0').value = r.suggestion.lines[0].debit; $('finLnC0').value = '';
+            $('finLnAcc1').value = cAcc; $('finLnD1').value = ''; $('finLnC1').value = r.suggestion.lines[1].credit;
+            paintBalance();
+            try { $('finDocForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+            toast('پیشنهاد در فرم سند دستی درج شد — بازبینی و ثبت فقط با تأیید حسابدار.');
+        }));
+        /* per انبار / گروه کالا */
+        const whBox = $('glValWhTable'), catBox = $('glValCatTable');
+        if (whBox) {
+            let hw = '<table><thead><tr><th>انبار</th><th>مقدار</th><th>ارزش (ریال)</th></tr></thead><tbody>';
+            (j.by_warehouse || []).forEach((w) => { hw += '<tr><td>' + esc(w.warehouse_fa) + '</td><td>' + dec(w.qty) + '</td><td><b>' + rls(w.value_rial, '') + '</b></td></tr>'; });
+            hw += '<tr class="tot"><td><b>جمع</b></td><td>—</td><td><b>' + rls(t.value_rial, '') + '</b></td></tr>';
+            whBox.innerHTML = hw + '</tbody></table>';
+        }
+        if (catBox) {
+            let hc = '<table><thead><tr><th>گروه کالا</th><th>مقدار</th><th>ارزش (ریال)</th></tr></thead><tbody>';
+            (j.by_category || []).forEach((c) => { hc += '<tr><td>' + esc(c.category) + '</td><td>' + dec(c.qty) + '</td><td><b>' + rls(c.value_rial, '') + '</b></td></tr>'; });
+            hc += '<tr class="tot"><td><b>جمع</b></td><td>—</td><td><b>' + rls(t.value_rial, '') + '</b></td></tr>';
+            catBox.innerHTML = hc + '</tbody></table>';
+        }
+    }
+    async function glValLoad_23b() {
+        const msg = $('glValMsg'); if (msg) msg.textContent = 'در حال محاسبه…';
+        try { const j = await jf('/api/fin/valuation'); glVal_23b.data = j; glValRender_23b(); if (msg) { msg.textContent = ''; msg.className = 'note'; } }
+        catch (e) { if (msg) { msg.textContent = e.message; msg.className = 'note fin-bal-no'; } }
+    }
+    const glOrigRenderReport_23b = renderReport;
+    renderReport = function (kind, j) {
+        glOrigRenderReport_23b(kind, j);
+        try {
+            if (kind === 'balance' && j && j.inventory_valuation) {
+                const box = $('finReportBox'); if (!box) return;
+                const v = j.inventory_valuation;
+                const div = document.createElement('div');
+                div.setAttribute('data-gl-23b', '1');
+                div.className = 'note' + (v.write_down_rial > 0 ? ' fin-bal-no' : ' fin-bal-ok');
+                div.style.marginTop = '6px';
+                div.innerHTML = '📦 کارت «موجودی ریالی» ترازنامه (ارزیابی میانگین موزون — استاندارد ۸): <b>' + rls(v.total_value_rial) + ' ریال</b>'
+                    + (v.write_down_rial > 0 ? ' | با اعمال NRV (اقل): <b>' + rls(v.carrying_rial) + ' ریال</b> — کاهش ارزش ' + rls(v.write_down_rial) + ' ریال (پیشنهاد سند در پنل ارزیابی موجودی)' : '')
+                    + ' | ماندهٔ حساب‌های ۱۱۰xxx در دفتر: ' + rls(v.gl_inventory_rial) + ' ریال' + (v.diff_gl_rial ? ' (اختلاف ارزیابی با دفتر: ' + rls(Math.abs(v.diff_gl_rial)) + ' ریال)' : '');
+                box.appendChild(div);
+            }
+        } catch (e) { /* بی‌ضرر */ }
+    };
+    try {
+        $('glValBtn').addEventListener('click', glValLoad_23b);
+        $('glValBasis').addEventListener('change', () => { glVal_23b.basis = $('glValBasis').value; if (glVal_23b.data) glValRender_23b(); });
+        $('glValXls').addEventListener('click', () => {
+            if (!glVal_23b.data) { toast('ابتدا ارزیابی را محاسبه کنید.', 'err'); return; }
+            const j = glVal_23b.data;
+            const rows = j.rows.map((r) => ({ code: toFaDigits(r.code), name: r.name, unit: r.unit, cat: r.category, qty: r.qty, avg: r.avg_cost_rial_per_unit, val: r.value_rial, nrv: r.nrv.price_rial_per_unit == null ? '' : r.nrv.price_rial_per_unit, carry: r.carrying_rial, wd: r.write_down_rial || '' }));
+            downloadXls('ارزش_موجودی', [{ label: 'کد', key: 'code' }, { label: 'کالا', key: 'name' }, { label: 'واحد', key: 'unit' }, { label: 'گروه', key: 'cat' }, { label: 'مقدار', key: 'qty' }, { label: 'میانگین (ریال)', key: 'avg' }, { label: 'ارزش کل (ریال)', key: 'val' }, { label: 'NRV (ریال)', key: 'nrv' }, { label: 'ارزش دفتری اقل (ریال)', key: 'carry' }, { label: 'کاهش ارزش (ریال)', key: 'wd' }], rows, 'ارزش موجودی — میانگین موزون + NRV (استاندارد ۸)');
+        });
+        $('glValWhXls').addEventListener('click', () => {
+            if (!glVal_23b.data) { toast('ابتدا ارزیابی را محاسبه کنید.', 'err'); return; }
+            const j = glVal_23b.data; const rows = [];
+            (j.by_warehouse || []).forEach((w) => rows.push({ kind: 'انبار', name: w.warehouse_fa, qty: w.qty, val: w.value_rial }));
+            (j.by_category || []).forEach((c) => rows.push({ kind: 'گروه کالا', name: c.category, qty: c.qty, val: c.value_rial }));
+            downloadXls('ارزش_موجودی_انبار_گروه', [{ label: 'نوع', key: 'kind' }, { label: 'نام', key: 'name' }, { label: 'مقدار', key: 'qty' }, { label: 'ارزش (ریال)', key: 'val' }], rows, 'ارزش موجودی per انبار / گروه کالا');
+        });
+    } catch (glE23b) { /* تب مالی در این نقش نیست — بی‌ضرر */ }
+    /* ===== FEAT-GL-23b (end) ===== */
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
     loaders.finance = function () { return loadAll(); }; /* FEAT-FIN-13b: ورود به تب مالی */
 })();

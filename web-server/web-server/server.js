@@ -2036,7 +2036,13 @@ function appRequestHandler(req, res) {
         });
         const profit = incTot - expTot;
         const totA = assets.reduce((s, r) => s + r.amount, 0), totL = liabs.reduce((s, r) => s + r.amount, 0), totE = eqs.reduce((s, r) => s + r.amount, 0);
-        return sendJson(res, { ok: true, assets: assets, liabilities: liabs, equity: eqs, total_assets: totA, total_liabilities: totL, total_equity: totE, period_profit: profit, balanced: totA === totL + totE + profit, generated_at: new Date().toISOString() });
+        /* ===== FEAT-GL-23b (begin): کارت «موجودی ریالی» ترازنامه از ارزیابی میانگین موزون (افزاینده — فقط دادهٔ گزارش؛ اسناد/حساب‌ها دست نمی‌خورند) ===== */
+        const invVal23b = gl23bValuation(live);
+        const glInvRial23b = assets.filter((a) => /^110/.test(String(a.code))).reduce((s, a) => s + a.amount, 0);
+        /* ===== FEAT-GL-23b (end) ===== */
+        return sendJson(res, { ok: true, assets: assets, liabilities: liabs, equity: eqs, total_assets: totA, total_liabilities: totL, total_equity: totE, period_profit: profit, balanced: totA === totL + totE + profit,
+            inventory_valuation: { method: 'میانگین موزون متحرک — استاندارد ۸', total_value_rial: invVal23b.totals.value_rial, carrying_rial: invVal23b.totals.carrying_rial, write_down_rial: invVal23b.totals.write_down_rial, nrv_applied: invVal23b.totals.write_down_rial > 0, items_with_stock: invVal23b.totals.items_with_stock, gl_inventory_rial: glInvRial23b, diff_gl_rial: invVal23b.totals.value_rial - glInvRial23b },
+            generated_at: new Date().toISOString() });
     }
     if (req.method === 'GET' && pathname === '/api/fin/reports/vat') {
         if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
@@ -2179,6 +2185,176 @@ function appRequestHandler(req, res) {
         return;
     }
     // ===== FEAT-GL-23a (end) =====
+
+    // ===== FEAT-GL-23b (begin): ارزیابی موجودی — میانگین موزون متحرک + NRV (استاندارد ۸ ایران — اقل بهای تمام‌شده و خالص ارزش فروش؛ LIFO ممنوع) — فقط گزارش/ابزار، هیچ حرکت انباری تغییر نمی‌کند =====
+    function gl23bEnsureNrv(live) {
+        if (!live.inv_valuation_23b || typeof live.inv_valuation_23b !== 'object') live.inv_valuation_23b = { nrv: {} };
+        if (!live.inv_valuation_23b.nrv || typeof live.inv_valuation_23b.nrv !== 'object') live.inv_valuation_23b.nrv = {};
+        return live.inv_valuation_23b;
+    }
+    /* بهای استاندارد برای مقایسهٔ نمایش (زیرساخت FIFO/Standard — FIFO فعلاً null) */
+    function gl23bStdOf(live, item) {
+        const code = String(item.code || '').toUpperCase();
+        const cfg = live.fin_config || {};
+        if (code === 'BILLET') { const p = Number(cfg.billet_rial_per_kg) || 0; return String(item.unit || '').indexOf('تن') !== -1 ? Math.round(p * 1000) : p; }
+        const m = /^RB-(\d+)$/.exec(code);
+        if (!m && code !== '5SP') return null;
+        const bom = (live.fin_bom || []).find((x) => String(x.size) === String(code === '5SP' ? '5SP' : m[1]));
+        return bom ? finStdCostPerTon(bom, cfg) : null;
+    }
+    /* resolve بهای ورود: خرید (پیوند با رسید ماژول خرید) ← بهای شمش fin_config ← BOM استاندارد محصول ← null (میانگین بدون تغییر) */
+    function gl23bEntryCost(live, item, r) {
+        const cfg = live.fin_config || {};
+        const code = String(item.code || '').toUpperCase();
+        const perTon = String(item.unit || '').indexOf('تن') !== -1;
+        if (String(r.receipt_type || '') === 'purchase' && r.source_ref) {
+            const pr = (live.purchase_receipts || []).find((x) => x && x.receipt_no === r.source_ref);
+            if (pr) {
+                const ln = (pr.lines || []).find((l) => l && l.item_id === item.id) || (pr.lines || [])[0];
+                if (ln && Number(ln.unit_price_rial) > 0) return { cost: Number(ln.unit_price_rial), basis: 'خرید (' + pr.receipt_no + ')' };
+            }
+        }
+        if (code === 'BILLET') { const p = Number(cfg.billet_rial_per_kg) || 0; if (p > 0) return { cost: perTon ? Math.round(p * 1000) : p, basis: 'بهای شمش fin_config' }; }
+        const m = /^RB-(\d+)$/.exec(code);
+        if (m || code === '5SP') {
+            const bom = (live.fin_bom || []).find((x) => String(x.size) === String(code === '5SP' ? '5SP' : m[1]));
+            if (bom) return { cost: finStdCostPerTon(bom, cfg), basis: 'بهای استاندارد BOM سایز ' + (code === '5SP' ? '5SP' : m[1]) };
+        }
+        return null;
+    }
+    /* موتور میانگین موزون متحرک — بازپخش زمانی همهٔ حرکات انبار per کالا */
+    function gl23bValuation(live) {
+        finSeed(live);
+        const items = (Array.isArray(live.inventory_items) ? live.inventory_items : []).filter((x) => x && x.id && x.active !== false);
+        const moves = [];
+        (Array.isArray(live.inventory_receipts) ? live.inventory_receipts : []).forEach((r) => { if (r && r.item_id) moves.push({ ts: Date.parse(r.timestamp || '') || 0, item_id: r.item_id, dir: 1, qty: Number(r.quantity) || 0, r: r }); });
+        (Array.isArray(live.inventory_issues) ? live.inventory_issues : []).forEach((r) => { if (r && r.item_id) moves.push({ ts: Date.parse(r.timestamp || '') || 0, item_id: r.item_id, dir: -1, qty: Number(r.quantity) || 0, r: r }); });
+        (Array.isArray(live.inventory_adjustments) ? live.inventory_adjustments : []).forEach((r) => { if (r && r.item_id) moves.push({ ts: Date.parse(r.timestamp || '') || 0, item_id: r.item_id, dir: (Number(r.delta_quantity) || 0) >= 0 ? 1 : -1, qty: Math.abs(Number(r.delta_quantity) || 0), adj: true, r: r }); });
+        moves.sort((a, b) => (a.ts - b.ts) || String((a.r && a.r.id) || '').localeCompare(String((b.r && b.r.id) || '')));
+        const nrvStore = gl23bEnsureNrv(live);
+        const byItem = new Map();
+        moves.forEach((mv) => { if (!byItem.has(mv.item_id)) byItem.set(mv.item_id, []); byItem.get(mv.item_id).push(mv); });
+        const rows = items.map((item) => {
+            let q = 0, avg = 0, inQty = 0, inVal = 0, outQty = 0, outVal = 0, noCost = 0;
+            const bases = [];
+            (byItem.get(item.id) || []).forEach((mv) => {
+                if (mv.dir > 0 && mv.qty > 0) {
+                    let cost = null, basis = null;
+                    if (!mv.adj) { const rc = gl23bEntryCost(live, item, mv.r); if (rc) { cost = rc.cost; basis = rc.basis; } }
+                    if (cost == null) { cost = avg; noCost++; if (!mv.adj && bases.length < 4 && bases.indexOf('بدون بهای صریح — میانگین جاری حفظ شد') === -1) bases.push('بدون بهای صریح — میانگین جاری حفظ شد'); }
+                    const val = mv.qty * cost;
+                    avg = (q + mv.qty) > 0 ? (q * avg + val) / (q + mv.qty) : cost;
+                    q += mv.qty; inQty += mv.qty; inVal += val;
+                    if (basis && bases.length < 4 && bases.indexOf(basis) === -1) bases.push(basis);
+                } else if (mv.dir < 0 && mv.qty > 0) {
+                    const take = Math.min(mv.qty, Math.max(0, q));
+                    outQty += take; outVal += take * avg;
+                    q = Math.max(0, q - mv.qty); /* خروج: بهای میانگین جاری — میانگین تغییر نمی‌کند */
+                }
+            });
+            const avgR = Math.round(avg);
+            const nrvRec = nrvStore.nrv[item.id] || null;
+            const nrvPrice = nrvRec ? (Number(nrvRec.price_rial_per_unit) || 0) : null;
+            const carryUnit = (nrvPrice != null && nrvPrice > 0 && nrvPrice < avgR) ? nrvPrice : avgR;
+            const value = Math.round(q * avgR);
+            const carrying = Math.round(q * carryUnit);
+            const writeDown = value - carrying;
+            const std = gl23bStdOf(live, item);
+            return {
+                item_id: item.id, code: item.code, name: item.name, unit: item.unit, category: item.category || '—',
+                qty: Math.round(q * 1000) / 1000, avg_cost_rial_per_unit: avgR, value_rial: value,
+                in_qty: Math.round(inQty * 1000) / 1000, in_value_rial: Math.round(inVal), out_qty: Math.round(outQty * 1000) / 1000, out_value_rial: Math.round(outVal),
+                no_cost_entries: noCost, cost_basis: bases,
+                nrv: { price_rial_per_unit: nrvPrice, updated_at: nrvRec ? nrvRec.updated_at : null, updated_by: nrvRec ? nrvRec.updated_by : null },
+                carrying_rial: carrying, write_down_rial: writeDown, write_down_needed: writeDown > 0,
+                suggestion: writeDown > 0 ? {
+                    desc: 'کاهش ارزش موجودی ' + item.name + ' به اقل NRV (استاندارد ۸)',
+                    lines: [{ account: '520002', title: 'زیان کاهش ارزش موجودی‌ها', debit: writeDown, credit: 0 }, { account: '110007', title: 'ذخیره کاهش ارزش موجودی‌ها', debit: 0, credit: writeDown }],
+                    note: 'اجرای خودکار ممنوع — ثبت فقط با تأیید حسابدار از فرم سند دستی'
+                } : null,
+                alt: { fifo_rial_per_unit: null, std_rial_per_unit: std }
+            };
+        });
+        const active = rows.filter((r) => r.qty !== 0 || r.in_qty > 0 || r.out_qty > 0);
+        const totals = {
+            value_rial: active.reduce((s, r) => s + r.value_rial, 0),
+            carrying_rial: active.reduce((s, r) => s + r.carrying_rial, 0),
+            write_down_rial: active.reduce((s, r) => s + r.write_down_rial, 0),
+            items_with_stock: active.filter((r) => r.qty !== 0).length,
+            nrv_flags: active.filter((r) => r.write_down_needed).length
+        };
+        return { rows: active, totals: totals };
+    }
+    /* گزارش ارزش موجودی per انبار / گروه کالا */
+    function gl23bByWarehouse(live, val) {
+        const avgBy = {}; val.rows.forEach((r) => { avgBy[r.item_id] = r.avg_cost_rial_per_unit; });
+        const items = {}; (Array.isArray(live.inventory_items) ? live.inventory_items : []).forEach((i) => { if (i && i.id) items[i.id] = i; });
+        const whAgg = {}, catAgg = {};
+        invBuildStock(live).forEach((s) => {
+            const item = items[s.item_id]; if (!item) return;
+            const qty = Number(s.quantity) || 0;
+            const valR = Math.round(qty * (avgBy[s.item_id] || 0));
+            const wh = s.warehouse || '—';
+            if (!whAgg[wh]) whAgg[wh] = { warehouse: wh, warehouse_fa: ({ raw: 'مواد اولیه', product: 'محصول', spare: 'قطعات', quarantine: 'قرنطینه' })[wh] || wh, qty: 0, value_rial: 0 };
+            whAgg[wh].qty = Math.round((whAgg[wh].qty + qty) * 1000) / 1000; whAgg[wh].value_rial += valR;
+            const cat = item.category || '—';
+            if (!catAgg[cat]) catAgg[cat] = { category: cat, qty: 0, value_rial: 0 };
+            catAgg[cat].qty = Math.round((catAgg[cat].qty + qty) * 1000) / 1000; catAgg[cat].value_rial += valR;
+        });
+        return { warehouses: Object.values(whAgg), categories: Object.values(catAgg) };
+    }
+    /* حساب‌های پیشنهادی کاهش ارزش — افزاینده idempotent (فقط هنگام ذخیرهٔ NRV) */
+    function gl23bEnsureAccounts(live) {
+        let changed = false;
+        const add = (code, title, type) => {
+            if ((live.fin_accounts || []).some((a) => a.code === code)) return;
+            /* FIX: والد حساب معین (۶رقم) = حساب کل (۳رقم) — نه پیشوند ۶رقمی خود کد */
+            const parent = (live.fin_accounts || []).find((a) => a.code === code.slice(0, 3));
+            if (!parent) return;
+            live.fin_accounts.push({ id: 'facc-' + code + '-23b', code: code, title: title, type: type, level: 3, parent_id: parent.id, active: true });
+            changed = true;
+        };
+        add('110007', 'ذخیره کاهش ارزش موجودی‌ها', 'asset');
+        add('520002', 'زیان کاهش ارزش موجودی‌ها', 'expense');
+        return changed;
+    }
+    if (req.method === 'GET' && pathname === '/api/fin/valuation') {
+        if (!auth.requireRole(req, FIN_R)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+        const val = gl23bValuation(live);
+        const byWh = gl23bByWarehouse(live, val);
+        return sendJson(res, {
+            ok: true,
+            method: 'میانگین موزون متحرک (Weighted Average) — استاندارد ۸ ایران؛ LIFO مجاز نیست؛ ارزیابی نهایی = اقل بهای تمام‌شده و خالص ارزش فروش (NRV)',
+            rows: val.rows, totals: val.totals, by_warehouse: byWh.warehouses, by_category: byWh.categories,
+            alt_note: 'FIFO فعلاً محاسبه نمی‌شود (فقط زیرساخت نمایش) — بهای استاندارد برای مقایسه از BOM/fin_config.',
+            write_down_accounts: { debit: '520002 زیان کاهش ارزش موجودی‌ها', credit: '110007 ذخیره کاهش ارزش موجودی‌ها' },
+            generated_at: new Date().toISOString()
+        });
+    }
+    if (req.method === 'PUT' && pathname === '/api/fin/valuation/nrv') {
+        if (!auth.requireRole(req, FIN_W)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت NRV فقط برای واحد مالی مجاز است.' }, 403);
+        readBody(req).then((body) => {
+            let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
+            const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            const item = (live.inventory_items || []).find((x) => x && x.id === String(b.item_id || ''));
+            if (!item) return sendJson(res, { error: 'کالا یافت نشد.' }, 404);
+            const store = gl23bEnsureNrv(live);
+            if (b.price_rial_per_unit == null || b.price_rial_per_unit === '') {
+                delete store.nrv[item.id];
+                if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.valuation.nrv.clear', { item: item.code }); return sendJson(res, { ok: true, cleared: true, item: item.code }); }
+                return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+            }
+            const p = Number(finDigitsEn(String(b.price_rial_per_unit)));
+            if (!isFinite(p) || p < 0 || p > 1e12) return sendJson(res, { error: 'قیمت خالص فروش (NRV) باید عددی بین ۰ و ۱۰۱۲ ریال باشد.' }, 400);
+            store.nrv[item.id] = { price_rial_per_unit: Math.round(p), updated_at: new Date().toISOString(), updated_by: String((req.user && (req.user.name || req.user.username)) || '') };
+            const accAdded = gl23bEnsureAccounts(live);
+            if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.valuation.nrv.set', { item: item.code, nrv: Math.round(p) }); return sendJson(res, { ok: true, item: item.code, nrv: store.nrv[item.id], accounts_added: accAdded }); }
+            return sendJson(res, { error: 'خطا در ذخیره‌سازی.' }, 500);
+        }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
+        return;
+    }
+    // ===== FEAT-GL-23b (end) =====
     // ===== FEAT-FIN-13b (end) =====
 
     /* ===== endpointهای برنامه‌ریزی ===== */
