@@ -5073,6 +5073,9 @@ live.inventory_reservations.splice(idx, 1);
             live.fin_accounts.push(rec); have[code] = rec;
             return rec;
         };
+        add('130', 'نقد و بانک', 'asset', 2); /* FEAT-PURCHASE-22b: اگر فروش هرگز اجرا نشده بود (همان کد/عنوان فروش — idempotent) */
+        add('130001', 'بانک', 'asset', 3);
+        add('130002', 'صندوق', 'asset', 3);
         add('240', 'پرداختنی تجاری', 'liability', 2);
         add('240001', 'حساب‌های پرداختنی (تجاری)', 'liability', 3);
         add('230003', 'پیش‌پرداخت به تأمین‌کنندگان', 'liability', 3);
@@ -5521,6 +5524,359 @@ live.inventory_reservations.splice(idx, 1);
         return;
     }
     // ===== FEAT-PURCHASE-22a (end) =====
+    // ================================================================
+    // ===== FEAT-PURCHASE-22b (begin): فاکتور خرید + VAT (از fin_config)
+    // + اسناد خودکار finPostDoc (source «purchase» — idempotent per ref_id)
+    // + پرداخت‌ها + حساب‌های پرداختنی (AP) با Aging شمسی + گزارش‌ها
+    // سند رسید در 22a ثبت می‌شود (بدهکار موجودی/بستانکار پرداختنی)؛ اینجا:
+    // تأیید فاکتور → سند VAT خرید + سند تعدیل قیمت (اگر تفاوت با رسید)
+    // برگشت خرید → سند معکوس + خروج انبار؛ پرداخت → بدهکار پرداختنی/
+    // پیش‌پرداخت / بستانکار بانک یا صندوق — حساب‌های لازم فقط اگر نبودند
+    // ساخته می‌شوند (purEnsureAccounts22a در 22a) — finPostDoc/هستهٔ مالی صفر تغییر
+    // ================================================================
+    function purEnsure22b(live) {
+        live.purchase_invoices = Array.isArray(live.purchase_invoices) ? live.purchase_invoices : [];
+        live.purchase_payments = Array.isArray(live.purchase_payments) ? live.purchase_payments : [];
+        live.purchase_seq = live.purchase_seq && typeof live.purchase_seq === 'object' ? live.purchase_seq : {};
+        if (live.purchase_seq.invoice == null) live.purchase_seq.invoice = 0;
+        if (live.purchase_seq.payment == null) live.purchase_seq.payment = 0;
+        return live;
+    }
+    const PUR_INV_STATUS_FA_22B = { received: 'دریافت‌شده', confirmed: 'تأییدشده', returned: 'برگشتی' };
+    const PUR_PAY_METHOD_FA_22B = { cash: 'نقد', bank: 'بانک', check: 'چک' };
+    /* ماندهٔ پرداختنی تأمین‌کننده از خود دفتر (روزنامه) — قرینهٔ حساب تفضیلی: Σ بستانکار − Σ بدهکار */
+    function purApBalance22b(live, sup) {
+        if (!sup || !sup.ap_account_id) return 0;
+        let bal = 0;
+        (live.fin_docs || []).forEach((d) => (d.lines || []).forEach((ln) => { if (ln.account_id === sup.ap_account_id) bal += (Number(ln.credit) || 0) - (Number(ln.debit) || 0); }));
+        return Math.round(bal);
+    }
+    /* افزودن روز شمسی (سررسید فاکتور = تاریخ + مهلت پرداخت تأمین‌کننده) */
+    function purAddDaysJalali22b(dj, days) {
+        const t = Date.parse(planJalaliToTs(finDigitsEn(String(dj || '')).trim(), 12));
+        if (!t) return '';
+        return finIsoToJalali(new Date(t + (Number(days) || 0) * 86400000).toISOString());
+    }
+    const PUR_READ_22B = ['purchase', 'manager', 'finance', 'warehouse'];
+    const PUR_WRITE_22B = ['purchase']; /* admin همیشه با requireRole عبور می‌کند */
+
+    if (req.method === 'POST' && pathname === '/api/purchase/invoices') {
+        if (!auth.requireRole(req, PUR_WRITE_22B)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت فاکتور خرید فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22b(purEnsure22a(invEnsure(readLive())));
+                const po = (live.purchase_orders || []).find((o) => o.id === String(b.po_id || '') || o.po_no === String(b.po_id || ''));
+                if (!po) return sendJson(res, { error: 'سفارش خرید یافت نشد.' }, 404);
+                if (po.status !== 'received' && po.status !== 'completed') return sendJson(res, { error: 'فاکتور فقط برای سفارش تحویل‌گرفته/تکمیل صادر می‌شود (وضعیت فعلی: ' + (PUR_PO_STATUS_FA_22A[po.status] || po.status) + ').' }, 409);
+                const sup = (live.suppliers || []).find((s) => s.id === po.supplier_id);
+                if (!sup) return sendJson(res, { error: 'تأمین‌کنندهٔ سفارش یافت نشد.' }, 404);
+                /* اقلام فاکتور = رسیدهای واقعی فاکتورنشدهٔ همین سفارش (وزن باسکول) — قیمت پیش‌فرض از PO، قابل اصلاح per ردیف */
+                const openRcpts = (live.purchase_receipts || []).filter((r) => r.po_id === po.id && r.status !== 'returned' && !r.invoice_no);
+                if (!openRcpts.length) return sendJson(res, { error: 'رسید فاکتورنشده‌ای برای این سفارش نیست — ابتدا رسید خرید ثبت کنید.' }, 409);
+                const byLine = {};
+                openRcpts.forEach((r) => (r.lines || []).forEach((l) => {
+                    const k = String(l.po_line);
+                    byLine[k] = byLine[k] || { po_line: Number(l.po_line), qty: 0, booked: 0, heats: [], receipts: [] };
+                    byLine[k].qty = round2(byLine[k].qty + (Number(l.qty) || 0));
+                    byLine[k].booked = round2(byLine[k].booked + (Number(l.qty) || 0) * (Number(l.unit_price_rial) || 0));
+                    if (l.heat_number) byLine[k].heats.push(l.heat_number);
+                    if (byLine[k].receipts.indexOf(r.receipt_no) === -1) byLine[k].receipts.push(r.receipt_no);
+                }));
+                const overrides = Array.isArray(b.lines) ? b.lines : [];
+                const lineSrc = (po.items || []);
+                const lines = Object.keys(byLine).map((k) => {
+                    const g = byLine[k];
+                    const src = lineSrc[g.po_line] || {};
+                    const ov = overrides.find((x) => purIdx22a(x.po_line) === g.po_line);
+                    const price = ov != null && finDigitsEn(ov.unit_price_rial) !== '' ? Math.round(Number(finDigitsEn(ov.unit_price_rial)) || 0) : Math.round(Number(src.unit_price_rial) || 0);
+                    if (!(price > 0)) throw new Error('قیمت هر ' + (src.qty_unit === 'تن' ? 'تن' : 'عدد') + ' برای ردیف «' + (src.item_name || '') + '» باید بزرگ‌تر از صفر باشد.');
+                    return { po_line: g.po_line, kind: src.kind || 'billet', item_name: src.item_name || PUR_KIND_FA_22A[src.kind] || 'کالا', grade: src.grade || '', qty: g.qty, qty_unit: src.qty_unit || 'تن', unit_price_rial: price, po_price_rial: Math.round(Number(src.unit_price_rial) || 0), booked_rial: Math.round(g.booked), line_total_rial: Math.round(g.qty * price), heats: g.heats.slice(0, 8), receipts: g.receipts };
+                });
+                const bookedTotal = lines.reduce((s, l) => s + l.booked_rial, 0);
+                const goods = lines.reduce((s, l) => s + l.line_total_rial, 0);
+                const adjustment = Math.round(goods - bookedTotal);
+                const vatRate = (live.fin_config && Number(live.fin_config.vat_rate)) || 10;
+                const vat = Math.round(goods * vatRate / 100);
+                const total = goods + vat;
+                const dj = purValidJalali22a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                const due = purAddDaysJalali22b(dj, Number(sup.payment_term_days) || 0) || dj;
+                const rec = {
+                    id: 'pinv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    invoice_no: purNextNo22a(live, 'invoice', 'PINV'),
+                    supplier_invoice_no: String(b.supplier_invoice_no || '').trim().slice(0, 40),
+                    po_id: po.id, po_no: po.po_no,
+                    supplier_id: sup.id, supplier_name: sup.name,
+                    seller: { name: sup.name, national_id: sup.national_id || '', economic_id: sup.economic_id || '', address: sup.address || '', phone: sup.phone || '' },
+                    lines: lines, booked_rial: bookedTotal, goods_rial: goods, adjustment_rial: adjustment,
+                    vat_rate: vatRate, vat_rial: vat, total_rial: total,
+                    date_jalali: dj, due_date_jalali: due,
+                    status: 'received', paid_rial: 0, receipts: openRcpts.map((r) => r.receipt_no),
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
+                    confirmed_at: null, returned_at: null, return_reason: '',
+                };
+                openRcpts.forEach((r) => { r.invoice_no = rec.invoice_no; });
+                live.purchase_invoices.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ فاکتور خرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.invoice.create', { invoice_no: rec.invoice_no, po_no: po.po_no, total: total, adjustment: adjustment });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت فاکتور خرید ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/invoices/confirm') {
+        if (!auth.requireRole(req, PUR_WRITE_22B)) return sendJson(res, { error: 'دسترسی غیرمجاز: تأیید فاکتور فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22b(purEnsure22a(invEnsure(readLive())));
+                const inv = (live.purchase_invoices || []).find((x) => x.id === String(b.invoice_id || '') || x.invoice_no === String(b.invoice_id || ''));
+                if (!inv) return sendJson(res, { error: 'فاکتور خرید یافت نشد.' }, 404);
+                if (inv.status !== 'received') return sendJson(res, { error: 'فقط فاکتور دریافت‌شده قابل تأیید است (وضعیت فعلی: ' + (PUR_INV_STATUS_FA_22B[inv.status] || inv.status) + ').' }, 409);
+                const sup = (live.suppliers || []).find((s) => s.id === inv.supplier_id);
+                purEnsureAccounts22a(live);
+                const apAcc = sup ? purApAccount22a(live, sup) : null;
+                const accByCode = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode[a.code] = a; });
+                if (!apAcc || !accByCode['210001'] || !accByCode['110001'] || !accByCode['110005']) return sendJson(res, { error: 'حساب‌های مالی خرید (VAT خرید ۲۱۰۰۰۱ / موجودی) در کدینگ یافت نشد — ابتدا تب مالی را باز کنید.' }, 409);
+                const createdBy = String((req.user && (req.user.name || req.user.username)) || '');
+                /* سند ۱ — VAT خرید: بدهکار ۲۱۰۰۰۱ / بستانکار پرداختنی (idempotent per «pinv-vat:PINV-xxxxx») */
+                if (inv.vat_rial > 0) {
+                    finPostDoc(live, {
+                        source: 'purchase', ref_module: 'purchase', ref_id: 'pinv-vat:' + inv.invoice_no,
+                        date_jalali: inv.date_jalali,
+                        desc: 'مالیات بر ارزش افزوده خرید ' + inv.invoice_no + ' — ' + sup.name + ' — نرخ ' + inv.vat_rate + '٪',
+                        lines: [
+                            { account_id: accByCode['210001'].id, debit: inv.vat_rial, ref_id: inv.invoice_no, note: 'VAT خرید ' + inv.invoice_no },
+                            { account_id: apAcc.id, credit: inv.vat_rial, ref_id: inv.invoice_no, note: 'پرداختنی ' + sup.name },
+                        ],
+                        created_by: createdBy,
+                    });
+                }
+                /* سند ۲ — تعدیل قیمت نسبت به رسید (اگر تفاوت): مثبت → بدهکار موجودی/بستانکار پرداختنی؛ منفی → برعکس */
+                if ((Number(inv.adjustment_rial) || 0) !== 0) {
+                    const adj = Math.round(inv.adjustment_rial);
+                    const billetAdj = Math.round((inv.lines || []).filter((l) => l.kind === 'billet').reduce((s, l) => s + ((Number(l.line_total_rial) || 0) - (Number(l.booked_rial) || 0)), 0));
+                    const matAdj = adj - billetAdj;
+                    const linesAdj = [];
+                    if (adj > 0) {
+                        if (billetAdj > 0) linesAdj.push({ account_id: accByCode['110001'].id, debit: billetAdj, ref_id: inv.invoice_no, note: 'افزایش بهای شمش' });
+                        if (matAdj > 0) linesAdj.push({ account_id: accByCode['110005'].id, debit: matAdj, ref_id: inv.invoice_no, note: 'افزایش بهای مواد/قطعات' });
+                        linesAdj.push({ account_id: apAcc.id, credit: adj, ref_id: inv.invoice_no, note: 'تعدیل مثبت — ' + sup.name });
+                    } else {
+                        if (billetAdj < 0) linesAdj.push({ account_id: accByCode['110001'].id, credit: -billetAdj, ref_id: inv.invoice_no, note: 'کاهش بهای شمش' });
+                        if (matAdj < 0) linesAdj.push({ account_id: accByCode['110005'].id, credit: -matAdj, ref_id: inv.invoice_no, note: 'کاهش بهای مواد/قطعات' });
+                        linesAdj.push({ account_id: apAcc.id, debit: -adj, ref_id: inv.invoice_no, note: 'تعدیل منفی — ' + sup.name });
+                    }
+                    finPostDoc(live, {
+                        source: 'purchase', ref_module: 'purchase', ref_id: 'pinv-adj:' + inv.invoice_no,
+                        date_jalali: inv.date_jalali,
+                        desc: 'تعدیل قیمت فاکتور خرید ' + inv.invoice_no + ' نسبت به رسید (' + (adj > 0 ? '+' : '') + adj.toLocaleString('fa-IR') + ' ریال) — ' + sup.name,
+                        lines: linesAdj, created_by: createdBy,
+                    });
+                }
+                inv.status = 'confirmed'; inv.confirmed_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ تأیید فاکتور انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.invoice.confirm', { invoice_no: inv.invoice_no, vat: inv.vat_rial, adjustment: inv.adjustment_rial });
+                return sendJson(res, { ok: true, record: inv });
+            } catch (e) { return sendJson(res, { error: 'تأیید فاکتور ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/invoices/return') {
+        if (!auth.requireRole(req, PUR_WRITE_22B)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22b(purEnsure22a(invEnsure(readLive())));
+                const inv = (live.purchase_invoices || []).find((x) => x.id === String(b.invoice_id || '') || x.invoice_no === String(b.invoice_id || ''));
+                if (!inv) return sendJson(res, { error: 'فاکتور خرید یافت نشد.' }, 404);
+                if (inv.status !== 'confirmed') return sendJson(res, { error: 'فقط فاکتور تأییدشده قابل برگشت است (وضعیت فعلی: ' + (PUR_INV_STATUS_FA_22B[inv.status] || inv.status) + ').' }, 409);
+                const allocated = (live.purchase_payments || []).reduce((s, p) => s + ((p.allocated || []).filter((a) => a.invoice_no === inv.invoice_no).reduce((x, a) => x + (Number(a.amount_rial) || 0), 0)), 0);
+                if (allocated > 0) return sendJson(res, { error: 'فاکتور با پرداخت ثبت‌شده قابل برگشت نیست — ' + salesFmt21a(allocated) + ' ریال پرداخت روی آن تخصیص یافته است.' }, 409);
+                const sup = (live.suppliers || []).find((s) => s.id === inv.supplier_id);
+                purEnsureAccounts22a(live);
+                const apAcc = sup ? purApAccount22a(live, sup) : null;
+                const accByCode = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode[a.code] = a; });
+                if (!apAcc || !accByCode['210001'] || !accByCode['110001'] || !accByCode['110005']) return sendJson(res, { error: 'حساب‌های مالی خرید یافت نشد.' }, 409);
+                /* سند معکوس: بدهکار پرداختنی کل فاکتور / بستانکار VAT خرید + موجودی (بهای رسید + تعدیل) */
+                const goodsRev = Math.round((Number(inv.booked_rial) || 0) + (Number(inv.adjustment_rial) || 0));
+                const billetRev = Math.round((inv.lines || []).filter((l) => l.kind === 'billet').reduce((s, l) => s + (Number(l.booked_rial) || 0) + ((Number(l.line_total_rial) || 0) - (Number(l.booked_rial) || 0)), 0));
+                const matRev = goodsRev - billetRev;
+                const linesRev = [{ account_id: apAcc.id, debit: inv.total_rial, ref_id: inv.invoice_no, note: 'برگشت خرید — ' + sup.name }];
+                if (inv.vat_rial > 0) linesRev.push({ account_id: accByCode['210001'].id, credit: inv.vat_rial, ref_id: inv.invoice_no, note: 'ابطال VAT خرید' });
+                if (billetRev > 0) linesRev.push({ account_id: accByCode['110001'].id, credit: billetRev, ref_id: inv.invoice_no, note: 'خروج شمش برگشتی' });
+                if (matRev > 0) linesRev.push({ account_id: accByCode['110005'].id, credit: matRev, ref_id: inv.invoice_no, note: 'خروج مواد/قطعات برگشتی' });
+                finPostDoc(live, {
+                    source: 'purchase', ref_module: 'purchase', ref_id: 'pinv-rev:' + inv.invoice_no,
+                    date_jalali: purValidJalali22a(b.date_jalali) || finIsoToJalali(new Date().toISOString()),
+                    desc: 'برگشت از خرید ' + inv.invoice_no + ' — ' + sup.name + ' — ' + String(b.reason || '').slice(0, 80),
+                    lines: linesRev, created_by: String((req.user && (req.user.name || req.user.username)) || ''),
+                });
+                /* خروج انبار اقلام برگشتی — انتخاب از ردیف‌های فیزیکی (همان الگوی حوالهٔ فروش) */
+                const nowIso = new Date().toISOString();
+                const issueBase = 'RET-' + Date.now();
+                (inv.lines || []).forEach((l, li) => {
+                    const it = (live.inventory_items || []).find((x) => (l.kind === 'billet' ? String(x.code).toUpperCase() === 'BILLET' : x.id === l.item_id) && x.active !== false);
+                    if (!it) return;
+                    const wh = purWarehouseFor22a(l.kind);
+                    const agg = invAggWarehouse(live, it.id, wh);
+                    let remain = Number(l.qty) || 0;
+                    const rows = agg.rows.filter((x) => x.stock_status === 'available' && Number(x.quantity) > 0).sort((x, y) => Number(y.quantity) - Number(x.quantity));
+                    let idx = 0;
+                    for (const row of rows) {
+                        if (remain <= 1e-9) break;
+                        const take = round2(Math.min(Number(row.quantity), remain));
+                        if (take <= 1e-9) continue;
+                        live.inventory_issues.push({ id: 'gin-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: 'purchase-ret:' + inv.invoice_no + ':' + li + ':' + (idx++), issue_no: issueBase + (idx > 1 ? '-' + idx : ''), item_id: it.id, quantity: take, unit: it.unit || 'عدد', lot_no: row.lot_no, warehouse: wh, location: row.location, destination: 'برگشت به تأمین‌کننده — ' + inv.invoice_no, destination_ref: inv.invoice_no, description: ('برگشت خرید ' + inv.invoice_no + ' — ' + l.item_name).slice(0, 500), timestamp: nowIso, operator_id: String((req.user && (req.user.name || req.user.username)) || '') });
+                        remain = round2(remain - take);
+                    }
+                });
+                inv.status = 'returned'; inv.returned_at = nowIso; inv.return_reason = String(b.reason || '').trim().slice(0, 200);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ برگشت خرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.invoice.return', { invoice_no: inv.invoice_no, total: inv.total_rial });
+                return sendJson(res, { ok: true, record: inv });
+            } catch (e) { return sendJson(res, { error: 'برگشت فاکتور ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/payments') {
+        if (!auth.requireRole(req, PUR_WRITE_22B)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت پرداخت فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22b(purEnsure22a(invEnsure(readLive())));
+                const sup = (live.suppliers || []).find((s) => s.id === String(b.supplier_id || ''));
+                if (!sup) return sendJson(res, { error: 'تأمین‌کننده یافت نشد.' }, 404);
+                const amount = Math.round(Number(finDigitsEn(b.amount_rial)) || 0);
+                if (!(amount > 0)) return sendJson(res, { error: 'مبلغ پرداخت باید بزرگ‌تر از صفر باشد (ریال).' }, 400);
+                const method = ['cash', 'bank', 'check'].indexOf(String(b.method || '')) !== -1 ? String(b.method) : '';
+                if (!method) return sendJson(res, { error: 'روش پرداخت باید نقد، بانک یا چک باشد.' }, 400);
+                const checkNo = finDigitsEn(String(b.check_no || '')).trim();
+                if (method === 'check' && !checkNo) return sendJson(res, { error: 'شمارهٔ چک الزامی است.' }, 400);
+                const checkDue = method === 'check' ? purValidJalali22a(b.check_due_jalali) : '';
+                if (method === 'check' && !checkDue) return sendJson(res, { error: 'سررسید چک شمسی نامعتبر است.' }, 400);
+                const dj = purValidJalali22a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                /* تخصیص به فاکتورهای تأییدشده */
+                const allocs = Array.isArray(b.allocations) ? b.allocations.slice(0, 40) : [];
+                const allocated = [];
+                let allocatedTotal = 0;
+                for (const al of allocs) {
+                    const amt = Math.round(Number(finDigitsEn(al.amount_rial)) || 0);
+                    if (!(amt > 0)) continue;
+                    const inv = (live.purchase_invoices || []).find((x) => (x.id === String(al.invoice_id || '') || x.invoice_no === String(al.invoice_id || '')) && x.supplier_id === sup.id);
+                    if (!inv) return sendJson(res, { error: 'فاکتور برای تخصیص یافت نشد.' }, 404);
+                    if (inv.status !== 'confirmed') return sendJson(res, { error: 'تخصیص فقط به فاکتور تأییدشده مجاز است (' + inv.invoice_no + ').' }, 409);
+                    const prevPaid = Number(inv.paid_rial) || 0;
+                    if (amt > (inv.total_rial - prevPaid) + 1e-6) return sendJson(res, { error: 'مبلغ تخصیص به ' + inv.invoice_no + ' بیش از ماندهٔ فاکتور است (مانده: ' + salesFmt21a(inv.total_rial - prevPaid) + ' ریال).' }, 409);
+                    allocated.push({ invoice_id: inv.id, invoice_no: inv.invoice_no, amount_rial: amt });
+                    allocatedTotal += amt;
+                }
+                if (allocatedTotal > amount + 1e-6) return sendJson(res, { error: 'جمع تخصیص‌ها از مبلغ پرداخت بیشتر است.' }, 409);
+                const onAccount = Math.round(amount - allocatedTotal);
+                const rec = { id: 'ppay-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), payment_no: purNextNo22a(live, 'payment', 'PAY'), supplier_id: sup.id, supplier_name: sup.name, amount_rial: amount, method: method, method_fa: PUR_PAY_METHOD_FA_22B[method], check_no: checkNo, check_due_jalali: checkDue, date_jalali: dj, allocated: allocated, allocated_total_rial: allocatedTotal, on_account_rial: onAccount, created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
+                /* سند خودکار پرداخت: بدهکار پرداختنی (+پیش‌پرداخت برای علی‌الحساب) / بستانکار بانک یا صندوق */
+                purEnsureAccounts22a(live);
+                const apAcc = purApAccount22a(live, sup);
+                const accByCode = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode[a.code] = a; });
+                const creditAcc = method === 'cash' ? accByCode['130002'] : accByCode['130001'];
+                if (!creditAcc || !accByCode['230003']) return sendJson(res, { error: 'حساب بانک/صندوق یا پیش‌پرداخت تأمین‌کنندگان در کدینگ مالی یافت نشد.' }, 409);
+                const linesP = [{ account_id: creditAcc.id, credit: amount, note: PUR_PAY_METHOD_FA_22B[method] + (method === 'check' ? ' شماره ' + checkNo : '') }];
+                if (allocatedTotal > 0) linesP.push({ account_id: apAcc.id, debit: allocatedTotal, note: 'تسویه ' + allocated.map((a) => a.invoice_no).join('، ') });
+                if (onAccount > 0) linesP.push({ account_id: accByCode['230003'].id, debit: onAccount, note: 'پیش‌پرداخت ' + sup.name });
+                finPostDoc(live, { source: 'purchase', ref_module: 'purchase', ref_id: 'pay:' + rec.payment_no, date_jalali: dj, desc: 'پرداخت وجه ' + rec.payment_no + ' — ' + sup.name + ' — ' + salesFmt21a(amount) + ' ریال', lines: linesP, created_by: String((req.user && (req.user.name || req.user.username)) || '') });
+                allocated.forEach((a) => { const inv = (live.purchase_invoices || []).find((x) => x.id === a.invoice_id); if (inv) inv.paid_rial = round2((Number(inv.paid_rial) || 0) + a.amount_rial); });
+                live.purchase_payments.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ پرداخت انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.payment.create', { payment_no: rec.payment_no, amount: amount, method: method });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت پرداخت ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/purchase/finance') {
+        if (!auth.requireRole(req, PUR_READ_22B)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = purEnsure22b(purEnsure22a(invEnsure(readLive())));
+        const todayJ = finIsoToJalali(new Date().toISOString());
+        const invoices = (live.purchase_invoices || []).map((inv) => Object.assign({}, inv, {
+            remaining_rial: Math.max(0, Math.round((Number(inv.total_rial) || 0) - (Number(inv.paid_rial) || 0))),
+            status_fa: PUR_INV_STATUS_FA_22B[inv.status] || inv.status,
+            days_late: inv.status === 'confirmed' ? salesDaysLate21b(todayJ, inv.due_date_jalali) : 0,
+            aging_bucket: inv.status === 'confirmed' ? salesAgingBucket21b(salesDaysLate21b(todayJ, inv.due_date_jalali)) : '',
+        })).sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || '')));
+        const payments = (live.purchase_payments || []).slice().sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || '')));
+        const ap = (live.suppliers || []).map((s) => {
+            const open = invoices.filter((inv) => inv.supplier_id === s.id && inv.status === 'confirmed' && inv.remaining_rial > 0).map((inv) => ({ invoice_no: inv.invoice_no, total_rial: inv.total_rial, paid_rial: inv.paid_rial, remaining_rial: inv.remaining_rial, due_date_jalali: inv.due_date_jalali, days_late: inv.days_late, bucket: inv.aging_bucket }));
+            /* رسید بدون فاکتور (GRNI) — بهای ثبت‌شدهٔ رسیدهایی که هنوز فاکتور نشده‌اند */
+            const grni = Math.round((live.purchase_receipts || []).filter((r) => r.supplier_id === s.id && r.status !== 'returned' && !r.invoice_no).reduce((x, r) => x + (Number(r.booked_value_rial) || 0), 0));
+            return { supplier_id: s.id, name: s.name, ap_account_code: s.ap_account_code || '', balance_rial: purApBalance22b(live, s), advance_rial: Math.round(payments.filter((p) => p.supplier_id === s.id).reduce((x, p) => x + (Number(p.on_account_rial) || 0), 0)), grni_rial: grni, open_count: open.length, open: open };
+        });
+        const agingTotals = { 'جاری': 0, '۱-۳۰': 0, '۳۱-۶۰': 0, '۶۱-۹۰': 0, '+۹۰': 0 };
+        ap.forEach((s) => s.open.forEach((inv) => { agingTotals[inv.bucket] = (agingTotals[inv.bucket] || 0) + inv.remaining_rial; }));
+        return sendJson(res, {
+            ok: true, invoices: invoices, payments: payments, ap: ap, aging_totals: agingTotals,
+            vat_rate: (live.fin_config && Number(live.fin_config.vat_rate)) || 10,
+            currency: (live.fin_config && live.fin_config.currency) || 'ریال',
+            today_jalali: todayJ,
+        });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/purchase/reports') {
+        if (!auth.requireRole(req, PUR_READ_22B)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = purEnsure22b(purEnsure22a(invEnsure(readLive())));
+        const todayJ = finIsoToJalali(new Date().toISOString());
+        /* خرید per تأمین‌کننده/ماه — تناژ و بهای ثبت‌شده از رسیدها (به‌جز برگشتی) */
+        const byKey = {};
+        (live.purchase_receipts || []).filter((r) => r.status !== 'returned').forEach((r) => {
+            const month = String(r.date_jalali || '').slice(0, 7);
+            const k = r.supplier_id + '|' + month;
+            byKey[k] = byKey[k] || { supplier: r.supplier_name, month: month, ton: 0, amount_rial: 0, receipts: 0 };
+            byKey[k].receipts += 1;
+            byKey[k].amount_rial += Math.round(Number(r.booked_value_rial) || 0);
+            (r.lines || []).forEach((l) => { if (l.kind === 'billet') byKey[k].ton = round2(byKey[k].ton + (Number(l.qty) || 0)); });
+        });
+        const by_supplier_month = Object.keys(byKey).map((k) => byKey[k]).sort((a, b2) => a.month.localeCompare(b2.month) || String(a.supplier).localeCompare(String(b2.supplier)));
+        /* ارزیابی تأمین‌کنندگان — میانگین تأخیر تحویل (رسید − سررسید تحویل PO) + آمار */
+        const evaluation = (live.suppliers || []).map((s) => {
+            const rows = (live.purchase_receipts || []).filter((r) => r.supplier_id === s.id && r.status !== 'returned');
+            let delays = [];
+            rows.forEach((r) => {
+                const po = (live.purchase_orders || []).find((o) => o.po_no === r.po_no);
+                if (!po) return;
+                const d = salesDaysLate21b(String(r.date_jalali || ''), String(po.delivery_due_jalali || ''));
+                if (po.delivery_due_jalali) delays.push(d);
+            });
+            const ton = round2(rows.reduce((x, r) => x + (r.lines || []).filter((l) => l.kind === 'billet').reduce((y, l) => y + (Number(l.qty) || 0), 0), 0));
+            const avg = delays.length ? Math.round(delays.reduce((x, y) => x + y, 0) / delays.length) : null;
+            return { supplier_id: s.id, name: s.name, receipts_count: rows.length, ton_billet: ton, avg_delivery_delay_days: avg, late_count: delays.filter((d) => d > 0).length, purchases_rial: rows.reduce((x, r) => x + (Number(r.booked_value_rial) || 0), 0) };
+        });
+        const confirmed = (live.purchase_invoices || []).filter((x) => x.status === 'confirmed');
+        const vat = {
+            rate: (live.fin_config && Number(live.fin_config.vat_rate)) || 10,
+            purchase_base: confirmed.reduce((s, x) => s + (Number(x.goods_rial) || 0), 0),
+            vat_total: confirmed.reduce((s, x) => s + (Number(x.vat_rial) || 0), 0),
+            invoices_count: confirmed.length,
+            returned_count: (live.purchase_invoices || []).filter((x) => x.status === 'returned').length,
+        };
+        return sendJson(res, {
+            ok: true, today_jalali: todayJ, by_supplier_month: by_supplier_month, evaluation: evaluation, vat: vat,
+            invoices: (live.purchase_invoices || []).length,
+            receipts: (live.purchase_receipts || []).length,
+            ap_rows: (live.suppliers || []).map((s) => ({ name: s.name, balance_rial: purApBalance22b(live, s) })),
+        });
+    }
+    // ===== FEAT-PURCHASE-22b (end) =====
+
 
 
    if (pathname.startsWith('/api/')) {
