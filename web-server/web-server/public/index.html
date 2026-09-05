@@ -2793,6 +2793,76 @@
                 </div>
                 <div class="tablewrap" style="max-height:330px;overflow-y:auto"><table id="tbl-sal-exits"></table></div>
             </div>
+            <div class="panel" id="salFinPanel21b">
+                <h2>🧾 فاکتورهای فروش <span class="plan-engine" id="salFinChip21b">…</span></h2>
+                <p class="note">فاکتور = حواله‌های واقعی فاکتورنشدهٔ سفارش (وزن باسکول) + VAT از fin_config؛ صدور فاکتور سند خودکار «دریافتنی / درآمد فروش + VAT فروش» در روزنامهٔ مالی ثبت می‌کند (idempotent). چاپ صورت‌حساب RTL با اقلام الزامی مؤدیان.</p>
+                <div class="toolbar">
+                    <button class="act" id="salInvIssueBtn21b">🧾 صدور فاکتور برای سفارش</button>
+                    <button class="act excel" id="salInvXls21b">اکسل فاکتورها 📊</button>
+                </div>
+                <div id="salInvForm21b" class="filters hidden">
+                    <div class="frow">
+                        <label>سفارش (با حوالهٔ فاکتورنشده): <select id="salInvOrderSel21b" class="fsel" style="min-width:280px"></select></label>
+                        <label>تاریخ فاکتور: <input id="salInvDate21b" placeholder="۱۴۰۵/۰۶/۰۳" style="width:120px"></label>
+                    </div>
+                    <div class="toolbar">
+                        <button class="act" id="salInvIssueGo21b">صدور فاکتور</button>
+                        <button class="act" id="salInvCancel21b">بستن</button>
+                        <span class="note" id="salInvMsg21b"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:360px;overflow-y:auto"><table id="tbl-sal-invoices21b"></table></div>
+            </div>
+            <div class="panel">
+                <h2>💳 دریافت وجه</h2>
+                <p class="note">نقد/بانک/چک (شماره و سررسید) + تخصیص به فاکتورها یا علی‌الحساب؛ سند خودکار: بدهکار بانک/صندوق / بستانکار دریافتنی (علی‌الحساب → پیش دریافت از مشتریان).</p>
+                <div class="toolbar">
+                    <button class="act" id="salRcpAdd21b">➕ دریافت جدید</button>
+                    <button class="act excel" id="salRcpXls21b">اکسل دریافت‌ها 📊</button>
+                </div>
+                <div id="salRcpForm21b" class="filters hidden">
+                    <div class="frow">
+                        <label>مشتری: <select id="salRcpCust21b" class="fsel" style="min-width:180px"></select></label>
+                        <label>مبلغ (ریال): <input id="salRcpAmt21b" placeholder="مثلاً 5000000000" style="width:150px"></label>
+                        <label>روش: <select id="salRcpMethod21b" class="fsel"><option value="cash">نقد (صندوق)</option><option value="bank">بانک</option><option value="check">چک</option></select></label>
+                    </div>
+                    <div class="frow" id="salRcpCheckRow21b">
+                        <label>شمارهٔ چک: <input id="salRcpCheckNo21b" style="width:130px"></label>
+                        <label>سررسید چک: <input id="salRcpCheckDue21b" placeholder="۱۴۰۵/۰۷/۰۱" style="width:120px"></label>
+                        <label>تاریخ دریافت: <input id="salRcpDate21b" style="width:120px"></label>
+                    </div>
+                    <div class="note">تخصیص به فاکتورهای باز (مانده باقی را علی‌الحساب ثبت می‌کند):</div>
+                    <div id="salRcpAlloc21b"></div>
+                    <div class="toolbar">
+                        <button class="act" id="salRcpSave21b">ثبت دریافت</button>
+                        <button class="act" id="salRcpCancel21b">بستن</button>
+                        <span class="note" id="salRcpMsg21b"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:300px;overflow-y:auto"><table id="tbl-sal-receipts21b"></table></div>
+            </div>
+            <div class="panel">
+                <h2>📊 حساب‌های دریافتنی (AR) و Aging</h2>
+                <p class="note">ماندهٔ هر مشتری = فاکتورهای صادرشده − دریافت‌ها؛ سینی‌های سررسید: جاری، ۱-۳۰، ۳۱-۶۰، ۶۱-۹۰، +۹۰ روز از سررسید؛ عبور از سقف اعتبار هنگام سفارش جدید هشدار می‌دهد.</p>
+                <div class="toolbar">
+                    <button class="act excel" id="salArXls21b">اکسل دریافتنی‌ها 📊</button>
+                    <button class="act excel" id="salAgingXls21b">اکسل Aging 📊</button>
+                </div>
+                <div class="tablewrap" style="max-height:300px;overflow-y:auto"><table id="tbl-sal-ar21b"></table></div>
+                <h3 class="inv-subtitle">جمع Aging کل (ریال)</h3>
+                <div class="tablewrap" style="max-height:200px;overflow-y:auto"><table id="tbl-sal-aging21b"></table></div>
+            </div>
+            <div class="panel">
+                <h2>📈 گزارش‌های فروش</h2>
+                <div class="toolbar">
+                    <button class="act" id="salRepBtn21b">نمایش گزارش‌ها</button>
+                    <button class="act excel" id="salRepSizeXls21b">اکسل فروش per سایز/ماه 📊</button>
+                    <button class="act excel" id="salRepVatXls21b">اکسل خلاصهٔ VAT فروش 📊</button>
+                </div>
+                <div class="tablewrap" style="max-height:300px;overflow-y:auto"><table id="tbl-sal-repsize21b"></table></div>
+                <h3 class="inv-subtitle">خلاصهٔ VAT فروش (تکمیل گزارش VAT تب مالی)</h3>
+                <div class="tablewrap" style="max-height:200px;overflow-y:auto"><div id="salRepVat21b"></div></div>
+            </div>
         </section>
         <!-- ===== FEAT-SALES-21a (end) ===== -->
         <!-- ===== SAAS-15c (begin): پنل سازمان و لایسنس — فقط admin ===== -->
@@ -4223,6 +4293,255 @@ document.getElementById('invStockSearch')?.addEventListener('input', function ()
         try { salWire21a(); } catch (e) { /* FEAT-SALES-21a: بی‌ضرر */ }
         /* ===== FEAT-SALES-21a (end) ===== */
 
+        /* ===== FEAT-SALES-21b (begin): فاکتور + دریافت‌ها + AR/Aging + گزارش‌ها + چاپ RTL ===== */
+        let salesFin21b = null, salesRep21b = null;
+        function salRoleWriteB21b() { return WEB_ROLE === 'admin' || WEB_ROLE === 'sales'; }
+        async function salLoadFin21b() {
+            const chip = document.getElementById('salFinChip21b');
+            try {
+                const [f, rp] = await Promise.all([fetch('/api/sales/finance', { cache: 'no-store' }), fetch('/api/sales/reports', { cache: 'no-store' })]);
+                if (!f.ok || !rp.ok) throw new Error('HTTP ' + f.status + '/' + rp.status);
+                salesFin21b = await f.json(); salesRep21b = await rp.json();
+                salRenderFin21b(); salRenderReports21b();
+                if (chip) chip.textContent = 'برخط ✅';
+            } catch (e) { if (chip) chip.textContent = 'خطا در دریافت'; }
+        }
+        function salRialB21b(n) { return groupFa(Math.round(Number(n) || 0)) + ' ریال'; }
+        function salRenderFin21b() {
+            if (!salesFin21b) return;
+            /* KPIهای اضافی — ماندهٔ کل دریافتنی + فروش ماه (به کارت‌های تب فروش) */
+            const totalAr = (salesFin21b.ar || []).reduce((s, c) => s + Math.max(0, Number(c.balance_rial) || 0), 0);
+            const kEl = document.getElementById('salKpis');
+            if (kEl && salesData21a) {
+                const d = salesData21a;
+                const activeCust = (d.customers || []).filter((c) => c.active !== false).length;
+                const openOrders = (d.orders || []).filter((o) => o.status === 'draft' || o.status === 'reserved');
+                const reservedTon = openOrders.reduce((s, o) => s + (o.items || []).reduce((x, it) => x + (Number(it.reserved_ton) || 0), 0), 0);
+                const exitsTon = (d.exits || []).reduce((s, e) => s + (Number(e.weight_ton) || 0), 0);
+                kEl.innerHTML = [
+                    { l: 'مشتریان فعال', v: fa(activeCust), c: '' },
+                    { l: 'سفارش‌های باز', v: fa(openOrders.length), c: '' },
+                    { l: 'تناژ رزروشده (تن)', v: salFmt21a(reservedTon), c: 'green' },
+                    { l: 'خروج فروش (تن)', v: salFmt21a(exitsTon), c: 'green' },
+                    { l: 'ماندهٔ دریافتنی (ریال)', v: groupFa(totalAr), c: totalAr > 0 ? 'amber' : 'green' },
+                    { l: 'فاکتورهای باز', v: fa((salesFin21b.invoices || []).filter((x) => x.status === 'issued').length), c: '' },
+                ].map((k) => '<div class="kpi"><div class="kl">' + k.l + '</div><div class="kv ' + (k.c || '') + '">' + k.v + '</div></div>').join('');
+            }
+            /* فاکتورها */
+            const el = document.getElementById('tbl-sal-invoices21b'); if (el) {
+                const rows = salesFin21b.invoices || [];
+                let html = '<thead><tr><th>شماره فاکتور</th><th>سفارش</th><th>مشتری</th><th>اقلام (سایز: تن)</th><th>جمع کالا</th><th>VAT</th><th>جمع کل</th><th>پرداخت‌شده</th><th>مانده</th><th>تاریخ</th><th>سررسید</th><th>وضعیت</th>' + (salRoleWriteB21b() ? '<th>عملیات</th>' : '') + '</tr></thead><tbody>';
+                if (!rows.length) html += '<tr><td colspan="13" class="empty">فاکتوری صادر نشده است.</td></tr>';
+                rows.forEach((v) => {
+                    const items = (v.lines || []).map((l) => toFaDigits(l.size) + ': ' + salFmt21a(l.weight_ton)).join(' + ');
+                    let ops = '<button class="act" data-salprint="' + esc(v.id) + '">چاپ</button>';
+                    if (salRoleWriteB21b() && v.status === 'issued') ops += ' <button class="act" data-salret="' + esc(v.id) + '">برگشت</button>';
+                    html += '<tr><td><b>' + esc(v.invoice_no) + '</b></td><td>' + esc(v.order_no) + '</td><td>' + esc(v.customer_name) + '</td><td>' + items + '</td><td>' + groupFa(v.goods_rial) + '</td><td>' + groupFa(v.vat_rial) + ' (' + fa(v.vat_rate) + '٪)</td><td>' + groupFa(v.total_rial) + '</td><td>' + groupFa(v.paid_rial) + '</td><td>' + groupFa(v.remaining_rial) + '</td><td>' + toFaDigits(v.date_jalali) + '</td><td>' + toFaDigits(v.due_date_jalali) + (v.status === 'issued' && v.days_late > 0 ? ' <span class="chip no">+' + fa(v.days_late) + 'روز</span>' : '') + '</td><td><span class="chip ' + (v.status === 'issued' ? 'ok' : 'no') + '">' + esc(v.status_fa) + '</span></td>'
+                        + (salRoleWriteB21b() ? '<td style="white-space:nowrap">' + ops + '</td>' : '') + '</tr>';
+                });
+                el.innerHTML = html + '</tbody>';
+                el.querySelectorAll('button[data-salprint]').forEach((b) => b.addEventListener('click', () => {
+                    const inv = (salesFin21b.invoices || []).find((x) => x.id === b.dataset.salprint); if (inv) salPrintInvoice21b(inv);
+                }));
+                el.querySelectorAll('button[data-salret]').forEach((b) => b.addEventListener('click', async () => {
+                    const inv = (salesFin21b.invoices || []).find((x) => x.id === b.dataset.salret); if (!inv) return;
+                    const reason = prompt('دلیل برگشت از فروش «' + inv.invoice_no + '» (سند معکوس + بازگشت موجودی/رزرو):', 'مرجوعی مشتری');
+                    if (reason === null) return;
+                    b.disabled = true;
+                    try {
+                        const r = await fetch('/api/sales/invoices/return', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: inv.id, reason: reason }) });
+                        const j = await r.json();
+                        if (!r.ok) { alert(j.error || 'خطا در برگشت'); return; }
+                        alert('برگشت ثبت شد ✅ — سند معکوس در روزنامهٔ مالی و موجودی/رزرو بازگشت داده شد.');
+                        await salLoadFin21b();
+                    } finally { b.disabled = false; }
+                }));
+            }
+            /* دریافت‌ها */
+            const rEl = document.getElementById('tbl-sal-receipts21b'); if (rEl) {
+                const rows = salesFin21b.receipts || [];
+                let html = '<thead><tr><th>شماره</th><th>مشتری</th><th>مبلغ (ریال)</th><th>روش</th><th>چک/سررسید</th><th>تخصیص</th><th>علی‌الحساب</th><th>تاریخ</th></tr></thead><tbody>';
+                if (!rows.length) html += '<tr><td colspan="8" class="empty">دریافتی ثبت نشده است.</td></tr>';
+                rows.forEach((r) => {
+                    const alloc = (r.allocated || []).map((a) => a.invoice_no + ': ' + groupFa(a.amount_rial)).join(' + ') || '—';
+                    html += '<tr><td><b>' + esc(r.receipt_no) + '</b></td><td>' + esc(r.customer_name) + '</td><td>' + groupFa(r.amount_rial) + '</td><td>' + esc(r.method_fa) + '</td><td>' + (r.method === 'check' ? toFaDigits(r.check_no) + ' — ' + toFaDigits(r.check_due_jalali) : '—') + '</td><td>' + alloc + '</td><td>' + (r.on_account_rial ? groupFa(r.on_account_rial) : '—') + '</td><td>' + toFaDigits(r.date_jalali) + '</td></tr>';
+                });
+                rEl.innerHTML = html + '</tbody>';
+            }
+            /* AR + Aging */
+            const aEl = document.getElementById('tbl-sal-ar21b'); if (aEl) {
+                const rows = salesFin21b.ar || [];
+                let html = '<thead><tr><th>مشتری</th><th>حساب تفضیلی</th><th>مانده (ریال)</th><th>سقف اعتبار</th><th>وضعیت اعتبار</th><th>فاکتورهای باز</th></tr></thead><tbody>';
+                if (!rows.length) html += '<tr><td colspan="6" class="empty">دریافتنی‌ای نیست.</td></tr>';
+                rows.forEach((c) => {
+                    const over = c.credit_limit_rial > 0 && c.balance_rial > c.credit_limit_rial;
+                    html += '<tr><td>' + esc(c.name) + '</td><td>' + toFaDigits(c.ar_account_code || '—') + '</td><td>' + groupFa(c.balance_rial) + '</td><td>' + (c.credit_limit_rial ? groupFa(c.credit_limit_rial) : 'بی‌سقف') + '</td><td>' + (c.credit_limit_rial ? (over ? '<span class="chip no">عبور از سقف!</span>' : '<span class="chip ok">مجاز</span>') : '—') + '</td><td>' + fa(c.open_count) + (c.open_count ? ' <button class="act" data-salaropen="' + esc(c.customer_id) + '">جزئیات</button>' : '') + '</td></tr>';
+                });
+                aEl.innerHTML = html + '</tbody>';
+                aEl.querySelectorAll('button[data-salaropen]').forEach((b) => b.addEventListener('click', () => {
+                    const c = (salesFin21b.ar || []).find((x) => x.customer_id === b.dataset.salaropen); if (!c) return;
+                    let h = '<thead><tr><th>فاکتور</th><th>جمع کل</th><th>مانده</th><th>سررسید</th><th>سینی</th></tr></thead><tbody>';
+                    c.open.forEach((o) => { h += '<tr><td>' + esc(o.invoice_no) + '</td><td>' + groupFa(o.total_rial) + '</td><td>' + groupFa(o.remaining_rial) + '</td><td>' + toFaDigits(o.due_date_jalali) + '</td><td>' + esc(o.bucket) + '</td></tr>'; });
+                    document.getElementById('tbl-sal-aging21b').innerHTML = h + '</tbody>';
+                }));
+            }
+            const agEl = document.getElementById('tbl-sal-aging21b'); if (agEl && salesFin21b.aging_totals) {
+                const t = salesFin21b.aging_totals;
+                agEl.innerHTML = '<thead><tr><th>جاری</th><th>۱-۳۰</th><th>۳۱-۶۰</th><th>۶۱-۹۰</th><th>+۹۰</th></tr></thead><tbody><tr><td>' + groupFa(t['جاری'] || 0) + '</td><td>' + groupFa(t['۱-۳۰'] || 0) + '</td><td>' + groupFa(t['۳۱-۶۰'] || 0) + '</td><td>' + groupFa(t['۶۱-۹۰'] || 0) + '</td><td>' + groupFa(t['+۹۰'] || 0) + '</td></tr></tbody>';
+            }
+            salFillFinSelects21b();
+        }
+        function salFillFinSelects21b() {
+            if (!salesFin21b) return;
+            /* سلکت سفارش برای صدور فاکتور — سفارش‌هایی با حوالهٔ فاکتورنشده */
+            const sel = document.getElementById('salInvOrderSel21b');
+            if (sel && salesData21a) {
+                const old = sel.value;
+                const rows = (salesData21a.orders || []).filter((o) => (salesData21a.exits || []).some((e) => e.order_id === o.id && !e.invoice_no));
+                sel.innerHTML = '<option value="">انتخاب سفارش…</option>' + rows.map((o) => '<option value="' + esc(o.id) + '">' + esc(o.order_no) + ' — ' + esc(o.customer_name || '') + '</option>').join('');
+                if (old) sel.value = old;
+            }
+            /* سلکت مشتری دریافت + ردیف‌های تخصیص */
+            const cSel = document.getElementById('salRcpCust21b');
+            if (cSel && salesData21a) {
+                const old = cSel.value;
+                cSel.innerHTML = '<option value="">انتخاب مشتری…</option>' + (salesData21a.customers || []).map((c) => '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>').join('');
+                if (old) cSel.value = old;
+            }
+            salRcpAllocRender21b();
+        }
+        function salRcpAllocRender21b() {
+            const box = document.getElementById('salRcpAlloc21b'); if (!box || !salesFin21b) return;
+            const cid = document.getElementById('salRcpCust21b').value;
+            const open = (salesFin21b.invoices || []).filter((v) => v.customer_id === cid && v.status === 'issued' && v.remaining_rial > 0);
+            box.innerHTML = open.length ? open.map((v) => '<div class="frow"><label style="flex:1">' + esc(v.invoice_no) + ' — مانده: ' + groupFa(v.remaining_rial) + ' ریال — تخصیص: <input class="sal-rcp-alloc21b" data-inv="' + esc(v.id) + '" placeholder="0" style="width:150px"></label></div>').join('') : '<div class="note">فاکتور بازی برای این مشتری نیست (کل مبلغ علی‌الحساب می‌شود).</div>';
+        }
+        function salRenderReports21b() {
+            if (!salesRep21b) return;
+            const el = document.getElementById('tbl-sal-repsize21b');
+            if (el) {
+                const rows = salesRep21b.by_size_month || [];
+                let html = '<thead><tr><th>ماه</th><th>سایز</th><th>تناژ خروج (تن)</th><th>مبلغ فروش (ریال)</th></tr></thead><tbody>';
+                if (!rows.length) html += '<tr><td colspan="4" class="empty">داده‌ای نیست.</td></tr>';
+                rows.forEach((r) => { html += '<tr><td>' + toFaDigits(r.month) + '</td><td>' + toFaDigits(r.size) + '</td><td>' + salFmt21a(r.ton) + '</td><td>' + groupFa(r.amount_rial) + '</td></tr>'; });
+                el.innerHTML = html + '</tbody>';
+            }
+            const vat = salesRep21b.vat || {};
+            const vEl = document.getElementById('salRepVat21b');
+            if (vEl) {
+                vEl.innerHTML = '<table><thead><tr><th>نرخ</th><th>تعداد فاکتور صادرشده</th><th>پایهٔ فروش (ریال)</th><th>VAT فروش (ریال)</th><th>برگشتی</th></tr></thead><tbody><tr><td>' + fa(vat.rate || 0) + '٪</td><td>' + fa(vat.invoices_count || 0) + '</td><td>' + groupFa(vat.sales_base || 0) + '</td><td>' + groupFa(vat.vat_total || 0) + '</td><td>' + fa(vat.returned_count || 0) + '</td></tr></tbody></table>';
+            }
+        }
+        /* ---- چاپ صورت‌حساب RTL با اقلام الزامی مؤدیان + لوگوی تنانت ---- */
+        function salPrintInvoice21b(inv) {
+            const t = (typeof TENANT_15A !== 'undefined' && TENANT_15A) || {};
+            const cs = t.custom_settings || {};
+            const buyer = inv.buyer || {};
+            const logo = t.logo && String(t.logo).indexOf('data:') !== 0 ? '<img src="' + esc(t.logo) + '" style="height:64px;object-fit:contain">' : '';
+            const rows = (inv.lines || []).map((l, i) => '<tr><td>' + fa(i + 1) + '</td><td>میلگرد آجدار سایز ' + toFaDigits(l.size) + '</td><td>' + salFmt21a(l.weight_ton) + '</td><td>' + groupFa(l.unit_price_rial) + '</td><td>' + groupFa(l.line_total_rial) + '</td></tr>').join('');
+            const w = window.open('', '_blank', 'width=900,height=980');
+            if (!w) { alert('پنجرهٔ چاپ باز نشد — popups را مجاز کنید.'); return; }
+            w.document.write('<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>صورتحساب ' + esc(inv.invoice_no) + '</title><style>@page{size:A4;margin:12mm}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:24px}.head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0e7490;padding-bottom:10px}.ttl{font-size:20px;font-weight:800}.sub{color:#555;font-size:12px}.box{border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;margin-top:12px;font-size:12.5px;line-height:1.9}.grid{display:flex;gap:12px}.grid>div{flex:1}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px}th{background:#0f2a43;color:#fff;padding:6px 8px;border:1px solid #94a3b8}td{border:1px solid #94a3b8;padding:5px 8px;text-align:center}.tot td{text-align:right;font-weight:800}.sign{display:flex;gap:40px;margin-top:36px;font-size:12px}.sign>div{flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555}@media print{.noprint{display:none}}</style></head><body>' +
+                '<div class="head"><div>' + logo + '</div><div style="text-align:center"><div class="ttl">صورتحساب فروش کالا</div><div class="sub">' + esc(t.name || '') + '</div></div><div style="text-align:left;font-size:12px">شماره: <b>' + esc(inv.invoice_no) + '</b><br>تاریخ: ' + toFaDigits(inv.date_jalali) + '<br>سررسید: ' + toFaDigits(inv.due_date_jalali) + '</div></div>' +
+                '<div class="grid"><div class="box"><b>مشخصات فروشنده:</b><br>نام: ' + esc(t.name || '—') + '<br>شناسهٔ ملی: ' + toFaDigits(cs.seller_national_id || '—') + '<br>شمارهٔ اقتصادی: ' + toFaDigits(cs.seller_economic_id || '—') + '<br>نشانی: ' + esc(cs.seller_address || '—') + '<br>تلفن: ' + toFaDigits(cs.seller_phone || '—') + '</div>' +
+                '<div class="box"><b>مشخصات خریدار:</b><br>نام: ' + esc(buyer.name || '—') + '<br>شناسهٔ ملی/کد ملی: ' + toFaDigits(buyer.national_id || '—') + '<br>شمارهٔ اقتصادی: ' + toFaDigits(buyer.economic_id || '—') + '<br>نشانی: ' + esc(buyer.address || '—') + '<br>تلفن: ' + toFaDigits(buyer.phone || '—') + '</div></div>' +
+                '<table><thead><tr><th>ردیف</th><th>شرح کالا</th><th>وزن (تن)</th><th>قیمت هر تن (ریال)</th><th>مبلغ (ریال)</th></tr></thead><tbody>' + rows +
+                '<tr class="tot"><td colspan="4">جمع مبلغ کالا</td><td>' + groupFa(inv.goods_rial) + '</td></tr>' +
+                '<tr class="tot"><td colspan="4">مالیات بر ارزش افزوده (' + fa(inv.vat_rate) + '٪)</td><td>' + groupFa(inv.vat_rial) + '</td></tr>' +
+                '<tr class="tot"><td colspan="4">مبلغ قابل پرداخت (ریال)</td><td>' + groupFa(inv.total_rial) + '</td></tr>' +
+                '</tbody></table>' +
+                '<div class="box">سفارش مرجع: <b>' + esc(inv.order_no) + '</b> — حواله‌ها: ' + toFaDigits((inv.exits || []).join('، ')) + ' — این صورت‌حساب مطابق اقلام الزامی صورتحساب الکترونیکی (سامانهٔ مؤدیان) تنظیم شده است.</div>' +
+                '<div class="sign"><div>مهر و امضای فروشنده</div><div>مهر و امضای خریدار</div></div>' +
+                '<div class="noprint" style="text-align:center;margin-top:18px"><button onclick="window.print()" style="padding:8px 22px;font-family:inherit">🖨 چاپ</button></div>' +
+                '<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},350)}<' + '/script></body></html>');
+            w.document.close();
+        }
+        /* ---- اکشن‌ها و خروجی‌ها ---- */
+        function salWireB21b() {
+            const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+            on('salInvIssueBtn21b', () => { document.getElementById('salInvForm21b').classList.toggle('hidden'); salFillFinSelects21b(); const d = document.getElementById('salInvDate21b'); if (d && !d.value && salesFin21b) d.placeholder = toFaDigits(salesFin21b.today_jalali); });
+            on('salInvCancel21b', () => document.getElementById('salInvForm21b').classList.add('hidden'));
+            on('salInvIssueGo21b', async () => {
+                if (!salRoleWriteB21b()) { salMsg21a('salInvMsg21b', 'صدور فاکتور فقط برای واحد فروش مجاز است.', true); return; }
+                const orderId = document.getElementById('salInvOrderSel21b').value;
+                if (!orderId) { salMsg21a('salInvMsg21b', 'سفارش را انتخاب کنید.', true); return; }
+                salMsg21a('salInvMsg21b', 'در حال صدور…');
+                try {
+                    const r = await fetch('/api/sales/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: orderId, date_jalali: salEn21a(document.getElementById('salInvDate21b').value) }) });
+                    const j = await r.json();
+                    if (!r.ok) { salMsg21a('salInvMsg21b', j.error || 'خطا', true); return; }
+                    salMsg21a('salInvMsg21b', ''); document.getElementById('salInvForm21b').classList.add('hidden');
+                    await loadSales();
+                    alert('فاکتور «' + j.record.invoice_no + '» صادر شد ✅\nجمع کالا: ' + groupFa(j.record.goods_rial) + ' — VAT ' + fa(j.record.vat_rate) + '٪: ' + groupFa(j.record.vat_rial) + '\nدو سند خودکار (دریافتنی/درآمد+VAT و بهای تمام‌شده) در روزنامهٔ مالی ثبت شد.');
+                } catch (e) { salMsg21a('salInvMsg21b', 'خطا در ارتباط با سرور', true); }
+            });
+            on('salRcpAdd21b', () => { document.getElementById('salRcpForm21b').classList.toggle('hidden'); salFillFinSelects21b(); const d = document.getElementById('salRcpDate21b'); if (d && !d.value && salesFin21b) d.placeholder = toFaDigits(salesFin21b.today_jalali); });
+            on('salRcpCancel21b', () => document.getElementById('salRcpForm21b').classList.add('hidden'));
+            const rc = document.getElementById('salRcpCust21b'); if (rc) rc.addEventListener('change', salRcpAllocRender21b);
+            const rm = document.getElementById('salRcpMethod21b'); if (rm) rm.addEventListener('change', () => { document.getElementById('salRcpCheckRow21b').style.opacity = rm.value === 'check' ? '1' : '.45'; });
+            on('salRcpSave21b', async () => {
+                if (!salRoleWriteB21b()) { salMsg21a('salRcpMsg21b', 'ثبت دریافت فقط برای واحد فروش/مالی مجاز است.', true); return; }
+                const allocations = [];
+                document.querySelectorAll('.sal-rcp-alloc21b').forEach((inp) => { const v = salEn21a(inp.value); if (v && Number(v) > 0) allocations.push({ invoice_id: inp.dataset.inv, amount_rial: v }); });
+                const body = { customer_id: document.getElementById('salRcpCust21b').value, amount_rial: salEn21a(document.getElementById('salRcpAmt21b').value), method: document.getElementById('salRcpMethod21b').value, check_no: salEn21a(document.getElementById('salRcpCheckNo21b').value), check_due_jalali: salEn21a(document.getElementById('salRcpCheckDue21b').value), date_jalali: salEn21a(document.getElementById('salRcpDate21b').value), allocations: allocations };
+                salMsg21a('salRcpMsg21b', 'در حال ثبت…');
+                try {
+                    const r = await fetch('/api/sales/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                    const j = await r.json();
+                    if (!r.ok) { salMsg21a('salRcpMsg21b', j.error || 'خطا', true); return; }
+                    salMsg21a('salRcpMsg21b', ''); document.getElementById('salRcpForm21b').classList.add('hidden');
+                    await loadSales();
+                    alert('دریافت «' + j.record.receipt_no + '» ثبت شد ✅' + (j.record.on_account_rial ? '\nعلی‌الحساب: ' + groupFa(j.record.on_account_rial) + ' ریال' : ''));
+                } catch (e) { salMsg21a('salRcpMsg21b', 'خطا در ارتباط با سرور', true); }
+            });
+            on('salRepBtn21b', () => { fetch('/api/sales/reports', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((j) => { if (j) { salesRep21b = j; salRenderReports21b(); } }).catch(() => { }); });
+            on('salInvXls21b', () => {
+                const rows = (salesFin21b && salesFin21b.invoices) || [];
+                if (!rows.length) { alert('داده‌ای برای خروجی وجود ندارد.'); return; }
+                const flat = [];
+                rows.forEach((v) => (v.lines || []).forEach((l) => flat.push({ no: v.invoice_no, order: v.order_no, cust: v.customer_name, size: toFaDigits(l.size), w: l.weight_ton, price: l.unit_price_rial, goods: v.goods_rial, vat: v.vat_rial, rate: v.vat_rate, total: v.total_rial, paid: v.paid_rial, rem: v.remaining_rial, date: toFaDigits(v.date_jalali), due: toFaDigits(v.due_date_jalali), st: v.status_fa })));
+                downloadXls('فاکتورهای_فروش', [{ label: 'شماره فاکتور', key: 'no' }, { label: 'سفارش', key: 'order' }, { label: 'مشتری', key: 'cust' }, { label: 'سایز', key: 'size' }, { label: 'وزن (تن)', key: 'w' }, { label: 'قیمت هر تن', key: 'price' }, { label: 'جمع کالا', key: 'goods' }, { label: 'VAT', key: 'vat' }, { label: 'نرخ ٪', key: 'rate' }, { label: 'جمع کل', key: 'total' }, { label: 'پرداخت‌شده', key: 'paid' }, { label: 'مانده', key: 'rem' }, { label: 'تاریخ', key: 'date' }, { label: 'سررسید', key: 'due' }, { label: 'وضعیت', key: 'st' }], flat, 'فاکتورهای فروش — اقلام با وزن واقعی');
+            });
+            on('salRcpXls21b', () => {
+                const rows = (salesFin21b && salesFin21b.receipts) || [];
+                if (!rows.length) { alert('داده‌ای برای خروجی وجود ندارد.'); return; }
+                downloadXls('دریافت‌های_فروش', [{ label: 'شماره', key: 'no' }, { label: 'مشتری', key: 'cust' }, { label: 'مبلغ (ریال)', key: 'amt' }, { label: 'روش', key: 'm' }, { label: 'چک', key: 'chk' }, { label: 'سررسید چک', key: 'chd' }, { label: 'تخصیص', key: 'alloc' }, { label: 'علی‌الحساب', key: 'oa' }, { label: 'تاریخ', key: 'date' }], rows.map((r) => ({ no: r.receipt_no, cust: r.customer_name, amt: r.amount_rial, m: r.method_fa, chk: r.method === 'check' ? toFaDigits(r.check_no) : '-', chd: r.method === 'check' ? toFaDigits(r.check_due_jalali) : '-', alloc: (r.allocated || []).map((a) => a.invoice_no + ':' + a.amount_rial).join(' + ') || '-', oa: r.on_account_rial || 0, date: toFaDigits(r.date_jalali) })), 'دریافت‌های وجه فروش');
+            });
+            on('salArXls21b', () => {
+                const rows = (salesFin21b && salesFin21b.ar) || [];
+                if (!rows.length) { alert('داده‌ای برای خروجی وجود ندارد.'); return; }
+                downloadXls('حساب‌های_دریافتنی', [{ label: 'مشتری', key: 'n' }, { label: 'حساب تفضیلی', key: 'acc' }, { label: 'مانده (ریال)', key: 'bal' }, { label: 'سقف اعتبار', key: 'lim' }, { label: 'فاکتور باز', key: 'cnt' }], rows.map((c) => ({ n: c.name, acc: toFaDigits(c.ar_account_code || '-'), bal: c.balance_rial, lim: c.credit_limit_rial || 0, cnt: c.open_count })), 'حساب‌های دریافتنی (AR) per مشتری');
+            });
+            on('salAgingXls21b', () => {
+                const rows = [];
+                ((salesFin21b && salesFin21b.ar) || []).forEach((c) => c.open.forEach((o) => rows.push({ cust: c.name, no: o.invoice_no, total: o.total_rial, rem: o.remaining_rial, due: toFaDigits(o.due_date_jalali), days: o.days_late, bucket: o.bucket })));
+                if (!rows.length) { alert('داده‌ای برای خروجی وجود ندارد.'); return; }
+                downloadXls('Aging_دریافتنی', [{ label: 'مشتری', key: 'cust' }, { label: 'فاکتور', key: 'no' }, { label: 'جمع کل', key: 'total' }, { label: 'مانده', key: 'rem' }, { label: 'سررسید', key: 'due' }, { label: 'روز از سررسید', key: 'days' }, { label: 'سینی', key: 'bucket' }], rows, 'Aging حساب‌های دریافتنی');
+            });
+            on('salRepSizeXls21b', () => {
+                const rows = (salesRep21b && salesRep21b.by_size_month) || [];
+                if (!rows.length) { alert('داده‌ای برای خروجی وجود ندارد.'); return; }
+                downloadXls('فروش_سایز_ماه', [{ label: 'ماه', key: 'm' }, { label: 'سایز', key: 's' }, { label: 'تناژ (تن)', key: 't' }, { label: 'مبلغ (ریال)', key: 'a' }], rows.map((r) => ({ m: toFaDigits(r.month), s: toFaDigits(r.size), t: r.ton, a: r.amount_rial })), 'گزارش فروش per سایز/ماه — تناژ و مبلغ');
+            });
+            on('salRepVatXls21b', () => {
+                const v = (salesRep21b && salesRep21b.vat) || {};
+                downloadXls('خلاصه_VAT_فروش', [{ label: 'شرح', key: 'k' }, { label: 'مقدار', key: 'v' }], [
+                    { k: 'نرخ VAT', v: fa(v.rate || 0) + '٪' }, { k: 'تعداد فاکتور صادرشده', v: fa(v.invoices_count || 0) }, { k: 'پایهٔ فروش (ریال)', v: groupFa(v.sales_base || 0) }, { k: 'VAT فروش (ریال)', v: groupFa(v.vat_total || 0) }, { k: 'تعداد برگشتی', v: fa(v.returned_count || 0) },
+                ], 'خلاصهٔ VAT فروش — تکمیل گزارش VAT تب مالی');
+            });
+        }
+        try { salWireB21b(); } catch (e) { /* FEAT-SALES-21b: بی‌ضرر */ }
+        /* لود همزمان دادهٔ مالی هنگام ورود به تب فروش — wrap افزاینده روی loadSales */
+        (function () {
+            const orig21b = loadSales;
+            loadSales = async function () { await orig21b(); try { await salLoadFin21b(); } catch (e) { /* بی‌ضرر */ } };
+        })();
+        /* کارت KPI فروش ماه در تب خلاصه — افزاینده و بی‌خطر (فقط اگر ماژول sales فعال و کاربر مجاز) */
+        (function () {
+            const origSum21b = loadSummary;
+            loadSummary = async function () { await origSum21b(); try { if (!moduleEnabled15a('sales')) return; if (!(WEB_ROLE === 'admin' || WEB_ROLE === 'manager' || WEB_ROLE === 'finance' || WEB_ROLE === 'sales')) return; fetch('/api/sales/kpi', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((j) => { if (!j || !j.ok) return; const box = document.getElementById('kpiBox'); if (!box) return; const d = document.createElement('div'); d.className = 'kpi'; d.setAttribute('data-saleskpi21b', '1'); d.innerHTML = '<div class="kl">فروش ماه (تن / ریال)</div><div class="kv green">' + salFmt21a(j.month_ton) + ' / ' + groupFa(j.month_rial) + '</div>'; box.appendChild(d); }).catch(function () { }); } catch (e) { /* بی‌ضرر */ } };
+        })();
+        /* ===== FEAT-SALES-21b (end) ===== */
         const AUTO_REFRESH_MS = 15000;        let autoRefreshOn = true, refreshTimer = null, clockTimer = null, lastOkAt = null, currentTab = 'summary', autoTick = false;        const loaders = {            summary: loadSummary,            analytics: () => loadAnalytics(), /* FEAT-FLT-3: فراخوانی پویا — نسخهٔ بازنویسی‌شدهٔ FEAT-BI-2 (buildBI) هم اجرا شود */            production: loadProduction,            waste: loadWaste,            downtime: loadDowntime,            quality: loadQuality,            maintenance: loadMaintenance,            inventory: loadInventory, warehouse: loadInventory, sales: loadSales /* FEAT-SALES-21a: تب فروش */        };        function setLiveStatus(ok) { const d = document.getElementById('liveDot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'err'); }        function updateAgo() { const el = document.getElementById('liveAgo'); if (!el) return; if (!lastOkAt) { el.textContent = 'هنوز بروزرسانی نشده'; return; } const s = Math.floor((Date.now() - lastOkAt) / 1000); el.textContent = autoRefreshOn ? (s < 60 ? fa(s) + ' ثانیه پیش' : fa(Math.floor(s / 60)) + ' دقیقه پیش') : 'خودکار خاموش'; }        async function refreshCurrentTab() {            try {                autoTick = true;                if (currentTab === 'genealogy') { if (document.getElementById('heatInput').value.trim()) await loadGenealogy(); }                else if (currentTab === 'balance') { if (document.getElementById('balanceHeat').value.trim()) await loadBalance(); }                else if (loaders[currentTab]) { await loaders[currentTab](); }                autoTick = false; lastOkAt = Date.now(); setLiveStatus(true);            } catch (e) { autoTick = false; setLiveStatus(false); }        }        function startAutoRefresh() { stopAutoRefresh(); if (autoRefreshOn) refreshTimer = setInterval(refreshCurrentTab, AUTO_REFRESH_MS); }        function stopAutoRefresh() { if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; } }        document.getElementById('nav').addEventListener('click', async (e) => {            const btn = e.target.closest('button[data-tab]'); if (!btn) return;            document.querySelectorAll('#nav button').forEach((b) => b.classList.remove('active')); btn.classList.add('active');            currentTab = btn.dataset.tab; document.querySelectorAll('main > section').forEach((s) => s.classList.add('hidden'));            document.getElementById('tab-' + currentTab).classList.remove('hidden');            applyRoleUI();            if (!moduleEnabled15a(currentTab)) { showLicenseGate15c(true); } /* SAAS-15c: ماژول غیرفعال — بدون fetch */ else { showLicenseGate15c(false); if (loaders[currentTab]) { try { await loaders[currentTab](); lastOkAt = Date.now(); setLiveStatus(true); } catch (err) { setLiveStatus(false); } } }            startAutoRefresh();        });        document.getElementById('btnGenealogy').addEventListener('click', loadGenealogy);        document.getElementById('btnBalance').addEventListener('click', loadBalance);        /* ===== FEAT-UI-4f: کنترل «بروزرسانی خودکار» از UI حذف شد — همیشه روشن (AUTO_REFRESH_MS) ===== */        document.getElementById('expSummary').addEventListener('click', () => {            /* ===== FEAT-FLT-3: خروجی از همان شاخص‌های فیلترشدهٔ نمایش‌داده‌شده ===== */            if (flt3SummaryExport && flt3SummaryExport.length) { downloadCsv('خلاصه_شاخص‌ها', [{ label: 'شاخص', key: 'k' }, { label: 'مقدار', key: 'v' }], flt3SummaryExport, 'خلاصه شاخص‌های یکپارچه'); return; }            const s = cache.summary || {};            downloadCsv('خلاصه_شاخص‌ها', [{ label: 'شاخص', key: 'k' }, { label: 'مقدار', key: 'v' }], [                { k: 'تناژ تولید سالم (تن)', v: Math.round((Number(s.bundle_weight_kg) || 0) / 1000 * 1000) / 1000 }, { k: 'تعداد شاخه سالم', v: s.production_good_quantity }, { k: 'وزن شمش ورودی (تن)', v: Math.round((Number(s.billet_weight_kg) || 0) / 1000 * 1000) / 1000 }, { k: 'ضایعات (شاخه)', v: s.waste_quantity }, { k: 'دقایق توقف', v: s.downtime_minutes }, { k: 'راندمان مواد ٪', v: s.yield_rate_percent },            ], 'خلاصه شاخص‌های یکپارچه');        });        document            .getElementById(                'expMaintenance'            )            .addEventListener(                'click',                () => {                    const logs =                        maintenanceLogsInRange();                    const plans =                        cache.mntPlans || [];                    if (                        !logs.length &&                        !plans.length                    ) {                        alert(                            'داده‌ای برای خروجی وجود ندارد.'                        );                        return;                    }                    // -----------------------------                    // گزارش تعمیرات                    // -----------------------------                    downloadCsv(                        'تعمیرات_نگهداری',                        [                            {                                label: 'تاریخ',                                key: 'work_date'                            },                            {                                label: 'ایستگاه',                                key: 'machine'                            },                            {                                label: 'نوع کار',                                key: 'type'                            },                            {                                label: 'اولویت',                                key: 'priority'                            },                            {                                label: 'تکنسین',                                key: 'technician'                            },                            {                                label: 'مدت (دقیقه)',                                key: 'duration'                            },                            {                                label: 'هزینه (ریال)',                                key: 'cost'                            },                            {                                label: 'قطعات',                                key: 'parts'                            },                            {                                label: 'علت ریشه‌ای',                                key: 'root_cause'                            },                            {                                label: 'اقدام انجام‌شده',                                key: 'action'                            },                            {                                label: 'توضیحات',                                key: 'description'                            }                        ],                        logs.map(                            (r) => ({                                work_date:                                    toFaDigits(                                        r.work_date ||                                        '-'                                    ),                                machine:                                    stationFa(                                        r.machine_id                                    ),                                type:                                    WORKTYPE_FA[                                    r.work_type                                    ] ||                                    r.work_type ||                                    '-',                                priority:                                    PRIORITY_FA[                                    r.priority                                    ] ||                                    r.priority ||                                    '-',                                technician:                                    r.technician ||                                    '-',                                duration:                                    r.duration_minutes ||                                    0,                                cost:                                    r.cost ||                                    0,                                parts:                                    r.parts ||                                    '-',                                root_cause:                                    r.root_cause ||                                    '-',                                action:                                    r.action_taken ||                                    '-',                                description:                                    r.description ||                                    '-'                            })                        ),                        'گزارش تعمیرات و نگهداری'                    );                    // -----------------------------                    // گزارش برنامه‌های PM                    // -----------------------------                    if (plans.length) {                        downloadCsv(                            'برنامه_PM',                            [                                {                                    label: 'ایستگاه',                                    key: 'machine'                                },                                {                                    label: 'عنوان',                                    key: 'title'                                },                                {                                    label: 'اولویت',                                    key: 'priority'                                },                                {                                    label: 'دوره (روز)',                                    key: 'interval'                                },                                {                                    label: 'آخرین انجام',                                    key: 'last_done'                                },                                {                                    label: 'سررسید بعدی',                                    key: 'next_due'                                },                                {                                    label: 'مسئول',                                    key: 'responsible'                                },                                {                                    label: 'وضعیت',                                    key: 'status'                                }                            ],                            plans.map(                                (p) => {                                    const st =                                        pmStatus(p);                                    return {                                        machine:                                            stationFa(                                                p.machine_id                                            ),                                        title:                                            p.title,                                        priority:                                            PRIORITY_FA[                                            p.priority                                            ] ||                                            p.priority ||                                            '-',                                        interval:                                            p.interval_days,                                        last_done:                                            toFaDigits(                                                p.last_done ||                                                '-'                                            ),                                        next_due:                                            toFaDigits(                                                st.next ||                                                '-'                                            ),                                        responsible:                                            p.responsible ||                                            '-',                                        status:                                            st.days < 0                                                ? 'عقب‌افتاده'                                                : st.days <= 7                                                    ? 'نزدیک سررسید'                                                    : 'طبق برنامه'                                    };                                }                            ),                            'برنامه نگهداری پیشگیرانه PM'                        );                    }                }            );        document.querySelectorAll('button[data-exp]').forEach((b) => {            b.addEventListener('click', () => {                const k = b.dataset.exp;                const map = { production: ['تولید_میلگرد', 'ثبت تولید میلگرد سالم', COLS.production], waste: ['ضایعات', 'ضایعات و پرت خط', COLS.waste], downtime: ['توقفات', 'توقفات خط', COLS.downtime], quality: ['کنترل_کیفیت', 'کنترل کیفیت QC', COLS.quality] };                const m = map[k]; if (m) exportList(k, m[0], m[1], m[2]);            });        });        document.getElementById('expGenealogy').addEventListener('click', () => {            const g = lastGenealogy; if (!g) { alert('ابتدا استعلام کنید.'); return; }            const rows = [];            g.billets.forEach((b) => rows.push({ بخش: 'شمش', کد: b.id, بچ: b.heat_number, سایز: '-', گرید: b.grade, وزن: b.initial_weight_kg, وضعیت: b.status, زمان: fmtDate(b.received_at) }));            g.furnace_logs.forEach((f) => rows.push({ بخش: 'کوره/ایستگاه‌ها', کد: f.id, بچ: f.heat_number, سایز: '-', گرید: '-', وزن: f.residence_time_minutes, وضعیت: 'ماندگاری(دقیقه)', زمان: fmtDate(f.charge_time) }));            g.rebar_bundles.forEach((r) => rows.push({ بخش: 'باندل', کد: r.bundle_code, بچ: r.heat_number, سایز: r.rebar_size, گرید: r.rebar_grade, وزن: r.net_weight_kg, وضعیت: r.quality_status, زمان: fmtDate(r.produced_at) }));            downloadCsv('ردیابی_بچ_' + g.heat_number, [{ label: 'بخش', key: 'بخش' }, { label: 'کد', key: 'کد' }, { label: 'بچ', key: 'بچ' }, { label: 'سایز', key: 'سایز' }, { label: 'گرید', key: 'گرید' }, { label: 'وزن/مقدار', key: 'وزن' }, { label: 'وضعیت', key: 'وضعیت' }, { label: 'زمان', key: 'زمان' }], rows, 'ردیابی تولید میلگرد ' + g.heat_number);        });        document.getElementById('expBalance').addEventListener('click', () => {            const b = lastBalance; if (!b) { alert('ابتدا محاسبه کنید.'); return; }            downloadCsv('بالانس_' + b.heat_number, [{ label: 'شرح', key: 'k' }, { label: 'وزن (kg)', key: 'w' }, { label: 'درصد', key: 'p' }], [                { k: 'شمش ورودی', w: b.input_weight_kg, p: '100٪' }, { k: 'میلگرد سالم', w: b.output_weight_kg, p: b.yield_rate_percent + '٪' }, { k: 'پرت/قراضه', w: b.scale_loss_kg, p: b.scale_loss_percent + '٪' },            ], 'بالانس شمش هیت ' + b.heat_number);        });        async function loadUserBar() {            try {                const r = await fetch('/api/auth/me', { cache: 'no-store' }); if (!r.ok) return;                const j = await r.json();                if (j.ok && j.user) {                    document.getElementById('userbar').innerHTML = '<span class="uname">👤 ' + esc(j.user.name || j.user.username) + '</span><button class="ulogout" id="btnLogout">خروج</button>';                    document.getElementById('btnLogout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; };                }            } catch (e) { /* ignore */ }        }        /* ===== FIX-FLT-4g: پرکردن تضمینی دراپ‌داون محصول (کاتالوگ A3 + 5SP + سابقه) بلافاصله پس از رندر، مستقل از موفقیت API؛ پس از لود داده هم در loadSummary/loadAnalytics تکرار می‌شود ===== */        try { flt3FillProducts(); } catch (e) { /* بی‌ضرر */ }        /* ===== SEC-AUDIT-13c (begin): boot اولیه پس از شناخت نقش — نقش بدون تب خلاصه fetch خلاصه نمی‌زند ===== */
         (function () {
             const boot13cGo = () => { refreshCurrentTab().then(() => { startAutoRefresh(); clockTimer = setInterval(updateAgo, 1000); loadUserBar(); }); };

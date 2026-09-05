@@ -4510,6 +4510,8 @@ live.inventory_reservations.splice(idx, 1);
                 /* سقف اعتبار: مجموع سفارش‌های باز/جاری مشتری + این سفارش (هشدار — مسدودکننده نیست) */
                 let exposure = orderTotal;
                 (live.sales_orders || []).forEach((o) => { if (o.customer_id === cust.id && (o.status === 'draft' || o.status === 'reserved')) { (o.items || []).forEach((it) => { exposure += Math.round((Number(it.qty_ton) || 0) * (Number(it.unit_price_rial) || 0)); }); } });
+                /* FEAT-SALES-21b: ماندهٔ دریافتنی فعلی مشتری هم به تعهدات لحاظ می‌شود */
+                exposure += Math.max(0, salesArBalance21b(live, cust.id));
                 let credit_warning = '';
                 if ((Number(cust.credit_limit_rial) || 0) > 0 && exposure > Number(cust.credit_limit_rial)) {
                     credit_warning = 'هشدار سقف اعتبار: مجموع تعهدات باز مشتری ' + salesFmt21a(exposure) + ' ریال از سقف اعتبار ' + salesFmt21a(cust.credit_limit_rial) + ' ریال عبور می‌کند.';
@@ -4663,6 +4665,16 @@ live.inventory_reservations.splice(idx, 1);
                 /* ۴) تکمیل سفارش اگر همهٔ اقلام کاملاً حواله شد */
                 const doneAll = (order.items || []).every((it) => round2((live.sales_exits || []).filter((e) => e.order_id === order.id && String(e.size) === String(it.size)).reduce((s, e) => s + (Number(e.weight_ton) || 0), 0)) >= (Number(it.qty_ton) || 0) - 1e-9);
                 if (doneAll) order.status = 'completed';
+                /* FEAT-SALES-21b: سند خودکار بهای تمام‌شدهٔ کالای فروش‌رفته — بدهکار 510006 / بستانکار 110003 (بهای استاندارد BOM سایز — همان قرارداد فاز ۸) از موتور سند واحد، idempotent per exit_no */
+                salesEnsure21b(live); salesEnsureAccounts21b(live);
+                const cfgB21b = live.fin_config || {};
+                const accByCode21b = {}; (live.fin_accounts || []).forEach((a) => { accByCode21b[a.code] = a; });
+                const bomB21b = (live.fin_bom || []).find((x) => String(x.size) === String(size));
+                const stdB21b = bomB21b ? finStdCostPerTon(bomB21b, cfgB21b) : Math.round((Number(cfgB21b.billet_rial_per_kg) || 0) * 1.035 * 1000 + 110 * (Number(cfgB21b.energy_tariff_rial_per_kwh) || 0) + 2500000 + 4000000 + 350000);
+                const cogsAmt21b = Math.round(weight * stdB21b);
+                if (cogsAmt21b > 0 && accByCode21b['510006'] && accByCode21b['110003']) {
+                    finPostDoc(live, { source: 'sales', ref_module: 'sales', ref_id: 'exit:' + rec.exit_no, date_jalali: dj, desc: 'بهای تمام‌شدهٔ کالای فروش‌رفته — حوالهٔ ' + rec.exit_no + ' — سایز ' + size + ' — ' + weight + ' تن × بهای استاندارد BOM', lines: [ { account_id: accByCode21b['510006'].id, debit: cogsAmt21b, cost_center_id: 'cc-mill', ref_id: rec.exit_no }, { account_id: accByCode21b['110003'].id, credit: cogsAmt21b, ref_id: rec.exit_no } ], created_by: String((req.user && (req.user.name || req.user.username)) || '') });
+                }
                 if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ حوالهٔ فروش انجام نشد.');
                 cache.data = null; cache.at = 0;
                 auditLog(req, 'sales.exit.create', { exit_no: rec.exit_no, order_no: order.order_no, size: size, weight_ton: weight, issue_no: rec.issue_no });
@@ -4673,6 +4685,325 @@ live.inventory_reservations.splice(idx, 1);
     }
     // ===== FEAT-SALES-21a (end) =====
 
+
+
+    // ================================================================
+    // ===== FEAT-SALES-21b (begin): فاکتور فروش + VAT (از fin_config) +
+    // اسناد خودکار از موتور سند واحد finPostDoc (source «sales» + ref_id یکتا =
+    // idempotent) + دریافت وجوه + حساب‌های دریافتنی (AR) + Aging شمسی + گزارش‌ها
+    // حساب‌های لازم (بانک/صندوق/دریافتنی/پیش‌دریافت/بهای فروش) فقط اگر نبودند
+    // به‌صورت افزاینده ساخته می‌شوند — finSeed/finPostDoc/هستهٔ مالی دست‌نخورده
+    // ================================================================
+    function salesEnsure21b(live) {
+        live.sales_invoices = Array.isArray(live.sales_invoices) ? live.sales_invoices : [];
+        live.sales_receipts = Array.isArray(live.sales_receipts) ? live.sales_receipts : [];
+        live.sales_seq = live.sales_seq && typeof live.sales_seq === 'object' ? live.sales_seq : {};
+        if (live.sales_seq.invoice == null) live.sales_seq.invoice = 0;
+        if (live.sales_seq.receipt == null) live.sales_seq.receipt = 0;
+        return live;
+    }
+    function salesEnsureAccounts21b(live) {
+        if (!live._fin_v1) finSeed(live); /* اگر ماژول مالی هرگز seed نشده بود — همان مسیر رسمی */
+        const have = {};
+        (live.fin_accounts || []).forEach((a) => { have[a.code] = a; });
+        const add = (code, title, type, level) => {
+            if (have[code]) return have[code];
+            const parent = 'facc-' + (level === 2 ? code[0] : code.slice(0, level === 3 ? 3 : 6));
+            const rec = { id: 'facc-' + code, code: code, title: title, type: type, level: level, parent_id: parent, active: true, _sales21b: true };
+            live.fin_accounts.push(rec); have[code] = rec;
+            return rec;
+        };
+        add('130', 'نقد و بانک', 'asset', 2);
+        add('130001', 'بانک', 'asset', 3);
+        add('130002', 'صندوق', 'asset', 3);
+        add('110101', 'حساب‌های دریافتنی (تجاری)', 'asset', 3);
+        add('230002', 'پیش دریافت از مشتریان', 'liability', 3);
+        add('510006', 'بهای تمام‌شده کالای فروش‌رفته', 'expense', 3);
+        return live;
+    }
+    /* حساب تفضیلی دریافتنی per مشتری — کد ۹ رقمی 110101xxx (الگوی کدینگ مالی) */
+    function salesArAccount21b(live, cust) {
+        salesEnsureAccounts21b(live);
+        if (cust.ar_account_id) {
+            const a = (live.fin_accounts || []).find((x) => x.id === cust.ar_account_id);
+            if (a) return a;
+        }
+        let n = 1, code = '';
+        do { code = '110101' + String(n).padStart(3, '0'); n++; } while ((live.fin_accounts || []).some((a) => a.code === code));
+        const rec = { id: 'facc-' + code, code: code, title: 'دریافتنی — ' + String(cust.name || '').slice(0, 60), type: 'asset', level: 4, parent_id: 'facc-110101', active: true, _sales21b: true };
+        live.fin_accounts.push(rec);
+        cust.ar_account_id = rec.id; cust.ar_account_code = code;
+        return rec;
+    }
+    /* ماندهٔ دریافتنی مشتری = جمع فاکتورهای صادرشده − تخصیص دریافت‌ها − پیش‌دریافت (برگشتی صفر لحاظ می‌شود) */
+    function salesArBalance21b(live, customerId) {
+        salesEnsure21b(live);
+        let bal = 0;
+        (live.sales_invoices || []).forEach((inv) => { if (inv.customer_id === customerId && inv.status === 'issued') bal += Number(inv.total_rial) || 0; });
+        (live.sales_receipts || []).forEach((r) => { if (r.customer_id === customerId) bal -= (Number(r.allocated_total_rial) || 0) + (Number(r.on_account_rial) || 0); });
+        return Math.round(bal);
+    }
+    function salesJalaliTs21b(dj) { const t = planJalaliToTs(finDigitsEn(String(dj || '')).trim(), 12); return t ? Date.parse(t) : null; }
+    function salesDaysLate21b(todayJ, dueJ) {
+        const tT = salesJalaliTs21b(todayJ), tD = salesJalaliTs21b(dueJ);
+        if (!tT || !tD) return 0;
+        return Math.floor((tT - tD) / 86400000);
+    }
+    function salesAgingBucket21b(daysLate) {
+        if (daysLate <= 0) return 'جاری';
+        if (daysLate <= 30) return '۱-۳۰';
+        if (daysLate <= 60) return '۳۱-۶۰';
+        if (daysLate <= 90) return '۶۱-۹۰';
+        return '+۹۰';
+    }
+    const SALES_INV_STATUS_FA_21B = { issued: 'صادرشده', returned: 'برگشتی', cancelled: 'ابطال' };
+    const SALES_METHOD_FA_21B = { cash: 'نقد', bank: 'بانک', check: 'چک' };
+
+    if (req.method === 'POST' && pathname === '/api/sales/invoices') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: صدور فاکتور فقط برای واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21b(salesEnsure21a(invEnsure(readLive())));
+                const order = (live.sales_orders || []).find((o) => o.id === String(b.order_id || '') || o.order_no === String(b.order_id || ''));
+                if (!order) return sendJson(res, { error: 'سفارش یافت نشد.' }, 404);
+                if (order.status !== 'reserved' && order.status !== 'completed') return sendJson(res, { error: 'فاکتور فقط برای سفارش تأییدشده صادر می‌شود (وضعیت فعلی: ' + (SALES_STATUS_FA_21A[order.status] || order.status) + ').' }, 409);
+                const cust = (live.customers || []).find((c) => c.id === order.customer_id);
+                if (!cust) return sendJson(res, { error: 'مشتری سفارش یافت نشد.' }, 404);
+                /* اقلام فاکتور = حواله‌های واقعی فاکتورنشده (وزن باسکول) */
+                const openExits = (live.sales_exits || []).filter((e) => e.order_id === order.id && !e.invoice_no);
+                if (!openExits.length) return sendJson(res, { error: 'حوالهٔ خروج فاکتورنشده‌ای برای این سفارش نیست — ابتدا حواله ثبت کنید.' }, 409);
+                const bySize = {};
+                openExits.forEach((e) => {
+                    const k = String(e.size);
+                    bySize[k] = bySize[k] || { size: k, weight_ton: 0, exits: [] };
+                    bySize[k].weight_ton = round2(bySize[k].weight_ton + (Number(e.weight_ton) || 0));
+                    bySize[k].exits.push(e.exit_no);
+                });
+                const lines = Object.keys(bySize).map((k) => {
+                    const it = (order.items || []).find((x) => String(x.size) === k);
+                    const price = Number(it && it.unit_price_rial) || 0;
+                    return { size: k, weight_ton: bySize[k].weight_ton, unit_price_rial: price, line_total_rial: Math.round(bySize[k].weight_ton * price), exits: bySize[k].exits };
+                });
+                const vatRate = (live.fin_config && Number(live.fin_config.vat_rate)) || 10;
+                const goods = lines.reduce((s, l) => s + l.line_total_rial, 0);
+                const vat = Math.round(goods * vatRate / 100);
+                const total = goods + vat;
+                const rec = {
+                    id: 'sinv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    invoice_no: salesNextNo21a(live, 'invoice', 'INV'),
+                    order_id: order.id, order_no: order.order_no,
+                    customer_id: cust.id, customer_name: cust.name,
+                    buyer: { name: cust.name, national_id: cust.national_id || '', economic_id: cust.economic_id || '', address: cust.address || '', phone: cust.phone || '' },
+                    lines: lines, goods_rial: goods, vat_rate: vatRate, vat_rial: vat, total_rial: total,
+                    date_jalali: salesValidJalali21a(b.date_jalali) || finIsoToJalali(new Date().toISOString()),
+                    due_date_jalali: order.due_date_jalali || finIsoToJalali(new Date().toISOString()),
+                    status: 'issued', paid_rial: 0, exits: openExits.map((e) => e.exit_no),
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
+                    returned_at: null, return_reason: '',
+                };
+                /* سند خودکار صدور فاکتور: بدهکار دریافتنی (تفضیلی مشتری) / بستانکار درآمد فروش + بستانکار VAT فروش */
+                const arAcc = salesArAccount21b(live, cust);
+                const accByCode = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode[a.code] = a; });
+                if (!accByCode['410001'] || !accByCode['210002']) return sendJson(res, { error: 'حساب‌های درآمد فروش/VAT در کدینگ مالی یافت نشد — ابتدا تب مالی را باز کنید.' }, 409);
+                finPostDoc(live, {
+                    source: 'sales', ref_module: 'sales', ref_id: 'inv:' + rec.invoice_no,
+                    date_jalali: rec.date_jalali,
+                    desc: 'فاکتور فروش ' + rec.invoice_no + ' — ' + cust.name + ' — سفارش ' + order.order_no + ' — ' + round2(lines.reduce((s, l) => s + l.weight_ton, 0)) + ' تن',
+                    lines: [
+                        { account_id: arAcc.id, debit: total, ref_id: rec.invoice_no, note: 'طلب از ' + cust.name },
+                        { account_id: accByCode['410001'].id, credit: goods, note: 'فروش میلگرد' },
+                        { account_id: accByCode['210002'].id, credit: vat, note: 'مالیات بر ارزش افزوده فروش ' + vatRate + '٪' },
+                    ],
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''),
+                });
+                openExits.forEach((e) => { e.invoice_no = rec.invoice_no; });
+                live.sales_invoices.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ فاکتور انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.invoice.create', { invoice_no: rec.invoice_no, order_no: order.order_no, total: total });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'صدور فاکتور ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/invoices/return') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21b(salesEnsure21a(invEnsure(readLive())));
+                const inv = (live.sales_invoices || []).find((x) => x.id === String(b.invoice_id || '') || x.invoice_no === String(b.invoice_id || ''));
+                if (!inv) return sendJson(res, { error: 'فاکتور یافت نشد.' }, 404);
+                if (inv.status !== 'issued') return sendJson(res, { error: 'فقط فاکتور صادرشده قابل برگشت است (وضعیت فعلی: ' + (SALES_INV_STATUS_FA_21B[inv.status] || inv.status) + ').' }, 409);
+                const allocated = (live.sales_receipts || []).reduce((s, r) => s + ((r.allocated || []).filter((a) => a.invoice_no === inv.invoice_no).reduce((x, a) => x + (Number(a.amount_rial) || 0), 0)), 0);
+                if (allocated > 0) return sendJson(res, { error: 'فاکتور با دریافت ثبت‌شده قابل برگشت نیست — ' + salesFmt21a(allocated) + ' ریال دریافت روی آن تخصیص یافته است.' }, 409);
+                const cust = (live.customers || []).find((c) => c.id === inv.customer_id);
+                const arAcc = cust ? salesArAccount21b(live, cust) : null;
+                const accByCode = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode[a.code] = a; });
+                if (!arAcc || !accByCode['410001'] || !accByCode['210002']) return sendJson(res, { error: 'حساب‌های مالی فروش یافت نشد.' }, 409);
+                /* سند معکوس */
+                finPostDoc(live, {
+                    source: 'sales', ref_module: 'sales', ref_id: 'ret:' + inv.invoice_no,
+                    date_jalali: salesValidJalali21a(b.date_jalali) || finIsoToJalali(new Date().toISOString()),
+                    desc: 'برگشت از فروش ' + inv.invoice_no + ' — ' + String(b.reason || '').slice(0, 80),
+                    lines: [
+                        { account_id: accByCode['410001'].id, debit: inv.goods_rial, note: 'ابطال درآمد فروش' },
+                        { account_id: accByCode['210002'].id, debit: inv.vat_rial, note: 'ابطال VAT فروش' },
+                        { account_id: arAcc.id, credit: inv.total_rial, note: 'کاهش طلب از ' + inv.customer_name },
+                    ],
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''),
+                });
+                /* بازگشت موجودی به انبار محصول + بازگشت رزرو سفارش (حتی اگر سفارش تکمیل شده بود — بازگشایی به «رزروشده») */
+                const nowIso = new Date().toISOString();
+                const order = (live.sales_orders || []).find((o) => o.id === inv.order_id);
+                inv.lines.forEach((l) => {
+                    const item = salesItemForSize21a(live, l.size);
+                    live.inventory_receipts.push({ id: 'grn-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: 'sales-ret:' + inv.invoice_no + ':' + l.size, receipt_no: 'GRN-' + Date.now(), item_id: item.id, quantity: l.weight_ton, unit: item.unit || 'تن', lot_no: '', warehouse: 'product', location: 'RETURN', stock_status: 'available', receipt_type: 'return', description: ('برگشت از فروش ' + inv.invoice_no + ' — سایز ' + l.size).slice(0, 500), timestamp: nowIso, operator_id: String((req.user && (req.user.name || req.user.username)) || '') });
+                    if (order && (order.status === 'reserved' || order.status === 'completed')) {
+                        let resv = salesOpenResOf21a(live, order.id, l.size, null)[0];
+                        if (!resv) {
+                            resv = { id: 'res-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: 'sales:' + order.order_no + ':' + l.size, reservation_no: 'SRES-' + Date.now() + '-' + l.size, item_id: item.id, warehouse: 'product', quantity: 0, status: 'open', reason: 'فروش — ' + order.order_no + ' (برگشت)', work_order: order.order_no, sales_order_id: order.id, sales_size: String(l.size), created_by: 'sales-return', created_at: nowIso, closed_at: null };
+                            live.inventory_reservations.push(resv);
+                        }
+                        resv.quantity = round2((Number(resv.quantity) || 0) + l.weight_ton);
+                        if (resv.status !== 'open') { resv.status = 'open'; resv.closed_at = null; }
+                        live.inventory_reservation_logs = Array.isArray(live.inventory_reservation_logs) ? live.inventory_reservation_logs : [];
+                        live.inventory_reservation_logs.push({ id: 'rlog-ret-' + resv.id + '-' + Date.now().toString(36), tx_type: 'reserve', receipt_no: resv.reservation_no, item_id: resv.item_id, quantity: l.weight_ton, warehouse: resv.warehouse, lot_no: '', destination: 'بازگشت از فروش ' + inv.invoice_no, timestamp: nowIso });
+                    }
+                });
+                if (order && order.status === 'completed') order.status = 'reserved';
+                inv.status = 'returned'; inv.returned_at = nowIso; inv.return_reason = String(b.reason || '').trim().slice(0, 200);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ برگشت فروش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.invoice.return', { invoice_no: inv.invoice_no, total: inv.total_rial });
+                return sendJson(res, { ok: true, record: inv });
+            } catch (e) { return sendJson(res, { error: 'برگشت فاکتور ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/receipts') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت دریافت فقط برای واحد فروش/مالی مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21b(salesEnsure21a(invEnsure(readLive())));
+                const cust = (live.customers || []).find((c) => c.id === String(b.customer_id || ''));
+                if (!cust) return sendJson(res, { error: 'مشتری یافت نشد.' }, 404);
+                const amount = Math.round(Number(finDigitsEn(b.amount_rial)) || 0);
+                if (!(amount > 0)) return sendJson(res, { error: 'مبلغ دریافت باید بزرگ‌تر از صفر باشد (ریال).' }, 400);
+                const method = ['cash', 'bank', 'check'].indexOf(String(b.method || '')) !== -1 ? String(b.method) : '';
+                if (!method) return sendJson(res, { error: 'روش دریافت باید نقد، بانک یا چک باشد.' }, 400);
+                const checkNo = finDigitsEn(String(b.check_no || '')).trim();
+                if (method === 'check' && !checkNo) return sendJson(res, { error: 'شمارهٔ چک الزامی است.' }, 400);
+                const checkDue = method === 'check' ? salesValidJalali21a(b.check_due_jalali) : '';
+                if (method === 'check' && !checkDue) return sendJson(res, { error: 'سررسید چک شمسی نامعتبر است.' }, 400);
+                const dj = salesValidJalali21a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                /* تخصیص به فاکتورها */
+                const allocs = Array.isArray(b.allocations) ? b.allocations.slice(0, 40) : [];
+                const allocated = [];
+                let allocatedTotal = 0;
+                for (const al of allocs) {
+                    const amt = Math.round(Number(finDigitsEn(al.amount_rial)) || 0);
+                    if (!(amt > 0)) continue;
+                    const inv = (live.sales_invoices || []).find((x) => (x.id === String(al.invoice_id || '') || x.invoice_no === String(al.invoice_id || '')) && x.customer_id === cust.id);
+                    if (!inv) return sendJson(res, { error: 'فاکتور برای تخصیص یافت نشد.' }, 404);
+                    if (inv.status !== 'issued') return sendJson(res, { error: 'تخصیص فقط به فاکتور صادرشده مجاز است (' + inv.invoice_no + ').' }, 409);
+                    const prevPaid = Number(inv.paid_rial) || 0;
+                    if (amt > (inv.total_rial - prevPaid) + 1e-6) return sendJson(res, { error: 'مبلغ تخصیص به ' + inv.invoice_no + ' بیش از ماندهٔ فاکتور است (مانده: ' + salesFmt21a(inv.total_rial - prevPaid) + ' ریال).' }, 409);
+                    allocated.push({ invoice_id: inv.id, invoice_no: inv.invoice_no, amount_rial: amt });
+                    allocatedTotal += amt;
+                }
+                if (allocatedTotal > amount + 1e-6) return sendJson(res, { error: 'جمع تخصیص‌ها از مبلغ دریافت بیشتر است.' }, 409);
+                const onAccount = Math.round(amount - allocatedTotal);
+                const rec = { id: 'srcp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), receipt_no: salesNextNo21a(live, 'receipt', 'RCP'), customer_id: cust.id, customer_name: cust.name, amount_rial: amount, method: method, method_fa: SALES_METHOD_FA_21B[method], check_no: checkNo, check_due_jalali: checkDue, date_jalali: dj, allocated: allocated, allocated_total_rial: allocatedTotal, on_account_rial: onAccount, created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
+                /* سند خودکار دریافت: بدهکار بانک/صندوق / بستانکار دریافتنی (+پیش‌دریاخت برای علی‌الحساب) */
+                const arAcc = salesArAccount21b(live, cust);
+                const accByCode = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode[a.code] = a; });
+                const debitAcc = method === 'cash' ? accByCode['130002'] : accByCode['130001'];
+                if (!debitAcc) return sendJson(res, { error: 'حساب بانک/صندوق در کدینگ مالی یافت نشد.' }, 409);
+                const linesR = [{ account_id: debitAcc.id, debit: amount, note: (SALES_METHOD_FA_21B[method]) + (method === 'check' ? ' شماره ' + checkNo : '') }];
+                if (allocatedTotal > 0) linesR.push({ account_id: arAcc.id, credit: allocatedTotal, note: 'تسویه ' + allocated.map((a) => a.invoice_no).join('، ') });
+                if (onAccount > 0) linesR.push({ account_id: accByCode['230002'].id, credit: onAccount, note: 'علی‌الحساب ' + cust.name });
+                finPostDoc(live, { source: 'sales', ref_module: 'sales', ref_id: 'rcpt:' + rec.receipt_no, date_jalali: dj, desc: 'دریافت وجه ' + rec.receipt_no + ' — ' + cust.name + ' — ' + salesFmt21a(amount) + ' ریال', lines: linesR, created_by: String((req.user && (req.user.name || req.user.username)) || '') });
+                allocated.forEach((a) => { const inv = (live.sales_invoices || []).find((x) => x.id === a.invoice_id); if (inv) inv.paid_rial = round2((Number(inv.paid_rial) || 0) + a.amount_rial); });
+                live.sales_receipts.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ دریافت انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.receipt.create', { receipt_no: rec.receipt_no, amount: amount, method: method });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت دریافت ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/sales/finance') {
+        if (!auth.requireRole(req, SALES_READ_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = salesEnsure21b(salesEnsure21a(invEnsure(readLive())));
+        salesEnsureAccounts21b(live);
+        const todayJ = finIsoToJalali(new Date().toISOString());
+        const invoices = (live.sales_invoices || []).map((inv) => Object.assign({}, inv, {
+            remaining_rial: Math.max(0, Math.round((Number(inv.total_rial) || 0) - (Number(inv.paid_rial) || 0))),
+            status_fa: SALES_INV_STATUS_FA_21B[inv.status] || inv.status,
+            days_late: inv.status === 'issued' ? salesDaysLate21b(todayJ, inv.due_date_jalali) : 0,
+            aging_bucket: inv.status === 'issued' ? salesAgingBucket21b(salesDaysLate21b(todayJ, inv.due_date_jalali)) : '',
+        })).sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || '')));
+        const receipts = (live.sales_receipts || []).slice().sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || '')));
+        const ar = (live.customers || []).map((c) => {
+            const open = invoices.filter((inv) => inv.customer_id === c.id && inv.status === 'issued' && inv.remaining_rial > 0).map((inv) => ({ invoice_no: inv.invoice_no, total_rial: inv.total_rial, paid_rial: inv.paid_rial, remaining_rial: inv.remaining_rial, due_date_jalali: inv.due_date_jalali, days_late: inv.days_late, bucket: inv.aging_bucket }));
+            return { customer_id: c.id, name: c.name, credit_limit_rial: Number(c.credit_limit_rial) || 0, ar_account_code: c.ar_account_code || '', balance_rial: salesArBalance21b(live, c.id), open_count: open.length, open: open };
+        });
+        const agingTotals = { 'جاری': 0, '۱-۳۰': 0, '۳۱-۶۰': 0, '۶۱-۹۰': 0, '+۹۰': 0 };
+        ar.forEach((c) => c.open.forEach((inv) => { agingTotals[inv.bucket] = (agingTotals[inv.bucket] || 0) + inv.remaining_rial; }));
+        return sendJson(res, {
+            ok: true, invoices: invoices, receipts: receipts, ar: ar, aging_totals: agingTotals,
+            vat_rate: (live.fin_config && Number(live.fin_config.vat_rate)) || 10,
+            currency: (live.fin_config && live.fin_config.currency) || 'ریال',
+            today_jalali: todayJ,
+        });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/sales/reports') {
+        if (!auth.requireRole(req, SALES_READ_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = salesEnsure21b(salesEnsure21a(invEnsure(readLive())));
+        const todayJ = finIsoToJalali(new Date().toISOString());
+        /* فروش per سایز/ماه (تناژ از حواله‌ها + مبلغ از فاکتورها) */
+        const byKey = {};
+        (live.sales_exits || []).forEach((e) => {
+            const inv = (live.sales_invoices || []).find((x) => x.invoice_no === e.invoice_no && x.status !== 'cancelled');
+            const month = String(e.date_jalali || '').slice(0, 7);
+            const k = e.size + '|' + month;
+            byKey[k] = byKey[k] || { size: String(e.size), month: month, ton: 0, amount_rial: 0 };
+            byKey[k].ton = round2(byKey[k].ton + (Number(e.weight_ton) || 0));
+            if (inv) byKey[k].amount_rial += Math.round((Number(e.weight_ton) || 0) * (Number((inv.lines || []).find((l) => l.size === String(e.size)) ? ((inv.lines || []).find((l) => l.size === String(e.size)).unit_price_rial) : 0) || 0));
+        });
+        const by_size_month = Object.keys(byKey).map((k) => byKey[k]).sort((a, b2) => a.month.localeCompare(b2.month) || Number(a.size) - Number(b2.size));
+        const issued = (live.sales_invoices || []).filter((x) => x.status === 'issued');
+        const vat = {
+            rate: (live.fin_config && Number(live.fin_config.vat_rate)) || 10,
+            sales_base: issued.reduce((s, x) => s + (Number(x.goods_rial) || 0), 0),
+            vat_total: issued.reduce((s, x) => s + (Number(x.vat_rial) || 0), 0),
+            invoices_count: issued.length,
+            returned_count: (live.sales_invoices || []).filter((x) => x.status === 'returned').length,
+        };
+        const arRows = (live.customers || []).map((c) => ({ name: c.name, balance_rial: salesArBalance21b(live, c.id), credit_limit_rial: Number(c.credit_limit_rial) || 0 }));
+        return sendJson(res, { ok: true, today_jalali: todayJ, by_size_month: by_size_month, vat: vat, ar: arRows, invoices: (live.sales_invoices || []).length, exits: (live.sales_exits || []).length });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/sales/kpi') {
+        if (!auth.requireRole(req, SALES_READ_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = salesEnsure21b(salesEnsure21a(invEnsure(readLive())));
+        const month = finIsoToJalali(new Date().toISOString()).slice(0, 7);
+        const ton = round2((live.sales_exits || []).filter((e) => String(e.date_jalali || '').slice(0, 7) === month).reduce((s, e) => s + (Number(e.weight_ton) || 0), 0));
+        const rial = (live.sales_invoices || []).filter((x) => x.status === 'issued' && String(x.date_jalali || '').slice(0, 7) === month).reduce((s, x) => s + (Number(x.total_rial) || 0), 0);
+        return sendJson(res, { ok: true, month: month, month_ton: ton, month_rial: rial });
+    }
+    // ===== FEAT-SALES-21b (end) =====
 
    if (pathname.startsWith('/api/')) {
         loadData().then((d) => {
