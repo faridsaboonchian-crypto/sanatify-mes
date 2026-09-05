@@ -283,6 +283,7 @@ function loadTenant15a() {
         if (!cfg.active_modules.length) cfg.active_modules = MODULES_15A.slice(); // پیکربندی خراب → قفل کامل نه؛ همهٔ ماژول‌ها
         if (!cfg.custom_settings || typeof cfg.custom_settings !== 'object' || Array.isArray(cfg.custom_settings)) cfg.custom_settings = {};
         if (!cfg.role_caps || typeof cfg.role_caps !== 'object' || Array.isArray(cfg.role_caps)) cfg.role_caps = {}; /* FEAT-ADMIN-17a */
+        applyLicenseSigGuard24(cfg, st.mtimeMs); /* SEC-LIC-24: تأیید امضا در هر خواندن/بوت */
         tenantCache15a = cfg; tenantMtime15a = st.mtimeMs;
         return cfg;
     } catch (e) {
@@ -290,6 +291,66 @@ function loadTenant15a() {
         tenantCache15a = null; return DEFAULT_TENANT_15A;
     }
 }
+// ===== SEC-LIC-24 (begin): امضای دیجیتال لایسنس (HMAC-SHA256) + لایسنس پایه + نقش مالک =====
+// کلید تأیید سرور: env SANATIFY_LIC_KEY (استقرار واقعی) وگرنه کلید پیش‌فرضِ ارسال‌شده.
+// کلید مخفیِ امضا فقط سمت فروشنده در tools/license.js (env: SANATIFY_LIC_KEY) است — هرگز در ریپو/tenant.json نیست.
+// الگوریتم: HMAC-SHA256 روی نسخهٔ متعارف (canonical) بخش لایسنس tenant.json → فیلد license_sig
+const LIC_VERIFY_KEY_24 = String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405');
+const LIC_BASE_MODULES_24 = ['summary', 'production', 'inventory']; /* لایسنس پایه — fallback ضد دستکاری */
+function licCanonical24(cfg) {
+    return JSON.stringify({
+        active_modules: (Array.isArray(cfg && cfg.active_modules) ? cfg.active_modules.slice() : []).sort(),
+        max_users: Number(cfg && cfg.max_users) || 0,
+        max_records: Number(cfg && cfg.max_records) || 0,
+        expires_at: String((cfg && cfg.expires_at) || ''),
+    });
+}
+function licSign24(cfg, key) {
+    return crypto.createHmac('sha256', String(key || LIC_VERIFY_KEY_24)).update(licCanonical24(cfg)).digest('hex');
+}
+function licVerify24(cfg) {
+    try {
+        const sig24 = String((cfg && cfg.license_sig) || '').toLowerCase();
+        if (!/^[0-9a-f]{64}$/.test(sig24)) return false;
+        const a24 = Buffer.from(sig24), b24 = Buffer.from(licSign24(cfg, LIC_VERIFY_KEY_24));
+        return a24.length === b24.length && crypto.timingSafeEqual(a24, b24);
+    } catch (e) { return false; }
+}
+let licGuardLogged24 = ''; /* هر نسخهٔ فایل فقط یک‌بار audit — ضد طغیان لاگ */
+function applyLicenseSigGuard24(cfg, srcMtime) {
+    if (!cfg) return cfg;
+    if (licVerify24(cfg)) { cfg.__lic_invalid_24 = false; return cfg; }
+    /* امضا غایب/نامعتبر/دستکاری‌شده → لایسنس پایه + بنر قرمز در UI + audit */
+    cfg.__lic_invalid_24 = true;
+    cfg.active_modules = LIC_BASE_MODULES_24.slice();
+    cfg.max_users = 0; cfg.max_records = 0; cfg.expires_at = '';
+    const fp24 = srcMtime != null ? String(Math.round(srcMtime)) : 'boot';
+    if (licGuardLogged24 !== fp24) {
+        licGuardLogged24 = fp24;
+        console.warn('[SEC-LIC-24] امضای لایسنس tenant.json غایب/نامعتبر است → لایسنس پایه (summary+production+inventory) اعمال شد — با tools/license.js --sign امضا کنید.');
+        const entry24 = {
+            ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-',
+            action: 'license.signature_invalid', endpoint: 'tenant.json', status: 200,
+            user_agent: 'SEC-LIC-24', payload_hash: '', ms: 0, mtime: srcMtime != null ? Math.round(srcMtime) : null,
+        };
+        const t24 = setTimeout(() => { try { writeAudit15b(entry24); } catch (e) { /* بی‌ضرر */ } }, 100); /* پس از بارگذاری کامل ماژول */
+        if (t24.unref) t24.unref();
+    }
+    return cfg;
+}
+function ownerExists24() { /* backward-compat: تا وقتی کاربر owner صریح وجود ندارد، admin همان مالک سیستم است */
+    try {
+        const a24 = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8'));
+        return Array.isArray(a24) && a24.some((u) => u && u.role === 'owner' && u.active !== false);
+    } catch (e) { return false; }
+}
+function isOwnerReq24(req) {
+    const u24 = req && req.user;
+    if (!u24) return false;
+    const role24 = String(u24.role || 'viewer');
+    return role24 === 'owner' || (role24 === 'admin' && !ownerExists24());
+}
+// ===== SEC-LIC-24 (end) =====
 function isLicenseExpired15a(cfg) {
     const exp = String((cfg && cfg.expires_at) || '').trim();
     if (!exp) return false;
@@ -436,7 +497,8 @@ function requireModule15c(req, res, moduleId) {
     return true;
 }
 function writeTenantFile15c(cfg) {
-    const out = JSON.stringify(cfg, null, 2) + String.fromCharCode(10);
+    const clean24 = Object.assign({}, cfg); delete clean24.__lic_invalid_24; /* SEC-LIC-24: پرچم زمان‌اجر هرگز در فایل ذخیره نمی‌شود */
+    const out = JSON.stringify(clean24, null, 2) + String.fromCharCode(10);
     const tmp = TENANT_FILE_15A + '.tmp';
     fs.writeFileSync(tmp, out, 'utf8');
     fs.renameSync(tmp, TENANT_FILE_15A);
@@ -448,12 +510,12 @@ function tenantPublicShape15c(cfg) {
         max_users: Number(cfg.max_users) || 0, max_records: Number(cfg.max_records) || 0,
         role_caps: cfg.role_caps || {}, /* FEAT-ADMIN-17a */
         custom_settings: cfg.custom_settings || {},
-        license: { expired: isLicenseExpired15a(cfg), expires_at: cfg.expires_at || '' },
+        license: { expired: isLicenseExpired15a(cfg), expires_at: cfg.expires_at || '', invalid: !!(cfg && cfg.__lic_invalid_24) }, /* SEC-LIC-24 */
     };
 }
 // ===== FEAT-ADMIN-17a (begin): ثابت‌های نقش + خوانندهٔ فایل کاربران =====
-const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش + FEAT-PURCHASE-22a: نقش خرید */
-const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید' }; /* FEAT-SALES-21a: +نقش فروش + FEAT-PURCHASE-22a: +نقش خرید */
+const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase', 'owner']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش + FEAT-PURCHASE-22a: نقش خرید + SEC-LIC-24: نقش مالک (فروشنده) */
+const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید', owner: 'مالک سیستم (فروشنده)' }; /* FEAT-SALES-21a: +نقش فروش + FEAT-PURCHASE-22a: +نقش خرید + SEC-LIC-24: +نقش مالک */
 function readUsers17a() {
     try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; }
 }
@@ -523,7 +585,7 @@ function appRequestHandler(req, res) {
         return sendJson(res, { ok: true, tenant: {
             tenant_id: c15a.tenant_id, name: c15a.name, logo: c15a.logo || '',
             brand_colors: c15a.brand_colors || {}, active_modules: c15a.active_modules.slice(),
-            license: { expired: isLicenseExpired15a(c15a), expires_at: c15a.expires_at || '' },
+            license: { expired: isLicenseExpired15a(c15a), expires_at: c15a.expires_at || '', invalid: !!(c15a && c15a.__lic_invalid_24) }, /* SEC-LIC-24 */
         } });
     }
     if (req.method === 'GET' && (pathname === '/tenant-logo.png' || pathname === '/tenant-logo.jpg')) {
@@ -629,7 +691,7 @@ function appRequestHandler(req, res) {
         return sendJson(res, { ok: true, usage: {
             users: limU15c.users, max_users: limU15c.maxUsers, records: limU15c.records, max_records: limU15c.maxRecords,
             sessions_active: auth.activeSessions15c(),
-            license: { expired: isLicenseExpired15a(cU15c), expires_at: cU15c.expires_at || '' },
+            license: { expired: isLicenseExpired15a(cU15c), expires_at: cU15c.expires_at || '', invalid: !!(cU15c && cU15c.__lic_invalid_24) }, /* SEC-LIC-24 */
             per_module: perModule15c,
         } });
     }
@@ -639,6 +701,14 @@ function appRequestHandler(req, res) {
             try {
                 const b15c = JSON.parse(body15c || '{}');
                 const cfg15c = JSON.parse(JSON.stringify(loadTenant15a())); /* کپی عمیق — DEFAULT مشترک خراب نشود */
+                /* ===== SEC-LIC-24 (begin): فیلدهای لایسنس فقط برای مالک سیستم (فروشنده) — admin مشتری فقط برندینگ/کاربران/آمار ===== */
+                const LIC_FIELDS_24 = ['active_modules', 'max_users', 'max_records', 'expires_at'];
+                const licTouched24 = LIC_FIELDS_24.some((f24) => b15c[f24] !== undefined);
+                if (licTouched24 && !isOwnerReq24(req)) {
+                    auditLog(req, 'license.owner_denied', { fields: LIC_FIELDS_24.filter((f24) => b15c[f24] !== undefined) });
+                    return sendJson(res, { error: 'ویرایش لایسنس (ماژول‌ها/سقف‌ها/انقضا) فقط توسط مالک سیستم (فروشنده) مجاز است.', code: 'OWNER_ONLY' }, 403);
+                }
+                /* ===== SEC-LIC-24 (end) ===== */
                 if (b15c.name != null) cfg15c.name = (String(b15c.name).slice(0, 80).trim() || 'صنعتی فای');
                 if (Array.isArray(b15c.active_modules)) {
                     const mods15c = b15c.active_modules.filter((m) => MODULES_15A.indexOf(m) !== -1);
@@ -647,6 +717,11 @@ function appRequestHandler(req, res) {
                 }
                 if (b15c.max_users != null) cfg15c.max_users = Math.max(0, Number(b15c.max_users) || 0);
                 if (b15c.max_records != null) cfg15c.max_records = Math.max(0, Number(b15c.max_records) || 0);
+                if (b15c.expires_at != null) { /* SEC-LIC-24: انقضای لایسنس از پنل مالک (ISO میلادی — خالی = حذف انقضا) */
+                    const e24 = String(b15c.expires_at || '').trim();
+                    if (e24) { const t24 = Date.parse(e24); if (isNaN(t24)) return sendJson(res, { error: 'تاریخ انقضا نامعتبر است — نمونه: 2027-03-20.' }, 400); cfg15c.expires_at = new Date(t24).toISOString(); }
+                    else cfg15c.expires_at = '';
+                }
                 /* ===== FEAT-ADMIN-17a (begin): سقف نفرات هر نقش (role_caps) — کلیدهای نامعتبر حذف، مقدار ≥۰ ===== */
                 if (b15c.role_caps != null) {
                     if (typeof b15c.role_caps !== 'object' || Array.isArray(b15c.role_caps)) return sendJson(res, { error: 'سقف نقش‌ها نامعتبر است.' }, 400);
@@ -687,6 +762,8 @@ function appRequestHandler(req, res) {
                     fs.writeFileSync(path.join(PUBLIC_DIR, 'tenant-logo.' + ext15c), buf15c);
                     cfg15c.logo = '/tenant-logo.' + ext15c;
                 }
+                cfg15c.license_sig = licSign24(cfg15c); /* SEC-LIC-24: هر ذخیرهٔ سرور = امضای تازه (فایل همیشه معتبر می‌ماند) */
+                cfg15c.__lic_invalid_24 = false; /* SEC-LIC-24: فایل تازه‌امضاشده حتماً معتبر است — پرچم کهنهٔ خواندن قبلی ریست شود تا بنر فوراً خاموش شود */
                 writeTenantFile15c(cfg15c);
                 auth.setTenantBranding15a({ name: cfg15c.name, logo: cfg15c.logo || '', colors: cfg15c.brand_colors || {} }); /* FIX-ORG-16b: + رنگ‌ها */
                 auditLog(req, 'tenant.update', { active_modules: cfg15c.active_modules, max_users: cfg15c.max_users, max_records: cfg15c.max_records, logo: cfg15c.logo, brand_colors: cfg15c.brand_colors || {} });
@@ -734,6 +811,7 @@ function appRequestHandler(req, res) {
                 if (!/^[A-Za-z0-9._-]{3,40}$/.test(username17a)) return sendJson(res, { error: 'نام کاربری باید ۳ تا ۴۰ کاراکتر لاتین، عدد، نقطه، زیرخط یا خط تیره باشد.' }, 400);
                 if (!name17a) return sendJson(res, { error: 'نام کامل کاربر الزامی است.' }, 400);
                 if (ROLES_17A.indexOf(role17a) === -1) return sendJson(res, { error: 'نقش انتخاب‌شده نامعتبر است.' }, 400);
+                if (role17a === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
                 if (password17a.length < 6 || password17a.length > 128) return sendJson(res, { error: 'رمز موقت باید حداقل ۶ کاراکتر باشد.' }, 400);
                 const users17a = readUsers17a();
                 if (users17a.some((u) => String(u.username || '').toLowerCase() === username17a.toLowerCase())) return sendJson(res, { error: 'این نام کاربری قبلاً ثبت شده است.' }, 400);
@@ -786,6 +864,13 @@ function appRequestHandler(req, res) {
                     if (ROLES_17A.indexOf(role17a) === -1) return sendJson(res, { error: 'نقش انتخاب‌شده نامعتبر است.' }, 400);
                     if (role17a !== String(u17a.role || '')) {
                         if (isSelf17a) return sendJson(res, { error: 'تغییر نقش حساب خودتان مجاز نیست — از حساب مدیر دیگری استفاده کنید.' }, 400);
+                        /* SEC-LIC-24 (begin): نقش مالک — فقط مالک می‌دهد/می‌گیرد؛ آخرین مالک فعال حفظ می‌شود */
+                        if ((role17a === 'owner' || String(u17a.role || '') === 'owner') && !isOwnerReq24(req)) return sendJson(res, { error: 'تغییر نقش «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403);
+                        if (String(u17a.role || '') === 'owner' && role17a !== 'owner' && u17a.active !== false) {
+                            const ownersLeft24 = users17a.filter((x) => x.role === 'owner' && x.active !== false).length;
+                            if (ownersLeft24 <= 1) return sendJson(res, { error: 'حداقل یک مالک فعال باید باقی بماند.' }, 400);
+                        }
+                        /* SEC-LIC-24 (end) */
                         if (u17a.role === 'admin' && u17a.active !== false) {
                             const admins17a = users17a.filter((x) => x.role === 'admin' && x.active !== false).length;
                             if (admins17a <= 1) return sendJson(res, { error: 'حداقل یک مدیر فعال باید باقی بماند.' }, 400);
@@ -803,6 +888,11 @@ function appRequestHandler(req, res) {
                     const act17a = !!b17a.active;
                     if (!act17a && u17a.active !== false) {
                         if (isSelf17a) return sendJson(res, { error: 'غیرفعال‌کردن حساب خودتان مجاز نیست.' }, 400);
+                        if (String(u17a.role || '') === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'غیرفعال‌سازی «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
+                        if (String(u17a.role || '') === 'owner') {
+                            const ownersAct24 = users17a.filter((x) => x.role === 'owner' && x.active !== false).length;
+                            if (ownersAct24 <= 1) return sendJson(res, { error: 'حداقل یک مالک فعال باید باقی بماند.' }, 400); /* SEC-LIC-24 */
+                        }
                         if (u17a.role === 'admin') {
                             const admins17a = users17a.filter((x) => x.role === 'admin' && x.active !== false).length;
                             if (admins17a <= 1) return sendJson(res, { error: 'حداقل یک مدیر فعال باید باقی بماند.' }, 400);
@@ -838,6 +928,7 @@ function appRequestHandler(req, res) {
                 const users17a = readUsers17a();
                 const u17a = users17a.find((x) => String(x.username || '').toLowerCase() === username17a.toLowerCase());
                 if (!u17a) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
+                if (String(u17a.role || '') === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'بازنشانی رمز «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
                 /* هش فوری + حذف هر باقیماندهٔ plaintext (سازگار با migrate-hashes) */
                 delete u17a.password;
                 u17a.password_hash = auth.hashPassword(pw17a);

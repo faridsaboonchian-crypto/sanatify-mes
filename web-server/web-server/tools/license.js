@@ -10,7 +10,10 @@
 //    node tools/license.js --only=inventory,finance        (تنها این ماژول‌ها فعال بمانند)
 //    node tools/license.js --expires=2027-03-20            (تاریخ میلادی ISO؛ خالی = حذف انقضا)
 //    node tools/license.js --name="فولاد ..." --max-users=25 --max-records=200000
+//    node tools/license.js --sign                           (امضای HMAC فایل — کلید از env: SANATIFY_LIC_KEY)
+//    node tools/license.js --verify                         (فقط بررسی امضا — چیزی نمی‌نویسد)
 //  چند پرچم می‌تواند همزمان بیاید؛ ترتیب اجرا: only → enable → disable → بقیه
+//  ⚠ SEC-LIC-24: tenant.json بدون امضای معتبر ⇒ سرور به لایسنس پایه (summary+production+inventory) برمی‌گردد
 // =====================================================================
 const fs = require('fs');
 const path = require('path');
@@ -18,14 +21,39 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const TENANT_FILE = path.join(ROOT, 'tenant.json');
 const TEMPLATE_FILE = path.join(ROOT, 'tenant.json.template');
-const MODULES = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance'];
+const MODULES = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance', 'sales', 'purchase']; /* SEC-LIC-24: +فروش/خرید — هم‌تراز MODULES_15A سرور */
 const MODULE_FA = {
     summary: 'خلاصه و شاخص‌ها', analytics: 'داشبورد تحلیلی', production: 'تولید (ثبت/ضایعات/توقف/ردیابی/بالانس)',
     quality: 'کیفیت', inventory: 'انبار', maintenance: 'نگهداری و تعمیرات (PM/EM)', em: 'مدیریت انرژی',
-    planning: 'برنامه‌ریزی تولید', finance: 'مالی و بهای تمام‌شده'
+    planning: 'برنامه‌ریزی تولید', finance: 'مالی و بهای تمام‌شده',
+    sales: 'فروش', purchase: 'خرید' /* SEC-LIC-24 */
 };
 
 function fail(msg) { console.error('✗ خطا: ' + msg); process.exit(1); }
+
+// ===== SEC-LIC-24 (begin): امضای HMAC-SHA256 لایسنس — کلید مخفی فقط از env: SANATIFY_LIC_KEY =====
+// canonical باید عیناً با licCanonical24 در server.js یکی باشد (۴ فیلد بخش لایسنس)
+function licCanonical24(cfg) {
+    return JSON.stringify({
+        active_modules: (Array.isArray(cfg.active_modules) ? cfg.active_modules.slice() : []).sort(),
+        max_users: Number(cfg.max_users) || 0,
+        max_records: Number(cfg.max_records) || 0,
+        expires_at: String(cfg.expires_at || ''),
+    });
+}
+function licKey24() {
+    const k = process.env.SANATIFY_LIC_KEY;
+    if (!k) fail('متغیر محیطی SANATIFY_LIC_KEY تنظیم نیست — کلید مخفی هرگز در ریپو/کد ذخیره نمی‌شود.\n  نمونه:  SANATIFY_LIC_KEY="کلید-مخفی-شما" node tools/license.js --sign');
+    return String(k);
+}
+function licSign24(cfg) { return require('crypto').createHmac('sha256', licKey24()).update(licCanonical24(cfg)).digest('hex'); }
+function licVerify24(cfg) {
+    const sig = String((cfg && cfg.license_sig) || '').toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(sig)) return false;
+    const a = Buffer.from(sig), b = Buffer.from(licSign24(cfg));
+    return a.length === b.length && require('crypto').timingSafeEqual(a, b);
+}
+// ===== SEC-LIC-24 (end) =====
 
 // ---------- آرگومان‌ها ----------
 const args = {};
@@ -59,6 +87,15 @@ function parseModules(v, label) {
 const cfg = loadConfig();
 if (!Array.isArray(cfg.active_modules)) cfg.active_modules = MODULES.slice();
 
+/* SEC-LIC-24: --verify — بررسی امضای فایل موجود بدون هیچ نوشتنی */
+if (args.verify) {
+    const okV = licVerify24(cfg);
+    if (okV) { console.log('✓ امضای لایسنس معتبر است (license_sig تطبیق دارد).'); process.exit(0); }
+    console.error('✗ امضای لایسنس نامعتبر/غایب است — سرور هنگام خواندن به لایسنس پایه (summary+production+inventory) برمی‌گردد.');
+    console.error('  برای امضا:  SANATIFY_LIC_KEY="..." node tools/license.js --sign');
+    process.exit(1);
+}
+
 // ---------- اعمال ----------
 if (args.list && Object.keys(args).length === 1) {
     console.log('━━━ وضعیت لایسنس تنانت ━━━');
@@ -91,6 +128,14 @@ if (args.expires !== undefined) {
     else cfg.expires_at = '';
 }
 
+/* ===== SEC-LIC-24 (begin): --sign — امضا با کلید env (نرمال‌سازی عین سرور: فیلتر ماژول + خالی ⇒ همه) ===== */
+if (args.sign) {
+    cfg.active_modules = (Array.isArray(cfg.active_modules) ? cfg.active_modules : []).filter((m) => MODULES.indexOf(m) !== -1);
+    if (!cfg.active_modules.length) cfg.active_modules = MODULES.slice();
+    cfg.license_sig = licSign24(cfg);
+}
+// ===== SEC-LIC-24 (end) =====
+
 // ---------- نوشتن اتمیک ----------
 const out = JSON.stringify(cfg, null, 2) + '\n';
 const tmp = TENANT_FILE + '.tmp';
@@ -103,3 +148,7 @@ console.log('  ماژول‌های فعال (' + cfg.active_modules.length + '/'
 const off = MODULES.filter((m) => cfg.active_modules.indexOf(m) === -1);
 if (off.length) console.log('  غیرفعال: ' + off.join(', ') + '\n  (تب‌ها در UI پنهان و APIهایشان 403 می‌شود — بدون نیاز به ری‌استارت سرور)');
 if (cfg.expires_at && Date.parse(cfg.expires_at) < Date.now()) console.warn('  ⚠ لایسنس منقضی است — همهٔ APIها 403 می‌دهند تا انقضا حذف/تمدید شود.');
+/* SEC-LIC-24: وضعیت امضا در گزارش */
+if (args.sign) console.log('  امضا: ✓ license_sig ثبت شد (HMAC-SHA256).');
+else if (!cfg.license_sig) console.warn('  ⚠ امضا ندارد (license_sig غایب) — سرور به لایسنس پایه برمی‌گردد. امضا: SANATIFY_LIC_KEY="..." node tools/license.js --sign');
+else if (process.env.SANATIFY_LIC_KEY && !licVerify24(cfg)) console.warn('  ⚠ امضای موجود با کلید فعلی تأیید نمی‌شود (کهنه/کلید دیگر) — دوباره --sign بزنید.');

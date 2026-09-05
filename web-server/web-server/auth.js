@@ -496,7 +496,15 @@ function doLogout(req, res) {
 function doMe(req, res) {
     const s = getSession(req);
     if (!s) return jsonRes(res, { ok: false }, 401);
-    jsonRes(res, { ok: true, user: s.user });
+    /* ===== SEC-LIC-24 (begin): is_owner — backward-compat: تا وقتی کاربر owner صریح نیست، admin همان مالک است ===== */
+    const u24 = s.user || {};
+    const role24 = String(u24.role || 'viewer');
+    let isOwner24 = role24 === 'owner';
+    if (!isOwner24 && role24 === 'admin') {
+        try { isOwner24 = !loadUsers().some((x) => x && x.role === 'owner' && x.active !== false); } catch (e) { isOwner24 = true; }
+    }
+    jsonRes(res, { ok: true, user: Object.assign({}, u24, { is_owner: isOwner24 }) });
+    /* ===== SEC-LIC-24 (end) ===== */
 }
 
 // ---------------------------------------------------------------------
@@ -518,6 +526,7 @@ function requireRole(req, allowed) {
     if (!u) return false;
     const role = String(u.role || 'viewer');
     if (role === 'admin') return true;
+    if (role === 'owner') return true; /* SEC-LIC-24: مالک سیستم — دسترسی کامل مثل admin (ویرایش لایسنس فقط مالک) */
     return allowed.indexOf(role) !== -1;
 }
 
