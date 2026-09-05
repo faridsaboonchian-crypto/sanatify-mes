@@ -262,7 +262,7 @@ function handleHealthFast(req, res) {
 // الگو: استقرار per-tenant (یک سرور برای هر مشتری، پیکربندی با tenant.json — الگوی standalone-app
 // الگوهای SaaS Azure با ایزوله‌سازی کامل داده؛ ERPNext هر tenant را یک site جدا می‌گیرد، ما هر استقرار را)
 const TENANT_FILE_15A = path.join(ROOT, 'tenant.json');
-const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance', 'sales']; /* FEAT-SALES-21a: +ماژول فروش (گیت لایسنس مثل بقیه) */
+const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance', 'sales', 'purchase']; /* FEAT-SALES-21a: +ماژول فروش (گیت لایسنس مثل بقیه) + FEAT-PURCHASE-22a: +ماژول خرید */
 const DEFAULT_TENANT_15A = {
     tenant_id: 'sanatify', name: 'صنعتی فای', logo: '', brand_colors: {},
     active_modules: MODULES_15A.slice(), max_users: 0, max_records: 0,
@@ -324,6 +324,7 @@ function checkTenantLimits15a() {
 // نگاشت مسیر API → ماژول لایسنس (null = عمومی/مستثنی)
 function moduleForPath15a(pathname) {
     if (pathname.indexOf('/api/sales') === 0) return 'sales'; /* FEAT-SALES-21a: گیت لایسنس ماژول فروش */
+    if (pathname.indexOf('/api/purchase') === 0) return 'purchase'; /* FEAT-PURCHASE-22a: گیت لایسنس ماژول خرید */
     if (pathname.indexOf('/api/fin') === 0) return 'finance';
     if (pathname.indexOf('/api/energy/') === 0) return 'em';
     if (pathname.indexOf('/api/planning/') === 0) return 'planning';
@@ -451,8 +452,8 @@ function tenantPublicShape15c(cfg) {
     };
 }
 // ===== FEAT-ADMIN-17a (begin): ثابت‌های نقش + خوانندهٔ فایل کاربران =====
-const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش */
-const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش' }; /* FEAT-SALES-21a: +نقش فروش */
+const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش + FEAT-PURCHASE-22a: نقش خرید */
+const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید' }; /* FEAT-SALES-21a: +نقش فروش + FEAT-PURCHASE-22a: +نقش خرید */
 function readUsers17a() {
     try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; }
 }
@@ -5004,6 +5005,523 @@ live.inventory_reservations.splice(idx, 1);
         return sendJson(res, { ok: true, month: month, month_ton: ton, month_rial: rial });
     }
     // ===== FEAT-SALES-21b (end) =====
+    // ================================================================
+    // ===== FEAT-PURCHASE-22a (begin): ماژول خرید — تأمین‌کنندگان /
+    // درخواست خرید (PR) / استعلام (quote) / سفارش خرید (PO) / رسید خرید
+    // (ورود انبار نوع «خرید» + سند خودکار موجودی/پرداختنی از finPostDoc با
+    // source «purchase» و ref_id یکتا = idempotent) — همهٔ داده‌ها افزاینده
+    // در live.json؛ رسید انبار موجود دست‌نخورده (فقط استفاده/endpoint موازی)
+    // نقش‌ها: purchase/admin ثبت و تأیید؛ warehouse فقط ثبت رسید؛
+    // manager/finance فقط‌خواندن — گیت لایسنس ماژول «purchase» مثل بقیه
+    // ================================================================
+    function purEnsure22a(live) {
+        live.suppliers = Array.isArray(live.suppliers) ? live.suppliers : [];
+        live.purchase_requests = Array.isArray(live.purchase_requests) ? live.purchase_requests : [];
+        live.purchase_quotes = Array.isArray(live.purchase_quotes) ? live.purchase_quotes : [];
+        live.purchase_orders = Array.isArray(live.purchase_orders) ? live.purchase_orders : [];
+        live.purchase_receipts = Array.isArray(live.purchase_receipts) ? live.purchase_receipts : [];
+        live.purchase_seq = live.purchase_seq && typeof live.purchase_seq === 'object' ? live.purchase_seq : { pr: 0, po: 0, receipt: 0 };
+        return live;
+    }
+    const PUR_KIND_FA_22A = { billet: 'شمش (بیلت)', material: 'مواد', part: 'قطعه' };
+    const PUR_PR_STATUS_FA_22A = { draft: 'پیش‌نویس', approved: 'تأیید', inquired: 'استعلام‌شده', ordered: 'سفارش‌داده‌شده', completed: 'تکمیل', cancelled: 'لغو' };
+    const PUR_PO_STATUS_FA_22A = { issued: 'صادرشده', received: 'تحویل‌گرفته', completed: 'تکمیل', cancelled: 'لغو' };
+    function purNextNo22a(live, key, prefix) { live.purchase_seq[key] = (Number(live.purchase_seq[key]) || 0) + 1; return prefix + '-' + String(live.purchase_seq[key]).padStart(5, '0'); }
+    const PUR_READ_22A = ['purchase', 'manager', 'finance', 'warehouse'];
+    const PUR_WRITE_22A = ['purchase']; /* admin همیشه با requireRole عبور می‌کند */
+    const PUR_RCPT_22A = ['warehouse', 'purchase'];
+    /* کالای شمش — اگر در انبار تعریف نشده باشد، افزاینده ساخته می‌شود (واحد تن، انبار مواد اولیه) */
+    function purBilletItem22a(live) {
+        let it = (live.inventory_items || []).find((x) => String(x.code || '').toUpperCase() === 'BILLET' && x.active !== false);
+        if (!it) {
+            it = { id: 'itm-pur-billet-' + Date.now().toString(36), code: 'BILLET', name: 'شمش فولاد (بیلت)', unit: 'تن', category: 'مواد اولیه', active: true, min_stock: 0, reorder_point: 0, batch_tracking: false, _purchase22a: true };
+            live.inventory_items.push(it);
+        }
+        return it;
+    }
+    /* کالای مواد/قطعه — از میان کالاهای انبار یا ساخت افزایندهٔ جدید */
+    function purMaterialItem22a(live, kind, itemId, itemName, qtyUnit) {
+        const it = (live.inventory_items || []).find((x) => x.id === String(itemId || '') && x.active !== false);
+        if (it) return it;
+        const name = String(itemName || '').trim();
+        if (name.length < 2) throw new Error('برای قلم «' + (PUR_KIND_FA_22A[kind] || kind) + '» کالای انبار را انتخاب یا نام کالای جدید را وارد کنید.');
+        const prefix = kind === 'part' ? 'PRT' : 'MTL';
+        let n = 1, code = '';
+        do { code = prefix + '-' + String(n).padStart(3, '0'); n++; } while ((live.inventory_items || []).some((x) => String(x.code).toUpperCase() === code));
+        const rec = { id: 'itm-pur-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), code: code, name: name.slice(0, 80), unit: (qtyUnit === 'تن' ? 'تن' : 'عدد'), category: kind === 'part' ? 'قطعات' : 'مواد', active: true, min_stock: 0, reorder_point: 0, batch_tracking: false, _purchase22a: true };
+        live.inventory_items.push(rec);
+        return rec;
+    }
+    function purWarehouseFor22a(kind) { return kind === 'part' ? 'spare' : 'raw'; }
+    /* ماندهٔ دریافت‌شدهٔ هر ردیف PO از رسیدهای قبلی (به‌جز برگشت‌خورده‌ها) */
+    function purReceivedOf22a(live, poNo, poLine) {
+        return round2((live.purchase_receipts || []).filter((r) => r.po_no === poNo && r.status !== 'returned').reduce((s, r) => s + ((r.lines || []).filter((l) => Number(l.po_line) === Number(poLine)).reduce((x, l) => x + (Number(l.qty) || 0), 0)), 0));
+    }
+    /* خطای شمسی مشترک — همان قالب فروش */
+    function purValidJalali22a(d) { return salesValidJalali21a(d); }
+    /* شمارهٔ ردیف امن — صفر هم معتبر است (باگ falsy-صفر) */
+    function purIdx22a(v) { const t = String(v == null ? '' : v).trim(); if (t === '') return -1; const n = Math.round(Number(finDigitsEn(t))); return isNaN(n) ? -1 : n; }
+    /* حساب‌های لازم خرید — فقط اگر نبودند افزاینده ساخته می‌شوند (finSeed/هستهٔ مالی دست‌نخورده) */
+    function purEnsureAccounts22a(live) {
+        if (!live._fin_v1) finSeed(live); /* اگر ماژول مالی هرگز seed نشده بود — همان مسیر رسمی فروش */
+        const have = {};
+        (live.fin_accounts || []).forEach((a) => { have[a.code] = a; });
+        const add = (code, title, type, level) => {
+            if (have[code]) return have[code];
+            const parent = 'facc-' + (level === 2 ? code[0] : code.slice(0, 3));
+            const rec = { id: 'facc-' + code, code: code, title: title, type: type, level: level, parent_id: parent, active: true, _purchase22a: true };
+            live.fin_accounts.push(rec); have[code] = rec;
+            return rec;
+        };
+        add('240', 'پرداختنی تجاری', 'liability', 2);
+        add('240001', 'حساب‌های پرداختنی (تجاری)', 'liability', 3);
+        add('230003', 'پیش‌پرداخت به تأمین‌کنندگان', 'liability', 3);
+        add('110005', 'موجودی قطعات و مواد (خرید)', 'asset', 3);
+        return live;
+    }
+    /* حساب تفضیلی پرداختنی per تأمین‌کننده — کد ۹ رقمی 240001xxx (الگوی کدینگ مالی، قرینهٔ دریافتنی فروش 110101xxx) */
+    function purApAccount22a(live, sup) {
+        purEnsureAccounts22a(live);
+        if (sup.ap_account_id) {
+            const a = (live.fin_accounts || []).find((x) => x.id === sup.ap_account_id);
+            if (a) return a;
+        }
+        let n = 1, code = '';
+        do { code = '240001' + String(n).padStart(3, '0'); n++; } while ((live.fin_accounts || []).some((a) => a.code === code));
+        const rec = { id: 'facc-' + code, code: code, title: 'پرداختنی — ' + String(sup.name || '').slice(0, 60), type: 'liability', level: 4, parent_id: 'facc-240001', active: true, _purchase22a: true };
+        live.fin_accounts.push(rec);
+        sup.ap_account_id = rec.id; sup.ap_account_code = code;
+        return rec;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/purchase/overview') {
+        if (!auth.requireRole(req, PUR_READ_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ خرید برای نقش شما مجاز نیست.' }, 403);
+        const live = purEnsure22a(invEnsure(readLive()));
+        const prs = (live.purchase_requests || []).map((p) => {
+            const quotes = (live.purchase_quotes || []).filter((q) => q.pr_id === p.id);
+            const pos = (live.purchase_orders || []).filter((o) => o.pr_id === p.id);
+            const best = quotes.filter((q) => q.lines && q.lines.length).map((q) => ({ q: q, avg: q.lines.reduce((s, l) => s + (Number(l.unit_price_rial) || 0), 0) / Math.max(1, q.lines.length) })).sort((a, b2) => a.avg - b2.avg)[0];
+            return Object.assign({}, p, {
+                quotes_count: quotes.length, orders_count: pos.length,
+                cheapest_quote_id: best ? best.q.id : '', cheapest_supplier: best ? best.q.supplier_name : '',
+                status_fa: PUR_PR_STATUS_FA_22A[p.status] || p.status,
+            });
+        }).sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || '')));
+        const pos = (live.purchase_orders || []).map((o) => {
+            const items = (o.items || []).map((it, idx) => {
+                const rec = purReceivedOf22a(live, o.po_no, idx);
+                return Object.assign({}, it, { received: rec, remaining: round2(Math.max(0, (Number(it.qty) || 0) - rec)), line_total_rial: Math.round((Number(it.qty) || 0) * (Number(it.unit_price_rial) || 0)) });
+            });
+            const total = items.reduce((s, it) => s + it.line_total_rial, 0);
+            return Object.assign({}, o, { items: items, total_rial: total, status_fa: PUR_PO_STATUS_FA_22A[o.status] || o.status, receipts_count: (live.purchase_receipts || []).filter((r) => r.po_id === o.id).length });
+        }).sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || '')));
+        return sendJson(res, {
+            ok: true,
+            suppliers: live.suppliers || [],
+            requests: prs,
+            quotes: (live.purchase_quotes || []).slice().sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || ''))),
+            orders: pos,
+            receipts: (live.purchase_receipts || []).slice().sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || ''))),
+            inventory_items: (live.inventory_items || []).filter((x) => x.active !== false).map((x) => ({ id: x.id, code: x.code, name: x.name, unit: x.unit, category: x.category || '' })),
+            vat_rate: (live.fin_config && Number(live.fin_config.vat_rate)) || 10,
+            today_jalali: finIsoToJalali(new Date().toISOString()),
+            kind_fa: PUR_KIND_FA_22A, pr_status_fa: PUR_PR_STATUS_FA_22A, po_status_fa: PUR_PO_STATUS_FA_22A,
+        });
+    }
+
+    if ((req.method === 'POST' || req.method === 'PUT') && pathname === '/api/purchase/suppliers') {
+        if (!auth.requireRole(req, PUR_WRITE_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت تأمین‌کننده فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22a(invEnsure(readLive()));
+                if (req.method === 'PUT') {
+                    const rec = (live.suppliers || []).find((x) => x.id === String(b.id || ''));
+                    if (!rec) return sendJson(res, { error: 'تأمین‌کننده یافت نشد.' }, 404);
+                    if (b.name != null) rec.name = String(b.name).trim().slice(0, 120) || rec.name;
+                    if (b.national_id != null) { const nid = finDigitsEn(String(b.national_id)).trim(); if (!/^[0-9]{10,14}$/.test(nid)) return sendJson(res, { error: 'شناسهٔ ملی/کد ملی باید ۱۰ تا ۱۴ رقم باشد (اقلام الزامی مؤدیان).' }, 400); rec.national_id = nid; }
+                    if (b.economic_id != null) rec.economic_id = finDigitsEn(String(b.economic_id)).trim().slice(0, 20);
+                    if (b.address != null) rec.address = String(b.address).trim().slice(0, 300);
+                    if (b.phone != null) rec.phone = finDigitsEn(String(b.phone || '')).trim().slice(0, 20);
+                    if (b.payment_term_days != null) rec.payment_term_days = Math.max(0, Math.round(Number(finDigitsEn(b.payment_term_days)) || 0));
+                    if (b.active != null) rec.active = !!b.active;
+                    rec.updated_at = new Date().toISOString();
+                    if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ تأمین‌کننده انجام نشد.');
+                    cache.data = null; cache.at = 0;
+                    auditLog(req, 'purchase.supplier.update', { id: rec.id });
+                    return sendJson(res, { ok: true, record: rec });
+                }
+                const name = String(b.name || '').trim();
+                if (name.length < 2) return sendJson(res, { error: 'نام تأمین‌کننده الزامی است.' }, 400);
+                if (!/^[0-9۰-۹]{10,14}$/.test(finDigitsEn(String(b.national_id || '')).trim())) return sendJson(res, { error: 'شناسهٔ ملی/کد ملی باید ۱۰ تا ۱۴ رقم باشد (اقلام الزامی مؤدیان).' }, 400);
+                const rec = {
+                    id: 'sup-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    name: name.slice(0, 120),
+                    national_id: finDigitsEn(String(b.national_id || '')).trim(),
+                    economic_id: finDigitsEn(String(b.economic_id || '')).trim().slice(0, 20),
+                    address: String(b.address || '').trim().slice(0, 300),
+                    phone: finDigitsEn(String(b.phone || '')).trim().slice(0, 20),
+                    payment_term_days: Math.max(0, Math.round(Number(finDigitsEn(b.payment_term_days)) || 0)),
+                    active: b.active === false ? false : true,
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(), updated_at: null,
+                };
+                live.suppliers.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ تأمین‌کننده انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.supplier.create', { id: rec.id, name: rec.name });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/requests') {
+        if (!auth.requireRole(req, PUR_WRITE_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت درخواست خرید فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22a(invEnsure(readLive()));
+                const itemsIn = Array.isArray(b.items) ? b.items.slice(0, 30) : [];
+                const items = [];
+                for (const it of itemsIn) {
+                    const kind = ['billet', 'material', 'part'].indexOf(String((it && it.kind) || '')) !== -1 ? String(it.kind) : '';
+                    if (!kind) return sendJson(res, { error: 'نوع هر قلم باید شمش، مواد یا قطعه باشد.' }, 400);
+                    const qty = round2(Number(finDigitsEn(it.qty)) || 0);
+                    if (!(qty > 0)) return sendJson(res, { error: 'مقدار درخواستی هر قلم باید بزرگ‌تر از صفر باشد.' }, 400);
+                    if (kind !== 'billet') {
+                        const hasItem = (live.inventory_items || []).some((x) => x.id === String((it && it.item_id) || '') && x.active !== false);
+                        if (!hasItem && String((it && it.item_name) || '').trim().length < 2) return sendJson(res, { error: 'برای قلم «' + (PUR_KIND_FA_22A[kind]) + '» کالای انبار را انتخاب یا نام کالای جدید را وارد کنید.' }, 400);
+                    }
+                    items.push({ kind: kind, item_id: String((it && it.item_id) || ''), item_name: String((it && it.item_name) || '').trim().slice(0, 80), grade: String((it && it.grade) || '').trim().slice(0, 20), qty: qty, qty_unit: kind === 'billet' ? 'تن' : (String((it && it.qty_unit) || '') === 'تن' ? 'تن' : 'عدد'), need_date_jalali: purValidJalali22a(it.need_date_jalali) || '' });
+                }
+                if (!items.length) return sendJson(res, { error: 'حداقل یک قلم به درخواست خرید اضافه کنید.' }, 400);
+                const dj = purValidJalali22a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                const rec = {
+                    id: 'pr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    pr_no: purNextNo22a(live, 'pr', 'PR'),
+                    items: items, date_jalali: dj, status: 'draft',
+                    notes: String(b.notes || '').trim().slice(0, 300),
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
+                    approved_at: null, cancelled_at: null,
+                };
+                live.purchase_requests.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ درخواست خرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.request.create', { pr_no: rec.pr_no, items: items.length });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && (pathname === '/api/purchase/requests/approve' || pathname === '/api/purchase/requests/cancel')) {
+        const isApprove = pathname === '/api/purchase/requests/approve';
+        if (!auth.requireRole(req, PUR_WRITE_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: تأیید/لغو فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22a(invEnsure(readLive()));
+                const pr = (live.purchase_requests || []).find((x) => x.id === String(b.id || '') || x.pr_no === String(b.id || ''));
+                if (!pr) return sendJson(res, { error: 'درخواست خرید یافت نشد.' }, 404);
+                const nowIso = new Date().toISOString();
+                if (isApprove) {
+                    if (pr.status !== 'draft') return sendJson(res, { error: 'فقط درخواست پیش‌نویس قابل تأیید است (وضعیت فعلی: ' + (PUR_PR_STATUS_FA_22A[pr.status] || pr.status) + ').' }, 409);
+                    pr.status = 'approved'; pr.approved_at = nowIso;
+                } else {
+                    if (pr.status === 'cancelled') return sendJson(res, { error: 'این درخواست قبلاً لغو شده است.' }, 409);
+                    if (pr.status === 'completed') return sendJson(res, { error: 'درخواست تکمیل‌شده قابل لغو نیست.' }, 409);
+                    const openPO = (live.purchase_orders || []).some((o) => o.pr_id === pr.id && o.status !== 'cancelled');
+                    if (openPO) return sendJson(res, { error: 'برای این درخواست سفارش خرید باز وجود دارد — ابتدا سفارش(ها) را لغو کنید.' }, 409);
+                    pr.status = 'cancelled'; pr.cancelled_at = nowIso; pr.cancel_reason = String(b.reason || '').trim().slice(0, 200);
+                }
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ تغییر وضعیت درخواست انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, isApprove ? 'purchase.request.approve' : 'purchase.request.cancel', { pr_no: pr.pr_no });
+                return sendJson(res, { ok: true, record: pr });
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/quotes') {
+        if (!auth.requireRole(req, PUR_WRITE_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت استعلام فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22a(invEnsure(readLive()));
+                const pr = (live.purchase_requests || []).find((x) => x.id === String(b.pr_id || '') || x.pr_no === String(b.pr_id || ''));
+                if (!pr) return sendJson(res, { error: 'درخواست خرید مرجع یافت نشد.' }, 404);
+                if (pr.status !== 'approved' && pr.status !== 'inquired' && pr.status !== 'ordered') return sendJson(res, { error: 'استعلام فقط برای درخواست تأییدشده مجاز است (وضعیت فعلی: ' + (PUR_PR_STATUS_FA_22A[pr.status] || pr.status) + ').' }, 409);
+                const sup = (live.suppliers || []).find((s) => s.id === String(b.supplier_id || '') && s.active !== false);
+                if (!sup) return sendJson(res, { error: 'تأمین‌کنندهٔ فعال انتخاب نشده است — ابتدا تأمین‌کننده را ثبت/فعال کنید.' }, 400);
+                const valid = purValidJalali22a(b.valid_until_jalali);
+                if (!valid) return sendJson(res, { error: 'مهلت اعتبار پیشنهاد شمسی نامعتبر است (نمونه: ۱۴۰۵/۰۷/۰۱).' }, 400);
+                const linesIn = Array.isArray(b.lines) ? b.lines.slice(0, 30) : [];
+                const lines = [];
+                for (const li of linesIn) {
+                    const idx = purIdx22a(li.item_index);
+                    const src = (pr.items || [])[idx];
+                    if (!src) return sendJson(res, { error: 'ردیف استعلام با درخواست خرید هم‌خوانی ندارد.' }, 400);
+                    const price = Math.round(Number(finDigitsEn(li.unit_price_rial)) || 0);
+                    if (price <= 0) return sendJson(res, { error: 'قیمت پیشنهادی برای «' + (src.item_name || PUR_KIND_FA_22A[src.kind]) + '» باید بزرگ‌تر از صفر باشد.' }, 400);
+                    lines.push({ item_index: idx, kind: src.kind, item_name: src.item_name || PUR_KIND_FA_22A[src.kind], qty: src.qty, qty_unit: src.qty_unit, unit_price_rial: price });
+                }
+                if (!lines.length) return sendJson(res, { error: 'حداقل قیمت یک ردیف را در استعلام وارد کنید.' }, 400);
+                const rec = {
+                    id: 'qt-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    pr_id: pr.id, pr_no: pr.pr_no,
+                    supplier_id: sup.id, supplier_name: sup.name,
+                    lines: lines, valid_until_jalali: valid,
+                    payment_terms: String(b.payment_terms || '').trim().slice(0, 200),
+                    lead_time_days: Math.max(0, Math.round(Number(finDigitsEn(b.lead_time_days)) || 0)),
+                    note: String(b.note || '').trim().slice(0, 200),
+                    chosen: false,
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
+                };
+                live.purchase_quotes.push(rec);
+                if (pr.status === 'approved') pr.status = 'inquired';
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ استعلام انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.quote.create', { pr_no: pr.pr_no, supplier: sup.name, lines: lines.length });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/orders') {
+        if (!auth.requireRole(req, PUR_WRITE_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: صدور سفارش خرید فقط برای واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22a(invEnsure(readLive()));
+                let sup = null, pr = null, itemsIn = null, chosenQuote = null;
+                if (b.quote_id) {
+                    chosenQuote = (live.purchase_quotes || []).find((q) => q.id === String(b.quote_id || ''));
+                    if (!chosenQuote) return sendJson(res, { error: 'استعلام انتخاب‌شده یافت نشد.' }, 404);
+                    if (chosenQuote.chosen) return sendJson(res, { error: 'از این استعلام قبلاً سفارش صادر شده است.' }, 409);
+                    sup = (live.suppliers || []).find((s) => s.id === chosenQuote.supplier_id && s.active !== false);
+                    pr = (live.purchase_requests || []).find((x) => x.id === chosenQuote.pr_id);
+                    if (!sup) return sendJson(res, { error: 'تأمین‌کنندهٔ استعلام فعال نیست.' }, 409);
+                    if (!pr) return sendJson(res, { error: 'درخواست خرید مرجع استعلام یافت نشد.' }, 404);
+                    itemsIn = chosenQuote.lines.map((l) => ({ kind: l.kind, item_id: ((pr.items || [])[l.item_index] || {}).item_id || '', item_name: l.item_name, grade: ((pr.items || [])[l.item_index] || {}).grade || '', qty: l.qty, qty_unit: l.qty_unit, unit_price_rial: l.unit_price_rial }));
+                } else {
+                    sup = (live.suppliers || []).find((s) => s.id === String(b.supplier_id || '') && s.active !== false);
+                    if (!sup) return sendJson(res, { error: 'تأمین‌کنندهٔ فعال انتخاب نشده است.' }, 400);
+                    if (b.pr_id) {
+                        pr = (live.purchase_requests || []).find((x) => x.id === String(b.pr_id || '') || x.pr_no === String(b.pr_id || ''));
+                        if (!pr) return sendJson(res, { error: 'درخواست خرید مرجع یافت نشد.' }, 404);
+                        if (pr.status !== 'approved' && pr.status !== 'inquired' && pr.status !== 'ordered') return sendJson(res, { error: 'سفارش فقط برای درخواست تأییدشده صادر می‌شود (وضعیت: ' + (PUR_PR_STATUS_FA_22A[pr.status] || pr.status) + ').' }, 409);
+                    }
+                    itemsIn = Array.isArray(b.items) ? b.items.slice(0, 30) : [];
+                }
+                const items = [];
+                for (const it of itemsIn) {
+                    const kind = ['billet', 'material', 'part'].indexOf(String((it && it.kind) || '')) !== -1 ? String(it.kind) : '';
+                    if (!kind) return sendJson(res, { error: 'نوع هر قلم سفارش باید شمش، مواد یا قطعه باشد.' }, 400);
+                    const qty = round2(Number(finDigitsEn(it.qty)) || 0);
+                    if (!(qty > 0)) return sendJson(res, { error: 'مقدار هر قلم سفارش باید بزرگ‌تر از صفر باشد.' }, 400);
+                    const price = Math.round(Number(finDigitsEn(it.unit_price_rial)) || 0);
+                    if (price <= 0) return sendJson(res, { error: 'قیمت هر ' + (it.qty_unit === 'تن' ? 'تن' : 'عدد') + ' برای قلم «' + (it.item_name || PUR_KIND_FA_22A[kind]) + '» الزامی است.' }, 400);
+                    items.push({ kind: kind, item_id: String((it && it.item_id) || ''), item_name: String((it && it.item_name) || '').trim().slice(0, 80) || PUR_KIND_FA_22A[kind], grade: String((it && it.grade) || '').trim().slice(0, 20), qty: qty, qty_unit: kind === 'billet' ? 'تن' : (String((it && it.qty_unit) || '') === 'تن' ? 'تن' : 'عدد'), unit_price_rial: price });
+                }
+                if (!items.length) return sendJson(res, { error: 'حداقل یک قلم به سفارش خرید اضافه کنید.' }, 400);
+                const dj = purValidJalali22a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                /* سررسید تحویل: صریح → از استعلام (امروز + lead_time_days) → از تاریخ نیاز اقلام PR → امروز+۱۴ روز */
+                let ddj = purValidJalali22a(b.delivery_due_jalali);
+                if (!ddj) {
+                    const todayJ22a = finIsoToJalali(new Date().toISOString());
+                    const baseTs22a = Date.parse(planJalaliToTs(todayJ22a, 12));
+                    const leadDays22a = chosenQuote ? (Number(chosenQuote.lead_time_days) || 14) : 0;
+                    const needJ22a = pr ? (pr.items || []).map((x) => x.need_date_jalali).filter(Boolean).sort()[0] : '';
+                    const needTs22a = needJ22a ? Date.parse(planJalaliToTs(needJ22a, 12)) : 0;
+                    if (!chosenQuote && needTs22a > 0) ddj = finIsoToJalali(new Date(needTs22a).toISOString());
+                    else if (baseTs22a) ddj = finIsoToJalali(new Date(baseTs22a + leadDays22a * 86400000).toISOString());
+                    else ddj = purValidJalali22a(b.delivery_due_jalali);
+                }
+                if (!ddj) return sendJson(res, { error: 'سررسید تحویل شمسی نامعتبر است (نمونه: ۱۴۰۵/۰۶/۲۵).' }, 400);
+                const vatRate = (live.fin_config && Number(live.fin_config.vat_rate)) || 10;
+                const rec = {
+                    id: 'po-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    po_no: purNextNo22a(live, 'po', 'PO'),
+                    supplier_id: sup.id, supplier_name: sup.name,
+                    pr_id: pr ? pr.id : '', pr_no: pr ? pr.pr_no : '',
+                    quote_id: chosenQuote ? chosenQuote.id : '',
+                    items: items, date_jalali: dj, delivery_due_jalali: ddj,
+                    vat_rate: vatRate, status: 'issued',
+                    notes: String(b.notes || '').trim().slice(0, 300),
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
+                    cancelled_at: null,
+                };
+                live.purchase_orders.push(rec);
+                if (pr) { pr.status = 'ordered'; }
+                if (chosenQuote) { chosenQuote.chosen = true; }
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ سفارش خرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.order.create', { po_no: rec.po_no, supplier: sup.name, items: items.length, from_quote: chosenQuote ? chosenQuote.id : null });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/orders/cancel') {
+        if (!auth.requireRole(req, PUR_WRITE_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = purEnsure22a(invEnsure(readLive()));
+                const po = (live.purchase_orders || []).find((o) => o.id === String(b.id || '') || o.po_no === String(b.id || ''));
+                if (!po) return sendJson(res, { error: 'سفارش خرید یافت نشد.' }, 404);
+                if (po.status === 'cancelled') return sendJson(res, { error: 'این سفارش قبلاً لغو شده است.' }, 409);
+                if (po.status === 'completed') return sendJson(res, { error: 'سفارش تکمیل‌شده قابل لغو نیست.' }, 409);
+                const got = (live.purchase_receipts || []).some((r) => r.po_id === po.id && r.status !== 'returned');
+                if (got) return sendJson(res, { error: 'برای این سفارش رسید خرید ثبت شده است — قابل لغو نیست (برگشت از طریق فاکتور خرید انجام می‌شود).' }, 409);
+                po.status = 'cancelled'; po.cancelled_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ لغو سفارش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.order.cancel', { po_no: po.po_no });
+                return sendJson(res, { ok: true, record: po });
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    /* پوشهٔ آپلود گواهی ذوب — در کنار سرور (خارج از public) */
+    const PUR_UPLOAD_DIR_22A = path.join(__dirname, 'uploads', 'purchase');
+    function purSaveCert22a(base64, name, receiptNo, lineIdx) {
+        const clean = String(base64 || '').replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+        if (!clean) return null;
+        if (!/^[A-Za-z0-9+/=]+$/.test(clean)) throw new Error('فایل گواهی ذوب معتبر نیست (باید base64 باشد).');
+        if (clean.length > 3000000) throw new Error('حجم فایل گواهی ذوب بیش از حد مجاز است (حداکثر ~۲ مگابایت).');
+        let ext = 'pdf';
+        const nm = String(name || '').toLowerCase();
+        if (/\.png$/.test(nm)) ext = 'png'; else if (/\.jpe?g$/.test(nm)) ext = 'jpg'; else if (/\.pdf$/.test(nm)) ext = 'pdf'; else ext = '';
+        if (!ext) throw new Error('فرمت گواهی ذوب باید PDF یا JPG/PNG باشد.');
+        try { fs.mkdirSync(PUR_UPLOAD_DIR_22A, { recursive: true }); } catch (e) { /* موجود */ }
+        const fname = 'cert-' + String(receiptNo).replace(/[^A-Za-z0-9-]/g, '') + '-L' + lineIdx + '-' + Date.now() + '.' + ext;
+        fs.writeFileSync(path.join(PUR_UPLOAD_DIR_22A, fname), Buffer.from(clean, 'base64'));
+        return { file: fname, name: String(name || '').slice(0, 120), size: Buffer.from(clean, 'base64').length };
+    }
+
+    if (req.method === 'GET' && pathname === '/api/purchase/cert') {
+        if (!auth.requireRole(req, PUR_READ_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const u = new URL(req.url, 'http://localhost');
+        const file = String(u.searchParams.get('file') || '');
+        const recId = String(u.searchParams.get('receipt') || '');
+        const live = purEnsure22a(invEnsure(readLive()));
+        const rec = (live.purchase_receipts || []).find((x) => x.id === recId);
+        const line = rec && (rec.lines || []).find((l) => l.cert_file === file);
+        if (!rec || !line || !file || file.indexOf('/') !== -1 || file.indexOf('..') !== -1 || !line.cert_file) return sendJson(res, { error: 'گواهی یافت نشد.' }, 404);
+        const full = path.join(PUR_UPLOAD_DIR_22A, file);
+        if (!full.startsWith(PUR_UPLOAD_DIR_22A) || !fs.existsSync(full)) return sendJson(res, { error: 'فایل گواهی روی دیسک یافت نشد.' }, 404);
+        const ext = file.slice(file.lastIndexOf('.') + 1);
+        const mime = ext === 'pdf' ? 'application/pdf' : (ext === 'png' ? 'image/png' : 'image/jpeg');
+        res.writeHead(200, { 'Content-Type': mime, 'Content-Disposition': 'attachment; filename="' + file + '"', 'Cache-Control': 'no-store' });
+        res.end(fs.readFileSync(full));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/purchase/receipts') {
+        if (!auth.requireRole(req, PUR_RCPT_22A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت رسید خرید فقط برای انباردار/واحد خرید مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                /* گواهی‌های base64 پیش از پاک‌سازی عمومی جدا می‌شوند (سقف رشتهٔ SEC-15b آن‌ها را برش می‌زند) */
+                const parsed = JSON.parse(raw || '{}');
+                const certMap = {};
+                (Array.isArray(parsed.lines) ? parsed.lines : []).forEach((l, i) => {
+                    if (l && typeof l.cert_data === 'string' && l.cert_data.length > 0) certMap[i] = { data: l.cert_data, name: String(l.cert_name || '').slice(0, 120) };
+                });
+                const b = sanitizeInput15b(parsed);
+                const live = purEnsure22a(invEnsure(readLive()));
+                const po = (live.purchase_orders || []).find((o) => o.id === String(b.po_id || '') || o.po_no === String(b.po_id || ''));
+                if (!po) return sendJson(res, { error: 'سفارش خرید یافت نشد.' }, 404);
+                if (po.status !== 'issued' && po.status !== 'received') return sendJson(res, { error: 'رسید فقط برای سفارش صادرشده/تحویل‌گرفته مجاز است (وضعیت فعلی: ' + (PUR_PO_STATUS_FA_22A[po.status] || po.status) + ').' }, 409);
+                const sup = (live.suppliers || []).find((s) => s.id === po.supplier_id);
+                if (!sup) return sendJson(res, { error: 'تأمین‌کنندهٔ سفارش یافت نشد.' }, 404);
+                const dj = purValidJalali22a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                const linesIn = Array.isArray(b.lines) ? b.lines.slice(0, 30) : [];
+                if (!linesIn.length) return sendJson(res, { error: 'حداقل یک ردیف رسید (انتخاب ردیف سفارش + مقدار) لازم است.' }, 400);
+                const nowIso = new Date().toISOString();
+                const lines = [];
+                const invReceipts = [];
+                for (let i = 0; i < linesIn.length; i++) {
+                    const li = linesIn[i];
+                    const poLine = purIdx22a(li.po_line);
+                    const src = (po.items || [])[poLine];
+                    if (!src) return sendJson(res, { error: 'ردیف رسید ' + (i + 1) + ' با اقلام سفارش هم‌خوانی ندارد.' }, 400);
+                    const qty = round2(Number(finDigitsEn(li.qty)) || 0);
+                    if (!(qty > 0)) return sendJson(res, { error: 'مقدار ردیف ' + (i + 1) + ' باید بزرگ‌تر از صفر باشد.' }, 400);
+                    const got = purReceivedOf22a(live, po.po_no, poLine);
+                    if (got + qty > (Number(src.qty) || 0) * 1.05 + 1e-9) {
+                        return sendJson(res, { error: 'جمع رسید ردیف «' + (src.item_name || PUR_KIND_FA_22A[src.kind]) + '» از مقدار سفارش بیشتر است (سفارش: ' + salesFmt21a(src.qty) + ' — قبلاً رسیده: ' + salesFmt21a(got) + ' — این رسید: ' + salesFmt21a(qty) + ').' }, 409);
+                    }
+                    let item, unit, lotNo = String(li.lot_no || '').trim().slice(0, 60), loc = String(li.location || '').trim().slice(0, 60);
+                    let heat = String(li.heat_number || '').trim().slice(0, 40);
+                    if (src.kind === 'billet') {
+                        if (!heat) return sendJson(res, { error: 'کد هیت (Heat Number) برای شمش ردیف ' + (i + 1) + ' الزامی است — ردگیری ذوب و گواهی آنالیز.' }, 400);
+                        item = purBilletItem22a(live); unit = 'تن';
+                        if (!lotNo) lotNo = heat;
+                    } else {
+                        item = purMaterialItem22a(live, src.kind, src.item_id, src.item_name, src.qty_unit);
+                        unit = item.unit || 'عدد';
+                        if (!lotNo) lotNo = item.code;
+                    }
+                    let cert = null;
+                    if (certMap[i]) cert = purSaveCert22a(certMap[i].data, certMap[i].name, 'R' + Math.floor(Date.now() / 1000) % 100000000, i);
+                    lines.push({ po_line: poLine, kind: src.kind, item_id: item.id, item_name: item.name, grade: src.grade || '', qty: qty, qty_unit: src.qty_unit || unit, unit_price_rial: Number(src.unit_price_rial) || 0, heat_number: heat, lot_no: lotNo, location: loc, cert_name: cert ? cert.name : '', cert_file: cert ? cert.file : '', cert_size: cert ? cert.size : 0 });
+                    invReceipts.push({ id: 'grn-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: 'purchase:' + po.po_no + ':' + poLine + ':' + Date.now() + (i > 0 ? '-' + (i + 1) : ''), receipt_no: 'GRN-' + Date.now() + (i > 0 ? '-' + (i + 1) : ''), item_id: item.id, quantity: qty, unit: unit, lot_no: lotNo, warehouse: purWarehouseFor22a(src.kind), location: loc || 'PURCHASE', stock_status: 'available', receipt_type: 'purchase', supplier: sup.name, document_no: po.po_no, source_ref: '', heat_number: heat, description: ('رسید خرید — سفارش ' + po.po_no + ' — ' + sup.name).slice(0, 500), timestamp: nowIso, operator_id: String((req.user && (req.user.name || req.user.username)) || '') });
+                }
+                const receiptNo = purNextNo22a(live, 'receipt', 'GRN');
+                invReceipts.forEach((r) => { r.source_ref = receiptNo; });
+                /* سند خودکار رسید: بدهکار موجودی (شمش 110001 / مواد و قطعات 110005) / بستانکار پرداختنی تأمین‌کننده */
+                purEnsureAccounts22a(live);
+                const accByCode22a = {};
+                (live.fin_accounts || []).forEach((a) => { accByCode22a[a.code] = a; });
+                const apAcc = purApAccount22a(live, sup);
+                if (!accByCode22a['110001'] || !accByCode22a['110005']) return sendJson(res, { error: 'حساب‌های موجودی (۱۱۰۰۰۱/۱۱۰۰۰۵) در کدینگ مالی یافت نشد — ابتدا تب مالی را باز کنید.' }, 409);
+                if (!apAcc) return sendJson(res, { error: 'حساب پرداختنی تأمین‌کننده ساخته نشد.' }, 409);
+                const booked = round2(lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_price_rial) || 0), 0));
+                if (!(booked > 0)) return sendJson(res, { error: 'بهای اقلام رسید صفر است — قیمت سفارش را بررسی کنید.' }, 409);
+                const finLines = [];
+                const billetVal = round2(lines.filter((l) => l.kind === 'billet').reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_price_rial) || 0), 0));
+                const matVal = round2(booked - billetVal);
+                if (billetVal > 0) finLines.push({ account_id: accByCode22a['110001'].id, debit: billetVal, ref_id: receiptNo, note: 'ورود شمش — ' + po.po_no });
+                if (matVal > 0) finLines.push({ account_id: accByCode22a['110005'].id, debit: matVal, ref_id: receiptNo, note: 'ورود مواد/قطعات — ' + po.po_no });
+                finLines.push({ account_id: apAcc.id, credit: booked, ref_id: receiptNo, note: 'پرداختنی ' + sup.name });
+                finPostDoc(live, { source: 'purchase', ref_module: 'purchase', ref_id: 'grn:' + receiptNo, date_jalali: dj, desc: 'رسید خرید ' + receiptNo + ' — ' + sup.name + ' — سفارش ' + po.po_no, lines: finLines, created_by: String((req.user && (req.user.name || req.user.username)) || '') });
+                invReceipts.forEach((r) => live.inventory_receipts.push(r));
+                const rec = {
+                    id: 'prcpt-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    receipt_no: receiptNo, po_id: po.id, po_no: po.po_no,
+                    supplier_id: sup.id, supplier_name: sup.name,
+                    lines: lines, date_jalali: dj,
+                    vehicle_plate: String(b.vehicle_plate || '').trim().slice(0, 30), driver: String(b.driver || '').trim().slice(0, 60),
+                    weighbridge_no: String(b.weighbridge_no || '').trim().slice(0, 40),
+                    booked_value_rial: Math.round(booked), doc_nos: invReceipts.map((r) => r.receipt_no),
+                    status: 'confirmed', invoice_no: '',
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: nowIso,
+                };
+                live.purchase_receipts.push(rec);
+                if (po.status === 'issued') po.status = 'received';
+                /* تکمیل با تحمل صنعتی ±۵٪ (رسید جزئی زیر مقدار سفارش هم سفارش را می‌بندد) */
+                const allDone = (po.items || []).every((it, idx) => purReceivedOf22a(live, po.po_no, idx) >= (Number(it.qty) || 0) * 0.95 - 1e-9);
+                if (allDone) po.status = 'completed';
+                const prOf = po.pr_id ? (live.purchase_requests || []).find((x) => x.id === po.pr_id) : null;
+                if (prOf && prOf.status === 'ordered') {
+                    const related = (live.purchase_orders || []).filter((o) => o.pr_id === prOf.id);
+                    if (related.length && related.every((o) => o.status === 'completed' || o.status === 'cancelled')) prOf.status = 'completed';
+                }
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ رسید خرید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'purchase.receipt.create', { receipt_no: receiptNo, po_no: po.po_no, booked: booked, lines: lines.length });
+                return sendJson(res, { ok: true, record: rec, receipts: invReceipts, po_status: po.status, booked_value_rial: Math.round(booked) }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت رسید ناموفق: ' + e.message }, 409); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    // ===== FEAT-PURCHASE-22a (end) =====
+
 
    if (pathname.startsWith('/api/')) {
         loadData().then((d) => {
