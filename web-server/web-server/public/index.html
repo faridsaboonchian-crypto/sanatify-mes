@@ -1781,6 +1781,99 @@
                 <div class="tablewrap" style="max-height:430px;overflow-y:auto"><table id="tbl-qc-incoming24"></table></div>
             </div>
             <!-- ===== FEAT-QC-PRO-24a (end) ===== -->
+            <!-- ============================================================ -->
+            <!-- ===== FEAT-QC-PRO-24b (begin): گواهی کیفیت MTC + عدم انطباق NCR + گزارش‌ها -->
+            <!-- ============================================================ -->
+            <div class="panel">
+                <h2>📜 گواهی کیفیت (MTC — EN 10204 3.1)</h2>
+                <p class="note">صدور per حوالهٔ فروش/سفارش: هدر با لوگوی سازمان + مشخصات محصول (گرید/استاندارد/سایز/هیت/وزن) + جدول آنالیز شیمیایی و مکانیکی per هیت + QR تأیید آنلاین. نتایج فقط از آزمون ورودی تأییدشده یا آزمایشگاه QC خوانده می‌شود — بدون نتیجهٔ واقعی گواهی صادر نمی‌شود. سفارش صادراتی بدون MTC فاکتور نمی‌شود (۴۰۹).</p>
+                <div class="kpis" id="qcMtcKpis24"></div>
+                <div class="toolbar">
+                    <button class="act" id="qcMtcIssue24" style="display:none">📜 صدور MTC</button>
+                    <button class="act excel" id="qcMtcXls24">اکسل MTCها 📊</button>
+                </div>
+                <div id="qcMtcForm24" class="filters hidden">
+                    <div class="frow">
+                        <label>حوالهٔ فروش (بدون MTC): <select id="qcMtcExit24" class="fsel" style="min-width:280px"></select></label>
+                        <label>کد هیت (خالی = هیت‌های سایز): <input id="qcMtcHeat24" style="width:150px" placeholder="HT-1405-…"></label>
+                    </div>
+                    <div class="frow">
+                        <label style="flex:1">یادداشت: <input id="qcMtcNotes24" placeholder="اختیاری"></label>
+                    </div>
+                    <div id="qcMtcReady24" class="note" style="flex:1 1 100%;margin:2px 0 0"></div>
+                    <div class="toolbar">
+                        <button class="act" id="qcMtcSave24" style="background:#15803d">صدور گواهی</button>
+                        <button class="act" id="qcMtcCancel24">بستن</button>
+                        <span class="note" id="qcMtcMsg24"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:360px;overflow-y:auto"><table id="tbl-qc-mtc24"></table></div>
+                <div id="mtcSheetWrap24" class="filters hidden">
+                    <div class="note" style="margin-bottom:6px">پیش‌نمایش گواهی (A4) — خروجی چاپ یا PDF:</div>
+                    <div id="mtcSheet24" style="background:#fff;color:#111;border:1px solid #cbd5e1;border-radius:6px;padding:14px;max-width:860px"></div>
+                    <div class="toolbar" style="margin-top:8px">
+                        <button class="act" id="qcMtcPrint24">🖨 چاپ A4</button>
+                        <button class="act" id="qcMtcPdf24">📄 PDF (jsPDF)</button>
+                        <button class="act" id="qcMtcClose24">بستن</button>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>⚠️ عدم انطباق (NCR — Non-Conformance Report)</h2>
+                <p class="note">per باندل/هیت/رسید خرید — نوع (شیمیایی/مکانیکی/ابعادی/ظاهری) + شدت (جزئی/عمده/بحرانی) + اقدام اصلاحی (دوباره‌کاری/ارفاق استفاده/رد). NCR بازِ عمده/بحرانی یا با اقدام رد → باندل/هیت قابل فروش نیست (حواله ۴۰۹ NCR_OPEN). بستن با اقدام «رد» → قرنطینهٔ ردیف‌های فیزیکی + سند خودکار زیان ضایعات (۵۲۰۰۰۱) از موتور واحد مالی.</p>
+                <div class="kpis" id="qcNcrKpis24"></div>
+                <div class="toolbar">
+                    <button class="act" id="qcNcrAdd24" style="display:none">➕ ثبت عدم انطباق</button>
+                    <button class="act excel" id="qcNcrXls24">اکسل NCRها 📊</button>
+                </div>
+                <div id="qcNcrForm24" class="filters hidden">
+                    <div class="frow">
+                        <label>محدوده: <select id="qcNcrScope24" class="fsel"><option value="bundle">باندل تولید</option><option value="heat">هیت (کلی)</option><option value="receipt">رسید خرید</option></select></label>
+                        <label>باندل: <select id="qcNcrBundle24" class="fsel" style="min-width:190px"></select></label>
+                        <label>هیت: <input id="qcNcrHeat24" style="width:130px" placeholder="HT-1405-…"></label>
+                        <label>رسید: <input id="qcNcrRcpt24" style="width:150px" placeholder="GRN-…"></label>
+                        <label>سایز: <input id="qcNcrSize24" style="width:70px" placeholder="16"></label>
+                    </div>
+                    <div class="frow">
+                        <label>نوع: <select id="qcNcrType24" class="fsel"><option value="chem">شیمیایی</option><option value="mech">مکانیکی</option><option value="dim">ابعادی</option><option value="visual">ظاهری</option></select></label>
+                        <label>شدت: <select id="qcNcrSev24" class="fsel"><option value="minor">جزئی (Minor)</option><option value="major">عمده (Major)</option><option value="critical">بحرانی (Critical)</option></select></label>
+                        <label>اقدام اصلاحی: <select id="qcNcrAct24" class="fsel"><option value="rework">دوباره‌کاری</option><option value="concession">ارفاق استفاده</option><option value="rejection">رد (Rejection)</option></select></label>
+                        <label>تناژ (تن): <input id="qcNcrQty24" style="width:80px" placeholder="خودکار"></label>
+                    </div>
+                    <div class="frow">
+                        <label style="flex:1">شرح عدم انطباق: <input id="qcNcrDesc24" placeholder="شرح دقیق مشاهدات (الزامی)"></label>
+                    </div>
+                    <div class="toolbar">
+                        <button class="act" id="qcNcrSave24" style="background:#b91c1c">ثبت NCR</button>
+                        <button class="act" id="qcNcrCancel24">بستن</button>
+                        <span class="note" id="qcNcrMsg24"></span>
+                    </div>
+                </div>
+                <div class="tablewrap" style="max-height:380px;overflow-y:auto"><table id="tbl-qc-ncr24"></table></div>
+            </div>
+            <div class="panel">
+                <h2>📊 گزارش‌های کنترل کیفیت</h2>
+                <p class="note">نرخ رد QC ورودی per تأمین‌کننده (مکمل ارزیابی تأمین‌کنندگان فاز ۱۴) + نرخ عدم انطباق per گرید/سایز/ماه + لیست گواهی‌های MTC صادرشده با فیلتر بازهٔ شمسی و مشتری.</p>
+                <div class="toolbar">
+                    <button class="act" id="qcRepLoad24">🔄 بروزرسانی گزارش‌ها</button>
+                    <button class="act excel" id="qcRepSupXls24">اکسل نرخ رد تأمین‌کننده 📊</button>
+                    <button class="act excel" id="qcRepNcrXls24">اکسل NCR تجمیعی 📊</button>
+                </div>
+                <div class="frow">
+                    <label>از تاریخ (MTC): <input id="qcRepFrom24" placeholder="۱۴۰۵/۰۱/۰۱" style="width:110px"></label>
+                    <label>تا تاریخ (MTC): <input id="qcRepTo24" placeholder="۱۴۰۵/۱۲/۲۹" style="width:110px"></label>
+                    <label>مشتری (MTC): <input id="qcRepCust24" style="width:160px" placeholder="جست‌وجوی مشتری"></label>
+                </div>
+                <div class="kpis" id="qcRepKpis24"></div>
+                <h3 style="margin:10px 0 4px;font-size:14px">نرخ رد QC ورودی per تأمین‌کننده</h3>
+                <div class="tablewrap" style="max-height:230px;overflow-y:auto"><table id="tbl-qc-repsup24"></table></div>
+                <h3 style="margin:10px 0 4px;font-size:14px">عدم انطباق per گرید / سایز / ماه</h3>
+                <div class="tablewrap" style="max-height:210px;overflow-y:auto"><table id="tbl-qc-repncr24"></table></div>
+                <h3 style="margin:10px 0 4px;font-size:14px">گواهی‌های MTC صادرشده (فیلترشده)</h3>
+                <div class="tablewrap" style="max-height:260px;overflow-y:auto"><table id="tbl-qc-repmtc24"></table></div>
+            </div>
+            <!-- ===== FEAT-QC-PRO-24b (end) ===== -->
+
 
             </div>
         </section>
@@ -2870,6 +2963,10 @@
                 <p class="note">زنجیرهٔ فروش: مشتری → لیست قیمت → سفارش (SO-xxxxx) → تأیید و رزرو تناژ از انبار محصول (ستون «رزرو» در تب انبار) → حوالهٔ خروج با وزن واقعی باسکول (ارسال جزئی مجاز، چند حواله per سفارش) → تکمیل؛ لغو سفارش → آزادسازی رزرو. دسترسی: واحد فروش/مدیر = ثبت و تأیید، انباردار = ثبت حواله، مدیریت/مالی = فقط مشاهده. مالیات بر ارزش افزوده هنگام صدور فاکتور از fin_config اعمال می‌شود (نرخ فعلی: <span id="salVatNote">…</span>٪).</p>
                 <div class="kpis" id="salKpis"></div>
             </div>
+                <!-- ===== FEAT-QC-PRO-24b (begin): هشدارهای کنترل کیفیت در تب فروش — NCR باز / سفارش صادراتی بدون MTC ===== -->
+                <div id="qcSalesWarn24" class="filters hidden" style="border:1px solid #f59e0b;background:rgba(245,158,11,0.08)"></div>
+                <!-- ===== FEAT-QC-PRO-24b (end) ===== -->
+
             <div class="panel">
                 <h2>👥 مشتریان</h2>
                 <p class="note">اقلام الزامی صورتحساب (سامانهٔ مؤدیان): نام، شناسهٔ ملی/کد ملی، شمارهٔ اقتصادی، نشانی و تلفن — سقف اعتبار (ریال) و مهلت پرداخت (روز) برای هشدار عبور از اعتبار هنگام سفارش جدید.</p>
@@ -2943,6 +3040,7 @@
                     </div>
                     <div class="frow">
                         <label style="flex:1">یادداشت: <input id="salOrderNotes" placeholder="اختیاری"></label>
+                        <label id="qcExpWrap24" style="display:none"><input type="checkbox" id="qcExpChk24"> سفارش صادراتی (MTC الزامی 🌍)</label> <!-- FEAT-QC-PRO-24b -->
                     </div>
                     <div class="toolbar">
                         <button class="act" id="salOrderSave">ثبت سفارش</button>
@@ -4715,7 +4813,7 @@ document.getElementById('invStockSearch')?.addEventListener('input', function ()
                     items.push({ size: size, qty_ton: qty, pieces: salEn21a(row.querySelector('.sal-it-pieces').value), unit_price_rial: salEn21a(row.querySelector('.sal-it-price').value) });
                 });
                 if (!items.length) { salMsg21a('salOrderMsg', 'حداقل یک قلم با سایز و تناژ کامل کنید.', true); return; }
-                const body = { customer_id: document.getElementById('salOrderCust').value, items: items, date_jalali: salEn21a(document.getElementById('salOrderDate').value), due_date_jalali: salEn21a(document.getElementById('salOrderDue').value), notes: document.getElementById('salOrderNotes').value };
+                const body = { customer_id: document.getElementById('salOrderCust').value, items: items, date_jalali: salEn21a(document.getElementById('salOrderDate').value), due_date_jalali: salEn21a(document.getElementById('salOrderDue').value), notes: document.getElementById('salOrderNotes').value, is_export: !!(document.getElementById('qcExpChk24') && document.getElementById('qcExpChk24').checked) }; /* FEAT-QC-PRO-24b */
                 salMsg21a('salOrderMsg', 'در حال ثبت…');
                 try {
                     const r = await fetch('/api/sales/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -7881,6 +7979,346 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', qcWrapLoader24); else setTimeout(qcWrapLoader24, 0);
 })();
 // ===== FEAT-QC-PRO-24a (end) =====
+// ===== FEAT-QC-PRO-24b (begin): کلاینت MTC + NCR + گزارش‌ها + هشدارهای تب فروش =====
+(function () {
+    let qcRep24 = null, qcMtcCurrent24 = null;
+    const qe24 = (id) => document.getElementById(id);
+    function qcNcrW24() { return WEB_ROLE === 'admin' || WEB_ROLE === 'owner' || WEB_ROLE === 'qc'; }
+    function qcMsg24b(id, text, isErr) { const el = qe24(id); if (!el) return; el.textContent = text || ''; el.style.color = isErr ? '#b91c1c' : ''; }
+    function qcTons24(n) { return fa(Math.round((Number(n) || 0) * 1000) / 1000); }
+    async function qcLoadRep24() {
+        try {
+            const r = await fetch('/api/qcpro/reports', { cache: 'no-store' });
+            if (!r.ok) { qcRep24 = null; qcRenderMtc24(); return; }
+            qcRep24 = await r.json();
+            qcRenderMtc24(); qcRenderNcr24(); qcRenderReports24(); qcRenderSalesWarn24();
+        } catch (e) { qcRenderMtc24(); }
+    }
+    /* ---------- MTC ---------- */
+    function qcRenderMtc24() {
+        const el = qe24('tbl-qc-mtc24'); if (!el) return;
+        const rows = (qcRep24 && qcRep24.mtc) || [];
+        const kEl = qe24('qcMtcKpis24');
+        if (kEl) {
+            const ex = rows.filter((m) => m.is_export).length;
+            kEl.innerHTML = [
+                { l: 'MTC صادرشده', v: fa(rows.length) },
+                { l: 'MTC صادراتی', v: fa(ex) },
+                { l: 'حواله در انتظار گواهی', v: fa(((qcRep24 && qcRep24.mtc_candidates) || []).length), c: ((qcRep24 && qcRep24.mtc_candidates) || []).length ? 'amber' : '' },
+                { l: 'سفارش صادراتی بدون MTC', v: fa(((qcRep24 && qcRep24.export_orders_without_mtc) || []).length), c: ((qcRep24 && qcRep24.export_orders_without_mtc) || []).length ? 'red' : '' },
+            ].map((k) => '<div class="kpi"><div class="kl">' + k.l + '</div><div class="kv ' + (k.c || '') + '">' + k.v + '</div></div>').join('');
+        }
+        const addBtn = qe24('qcMtcIssue24'); if (addBtn) addBtn.style.display = qcNcrW24() ? '' : 'none';
+        let html = '<thead><tr><th>شماره MTC</th><th>تاریخ</th><th>حواله / سفارش</th><th>مشتری</th><th>سایز / گرید</th><th>استاندارد</th><th>هیت‌ها</th><th>وزن (تن)</th><th>نوع</th><th>صادره از</th><th>عملیات</th></tr></thead><tbody>';
+        if (!rows.length) html += '<tr><td colspan="11" class="empty">MTC صادر نشده است.</td></tr>';
+        rows.forEach((m) => {
+            html += '<tr><td><b>' + esc(m.mtc_no) + '</b></td><td>' + toFaDigits(m.date_jalali || '—') + '</td><td>' + esc(m.exit_no || '—') + '<br><span style="font-size:10px;color:#64748b">' + esc(m.order_no || '') + '</span></td><td>' + esc(m.customer_name || '—') + '</td><td>' + toFaDigits(m.size) + ' / ' + esc(m.grade) + '</td><td>' + esc(m.standard || '—') + '</td><td style="font-size:10px">' + esc((m.heat_numbers || []).join('، ')) + '</td><td>' + qcTons24(m.weight_ton) + '</td>'
+                + '<td>' + (m.is_export ? '<span class="chip no">صادراتی</span>' : '<span class="chip ok">داخلی</span>') + '</td><td style="font-size:11px">' + esc(m.issued_by || '—') + '</td>'
+                + '<td style="white-space:nowrap"><button class="act" data-qcmtcshow="' + esc(m.id) + '">نمایش/چاپ</button> <a class="act" style="text-decoration:none" href="/api/qcpro/mtc/verify/' + esc(m.verify_id) + '" target="_blank" rel="noopener">تأیید آنلاین</a></td></tr>';
+        });
+        el.innerHTML = html + '</tbody>';
+        el.querySelectorAll('button[data-qcmtcshow]').forEach((b) => b.addEventListener('click', () => {
+            const m = rows.find((x) => x.id === b.dataset.qcmtcshow); if (m) qcShowSheet24(m);
+        }));
+    }
+    function qcMtcFillForm24() {
+        const sel = qe24('qcMtcExit24'); if (!sel) return;
+        const cands = (qcRep24 && qcRep24.mtc_candidates) || [];
+        sel.innerHTML = '<option value="">— انتخاب حوالهٔ فروش —</option>' + cands.map((c) => '<option value="' + esc(c.exit_id) + '">' + esc(c.exit_no) + ' — ' + esc(c.customer_name || '') + ' — سایز ' + toFaDigits(c.size) + ' — ' + qcTons24(c.weight_ton) + ' تن' + (c.is_export ? ' 🌍صادراتی' : '') + (c.tests_ready ? '' : ' (آزمون ناقص!)') + '</option>').join('');
+        const info = qe24('qcMtcReady24');
+        if (info) info.textContent = cands.length ? 'برای صدور MTC، هیت‌های سایز انتخابی باید آزمون شیمیایی+مکانیکی تأییدشده داشته باشند (آزمون ورودی یا آزمایشگاه QC). حواله‌های با علامت «آزمون ناقص» رد می‌شوند.' : 'حوالهٔ فاکتورنشده‌ای بدون MTC وجود ندارد — ابتدا از تب فروش حواله ثبت کنید.';
+    }
+    /* برگ A4 — HTML گواهی */
+    function qcMtcSheetHtml24(m, forPrint) {
+        const t = (typeof TENANT_15A !== 'undefined' && TENANT_15A) || {};
+        const cs = t.custom_settings || {};
+        const logo = t.logo && String(t.logo).indexOf('data:') !== 0 ? '<img src="' + esc(t.logo) + '" style="height:64px;object-fit:contain">' : (t.logo && String(t.logo).indexOf('data:') === 0 ? '<img src="' + esc(t.logo) + '" style="height:64px;object-fit:contain">' : '');
+        const g24 = m.tests || {};
+        const heats = m.heat_numbers || [];
+        const elFa = { C: 'C کربن', Mn: 'Mn منگنز', Si: 'Si سیلیس', P: 'P فسفر', S: 'S گوگرد', Cu: 'Cu مس', N: 'N نیتروژن' };
+        const chemRows = heats.map((h) => { const c = (g24[h] && g24[h].chem) || {}; return '<tr><td>' + esc(h) + '</td>' + ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].map((e2) => '<td>' + (c[e2] == null ? '—' : c[e2]) + '</td>').join('') + '</tr>'; }).join('');
+        const mechRows = heats.map((h) => { const x = (g24[h] && g24[h].mech) || {}; return '<tr><td>' + esc(h) + '</td><td>' + (x.ReH || '—') + '</td><td>' + (x.Rm || '—') + '</td><td>' + (x.A == null ? '—' : x.A) + '</td><td>' + (x.bend ? 'مطابق' : '—') + '</td><td>' + ((x.ReH && x.Rm) ? Math.round(x.Rm * 100 / x.ReH) / 100 : '—') + '</td></tr>'; }).join('');
+        const vurl = location.origin + '/api/qcpro/mtc/verify/' + m.verify_id;
+        return '<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;font-size:12.5px;color:#111">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0e7490;padding-bottom:10px">' +
+            '<div>' + logo + '</div><div style="text-align:center"><div style="font-size:20px;font-weight:800">گواهی کیفیت (Mill Test Certificate)</div><div style="color:#555;font-size:12px">' + esc(m.cert_type || 'EN 10204 — Type 3.1') + (m.is_export ? ' — 🌍 صادراتی' : '') + '</div><div style="color:#555;font-size:12px">' + esc(t.name || '') + '</div></div>' +
+            '<div style="text-align:left;font-size:12px">شماره گواهی: <b>' + esc(m.mtc_no) + '</b><br>شمارهٔ سفارش: ' + esc(m.order_no || '—') + (m.exit_no ? '<br>حوالهٔ خروج: ' + esc(m.exit_no) : '') + (m.invoice_no ? '<br>فاکتور: ' + esc(m.invoice_no) : '') + '<br>تاریخ: ' + toFaDigits(m.date_jalali || '') + '</div></div>' +
+            '<div style="display:flex;gap:12px;margin-top:12px"><div style="flex:1;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;line-height:1.9"><b>مشخصات محصول:</b><br>سایز میلگرد: <b>' + toFaDigits(m.size) + '</b> — گرید: <b>' + esc(m.grade) + '</b><br>استاندارد مرجع: ' + esc(m.standard || '—') + '<br>وزن محموله: <b>' + qcTons24(m.weight_ton) + ' تن</b>' + (m.pieces ? ' — ' + fa(m.pieces) + ' شاخه' : '') + (m.piece_length_m ? ' — طول شاخه ' + fa(m.piece_length_m) + ' متر' : '') + '<br>هیت (Heat No.): <b>' + esc((heats || []).join('، ')) + '</b><br>مبنای نتایج: ' + esc(m.test_source || '—') + '</div>' +
+            '<div style="width:170px;border:1px solid #cbd5e1;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#555">تأیید آنلاین (QR)</div><div id="mtcQrBox24' + (forPrint ? 'P' : '') + '" style="margin:6px auto"></div><div style="font-size:9.5px;word-break:break-all;direction:ltr;color:#475569">' + esc(vurl) + '</div><div style="font-size:10px;color:#475569;margin-top:4px">اثر انگشت: <span style="direction:ltr">' + esc((m.hash || '').slice(0, 16)) + '</span></div></div></div>' +
+            '<div style="font-weight:800;margin:12px 0 4px">۱) آنالیز شیمیایی (٪ وزنی) — ' + esc(m.test_source || '') + '</div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>هیت</th><th>' + Object.keys(elFa).map((k) => k).join('</th><th>') + '</th></tr></thead><tbody>' + chemRows + '</tbody></table>' +
+            '<div style="font-weight:800;margin:12px 0 4px">۲) خواص مکانیکی (کشش — ISO 6892-1)</div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>هیت</th><th>ReH — تسلیم (MPa)</th><th>Rm — کشش (MPa)</th><th>A — ازدیاد طول (٪)</th><th>خمش</th><th>Rm/ReH</th></tr></thead><tbody>' + mechRows + '</tbody></table>' +
+            (m.tol_weight_percent ? '<div style="font-size:11px;color:#555;margin-top:6px">تلرانس جرم طولی اعمال‌شده: ' + toFaDigits('±' + m.tol_weight_percent.max) + '٪ (ISO 6935-2) — ابعاد و آج مطابق ' + esc(m.standard || 'استاندارد مرجع') + '.</div>' : '') +
+            '<div style="display:flex;gap:40px;margin-top:30px;font-size:12px"><div style="flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555">نمایندهٔ بازرسی مستقل از تولید (EN 10204 3.1)<br><b>' + esc(m.issued_by || '') + '</b></div><div style="flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555">مهر و امضای کارخانه</div></div>' +
+            '</div>';
+    }
+    function qcEnsureQrLib24(cb) {
+        if (window.QRCode) return cb();
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js';
+        s.onload = cb; s.onerror = () => cb(); /* بدون CDN — فقط متن لینک */
+        document.head.appendChild(s);
+    }
+    function qcDrawQr24(boxId, url) {
+        const box = qe24(boxId); if (!box) return;
+        box.innerHTML = '';
+        if (!window.QRCode) { box.innerHTML = '<div style="font-size:9px;color:#94a3b8">QR در حالت آفلاین در دسترس نیست — لینک چاپ شده معتبر است.</div>'; return; }
+        try { new window.QRCode(box, { text: url, width: 96, height: 96, correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.M : 0 }); } catch (e) { }
+    }
+    function qcShowSheet24(m) {
+        qcMtcCurrent24 = m;
+        const wrap = qe24('mtcSheetWrap24'), sheet = qe24('mtcSheet24');
+        if (!wrap || !sheet) return;
+        sheet.innerHTML = qcMtcSheetHtml24(m, false);
+        wrap.classList.remove('hidden');
+        try { wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { }
+        qcEnsureQrLib24(() => qcDrawQr24('mtcQrBox24', location.origin + '/api/qcpro/mtc/verify/' + m.verify_id));
+    }
+    function qcPrintSheet24() {
+        if (!qcMtcCurrent24) return;
+        const m = qcMtcCurrent24;
+        const w = window.open('', '_blank', 'width=920,height=1000');
+        if (!w) { alert('پنجرهٔ چاپ باز نشد — popups را مجاز کنید. (در headless از PDF استفاده کنید)'); return; }
+        const qrTag = '<' + 'script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"><' + '/script>';
+        w.document.write('<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + esc(m.mtc_no) + ' — گواهی کیفیت MTC</title><style>@page{size:A4;margin:12mm}body{margin:0;background:#fff}</style>' + qrTag + '</head><body>' + qcMtcSheetHtml24(m, true) + '</body></html>');
+        w.document.close();
+        /* QR پنجرهٔ چاپ — پس از لود کتابخانه در همان پنجره */
+        setTimeout(function () {
+            try {
+                if (w.window.QRCode) {
+                    const b = w.document.getElementById('mtcQrBox24P');
+                    if (b) { b.innerHTML = ''; new w.window.QRCode(b, { text: location.origin + '/api/qcpro/mtc/verify/' + m.verify_id, width: 96, height: 96 }); }
+                }
+            } catch (e) { /* QR اختیاری است — لینک چاپ شده معتبر می‌ماند */ }
+            setTimeout(function () { try { w.focus(); w.print(); } catch (e) { } }, 450);
+        }, 900);
+    }
+    function qcLoadScript24(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('CDN بارگیری نشد: ' + src)); document.head.appendChild(s); }); }
+    async function qcPdfSheet24() {
+        if (!qcMtcCurrent24) return;
+        const m = qcMtcCurrent24;
+        const btn = qe24('qcMtcPdf24'); if (btn) { btn.disabled = true; btn.textContent = 'در حال ساخت PDF…'; }
+        try {
+            if (!window.jspdf) await qcLoadScript24('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js');
+            if (!window.html2canvas) await qcLoadScript24('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+            const sheet = qe24('mtcSheet24'); if (!sheet) throw new Error('پیش‌نمایش گواهی باز نیست.');
+            const canvas = await window.html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff' });
+            const pdf = new window.jspdf.jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+            const pw = 210, ph = 297, iw = pw - 16;
+            const ih = canvas.height * iw / canvas.width;
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 8, 8, iw, Math.min(ih, ph - 16));
+            pdf.save(m.mtc_no + '-MTC.pdf');
+            toast('PDF گواهی ' + m.mtc_no + ' ساخته شد.', 'ok');
+        } catch (e) {
+            alert('ساخت PDF ناموفق بود (' + e.message + '). در شبکهٔ بدون اینترنت از دکمهٔ «چاپ A4» و Save-as-PDF مرورگر استفاده کنید.');
+        } finally { if (btn) { btn.disabled = false; btn.textContent = '📄 PDF (jsPDF)'; } }
+    }
+    /* ---------- NCR ---------- */
+    function qcRenderNcr24() {
+        const el = qe24('tbl-qc-ncr24'); if (!el) return;
+        const rows = (qcRep24 && qcRep24.ncr) || [];
+        const sum = (qcRep24 && qcRep24.ncr_summary) || { total: 0, open: 0, rejection: 0 };
+        const kEl = qe24('qcNcrKpis24');
+        if (kEl) kEl.innerHTML = [
+            { l: 'کل NCR', v: fa(sum.total || 0) },
+            { l: 'باز', v: fa(sum.open || 0), c: sum.open ? 'red' : '' },
+            { l: 'با اقدام رد', v: fa(sum.rejection || 0), c: sum.rejection ? 'amber' : '' },
+            { l: 'هیت‌های مسدود', v: fa(((qcRep24 && qcRep24.blocked_heats) || []).length), c: ((qcRep24 && qcRep24.blocked_heats) || []).length ? 'red' : 'green' },
+        ].map((k) => '<div class="kpi"><div class="kl">' + k.l + '</div><div class="kv ' + (k.c || '') + '">' + k.v + '</div></div>').join('');
+        const addBtn = qe24('qcNcrAdd24'); if (addBtn) addBtn.style.display = qcNcrW24() ? '' : 'none';
+        const scopeFa = { bundle: 'باندل', heat: 'هیت', receipt: 'رسید' };
+        let html = '<thead><tr><th>شماره</th><th>تاریخ</th><th>محدوده</th><th>هیت / باندل / رسید</th><th>سایز</th><th>نوع</th><th>شدت</th><th>اقدام</th><th>تناژ (تن)</th><th>وضعیت</th><th>ثبت‌کننده</th>' + (qcNcrW24() ? '<th>عملیات</th>' : '') + '</tr></thead><tbody>';
+        if (!rows.length) html += '<tr><td colspan="12" class="empty">عدم انطباقی ثبت نشده است.</td></tr>';
+        rows.forEach((n) => {
+            const blocking = n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection');
+            html += '<tr><td><b>' + esc(n.ncr_no) + '</b></td><td>' + toFaDigits(n.date_jalali || '—') + '</td><td>' + esc(scopeFa[n.scope] || n.scope) + '</td><td style="font-size:11px">' + esc(n.heat_number || '') + (n.bundle_code ? '<br>📦 ' + esc(n.bundle_code) : '') + (n.receipt_no ? '<br>' + esc(n.receipt_no) : '') + '</td><td>' + toFaDigits(n.size || '—') + '</td><td>' + esc(n.ntype_fa || n.ntype) + '</td>'
+                + '<td><span class="chip ' + (n.severity === 'critical' ? 'no' : (n.severity === 'major' ? 'wait' : 'ok')) + '">' + esc(n.severity_fa || n.severity) + '</span></td>'
+                + '<td>' + esc(n.action_fa || n.action) + '</td><td>' + qcTons24(n.quantity_ton) + '</td>'
+                + '<td>' + (n.status === 'open' ? (blocking ? '<span class="chip no">باز — فروش مسدود</span>' : '<span class="chip wait">باز</span>') : '<span class="chip ok">بسته</span>') + (n.quarantine_count ? '<br><span style="font-size:10px;color:#b91c1c">قرنطینه: ' + fa(n.quarantine_count) + ' ردیف</span>' : '') + '</td>'
+                + '<td style="font-size:11px">' + esc(n.opened_by || '—') + '</td>'
+                + (qcNcrW24() ? '<td>' + (n.status === 'open' ? '<button class="act" data-qcnrclose="' + esc(n.id) + '">بستن</button>' : '<span style="font-size:10px;color:#64748b">' + esc(n.closed_by || '') + '</span>') + '</td>' : '') + '</tr>';
+            if (n.status === 'closed' || n.corrective_action) html += '<tr><td colspan="12" style="background:rgba(14,116,144,0.06);font-size:11px"><b>شرح:</b> ' + esc(n.description || '') + (n.corrective_action ? ' — <b>اقدام اصلاحی:</b> ' + esc(n.corrective_action) + ' (' + toFaDigits('') + esc(n.closed_by || '') + ')' : '') + '</td></tr>';
+        });
+        el.innerHTML = html + '</tbody>';
+        el.querySelectorAll('button[data-qcnrclose]').forEach((b) => b.addEventListener('click', async () => {
+            const n = rows.find((x) => x.id === b.dataset.qcnrclose); if (!n) return;
+            const ca = prompt('بستن NCR ' + n.ncr_no + ' — اقدام اصلاحی انجام‌شده:', n.action === 'rejection' ? 'قرنطینه و انتقال به ضایعات' : '');
+            if (ca === null) return;
+            b.disabled = true;
+            try {
+                const r = await fetch('/api/qcpro/ncr/close', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: n.id, corrective_action: ca }) });
+                const j = await r.json();
+                if (!r.ok) { alert(j.error || 'خطا'); return; }
+                toast('NCR ' + n.ncr_no + ' بسته شد.' + (j.quarantined ? ' ' + fa(j.quarantined) + ' ردیف قرنطینه شد.' : '') + (j.doc_no ? ' سند مالی: ' + esc(j.doc_no) : ''), 'ok');
+                await qcLoadRep24();
+            } finally { b.disabled = false; }
+        }));
+    }
+    /* ---------- گزارش‌ها ---------- */
+    function qcRenderReports24() {
+        if (!qcRep24) return;
+        const kEl = qe24('qcRepKpis24');
+        if (kEl) {
+            const sr = qcRep24.supplier_reject || [];
+            const tot = sr.reduce((s, x) => s + x.total, 0), rej = sr.reduce((s, x) => s + x.rejected, 0);
+            kEl.innerHTML = [
+                { l: 'نرخ رد کل (ورودی)', v: (tot ? fa(Math.round(rej * 1000 / tot) / 10) : '۰') + '٪', c: rej ? 'red' : 'green' },
+                { l: 'NCR باز', v: fa((qcRep24.ncr_summary || {}).open || 0), c: (qcRep24.ncr_summary || {}).open ? 'red' : '' },
+                { l: 'MTC صادرشده', v: fa((qcRep24.mtc || []).length) },
+                { l: 'هیت مسدود', v: fa((qcRep24.blocked_heats || []).length), c: (qcRep24.blocked_heats || []).length ? 'red' : '' },
+            ].map((k) => '<div class="kpi"><div class="kl">' + k.l + '</div><div class="kv ' + (k.c || '') + '">' + k.v + '</div></div>').join('');
+        }
+        const sup = qe24('tbl-qc-repsup24');
+        if (sup) {
+            const rows = qcRep24.supplier_reject || [];
+            let html = '<thead><tr><th>تأمین‌کننده</th><th>کل آزمون</th><th>ردشده</th><th>در انتظار</th><th>نرخ رد</th></tr></thead><tbody>';
+            if (!rows.length) html += '<tr><td colspan="5" class="empty">آزمون ورودی‌ای ثبت نشده است.</td></tr>';
+            rows.forEach((r) => { html += '<tr><td>' + esc(r.supplier) + '</td><td>' + fa(r.total) + '</td><td>' + fa(r.rejected) + '</td><td>' + fa(r.pending) + '</td><td><span class="chip ' + (r.rate_percent > 0 ? 'no' : 'ok') + '">' + fa(r.rate_percent) + '٪</span></td></tr>'; });
+            sup.innerHTML = html + '</tbody>';
+        }
+        const ncrT = qe24('tbl-qc-repncr24');
+        if (ncrT) {
+            let html = '<thead><tr><th>گروه</th><th>تعداد NCR</th><th>باز</th><th>بحرانی</th></tr></thead><tbody>';
+            const push = (title, rows) => { html += '<tr><td colspan="4" style="background:rgba(14,116,144,0.08);font-weight:800">' + esc(title) + '</td></tr>'; (rows || []).forEach((r) => { html += '<tr><td>' + esc(r.key) + '</td><td>' + fa(r.count) + '</td><td>' + fa(r.open) + '</td><td>' + fa(r.critical) + '</td></tr>'; }); };
+            push('per گرید', qcRep24.ncr_by_grade); push('per سایز', qcRep24.ncr_by_size); push('per ماه شمسی', qcRep24.ncr_by_month);
+            if (!((qcRep24.ncr_by_grade || []).length)) html += '<tr><td colspan="4" class="empty">NCRی ثبت نشده است.</td></tr>';
+            ncrT.innerHTML = html + '</tbody>';
+        }
+        qcRenderMtcList24();
+    }
+    function qcMtcFilter24() {
+        const from = (qe24('qcRepFrom24') || {}).value || '', to = (qe24('qcRepTo24') || {}).value || '', cust = ((qe24('qcRepCust24') || {}).value || '').trim();
+        let rows = (qcRep24 && qcRep24.mtc) || [];
+        const jcmp = (j) => String(j || '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)).replace(/\//g, '');
+        if (from) rows = rows.filter((m) => jcmp(m.date_jalali) >= jcmp(from));
+        if (to) rows = rows.filter((m) => jcmp(m.date_jalali) <= jcmp(to));
+        if (cust) rows = rows.filter((m) => String(m.customer_name || '').indexOf(cust) !== -1);
+        return rows;
+    }
+    function qcRenderMtcList24() {
+        const el = qe24('tbl-qc-repmtc24'); if (!el) return;
+        const rows = qcMtcFilter24();
+        let html = '<thead><tr><th>شماره</th><th>تاریخ</th><th>مشتری</th><th>سایز/گرید</th><th>حواله</th><th>وزن (تن)</th><th>نوع</th><th>تأیید آنلاین</th></tr></thead><tbody>';
+        if (!rows.length) html += '<tr><td colspan="8" class="empty">با این فیلتر MTCی یافت نشد.</td></tr>';
+        rows.forEach((m) => { html += '<tr><td>' + esc(m.mtc_no) + '</td><td>' + toFaDigits(m.date_jalali || '') + '</td><td>' + esc(m.customer_name || '—') + '</td><td>' + toFaDigits(m.size) + '/' + esc(m.grade) + '</td><td>' + esc(m.exit_no || '—') + '</td><td>' + qcTons24(m.weight_ton) + '</td><td>' + (m.is_export ? 'صادراتی 🌍' : 'داخلی') + '</td><td><a href="/api/qcpro/mtc/verify/' + esc(m.verify_id) + '" target="_blank" rel="noopener" style="color:#0e7490">' + esc(m.verify_id) + '</a></td></tr>'; });
+        el.innerHTML = html + '</tbody>';
+    }
+    /* ---------- هشدارهای تب فروش ---------- */
+    function qcRenderSalesWarn24() {
+        /* چک‌باکس صادراتی فرم سفارش — نقش‌های نوشتن فروش (پس از شناخت نقش) */
+        const wrapChk = qe24('qcExpWrap24');
+        if (wrapChk) wrapChk.style.display = (WEB_ROLE === 'admin' || WEB_ROLE === 'owner' || WEB_ROLE === 'sales') ? '' : 'none';
+        const box = qe24('qcSalesWarn24'); if (!box) return;
+        if (!qcRep24) { box.classList.add('hidden'); return; }
+        const items = [];
+        ((qcRep24.ncr || [])).forEach((n) => {
+            if (n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection')) {
+                items.push('⛔ عدم انطباق باز: <b>' + esc(n.ncr_no) + '</b> — ' + esc(n.severity_fa || '') + ' — ' + (n.heat_number ? 'هیت <b>' + esc(n.heat_number) + '</b>' : 'سایز <b>' + toFaDigits(n.size || '') + '</b>') + (n.bundle_code ? ' — باندل ' + esc(n.bundle_code) : '') + ' → حوالهٔ این سایز/هیت ۴۰۹ می‌شود');
+            }
+        });
+        ((qcRep24.export_orders_without_mtc) || []).forEach((o) => {
+            items.push('🌍 سفارش صادراتی <b>' + esc(o.order_no) + '</b> (' + esc(o.customer_name || '') + ') بدون گواهی MTC — صدور فاکتور ۴۰۹ می‌شود؛ MTC را از تب کیفیت صادر کنید');
+        });
+        if (!items.length) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        box.innerHTML = '<b>🛡 هشدارهای کنترل کیفیت (QC-PRO):</b><br>' + items.join('<br>');
+    }
+    /* ---------- وایرینگ ---------- */
+    function qcWire24b() {
+        const on = (id, ev, fn) => { const el = qe24(id); if (el) el.addEventListener(ev, fn); };
+        on('qcMtcIssue24', 'click', () => { qcMtcFillForm24(); qe24('qcMtcForm24').classList.remove('hidden'); qcMsg24b('qcMtcMsg24', ''); });
+        on('qcMtcCancel24', 'click', () => qe24('qcMtcForm24').classList.add('hidden'));
+        on('qcMtcExit24', 'change', () => {
+            const c = ((qcRep24 && qcRep24.mtc_candidates) || []).find((x) => x.exit_id === qe24('qcMtcExit24').value);
+            if (c) qcMsg24b('qcMtcReady24', 'هیت‌های سایز ' + toFaDigits(c.size) + ': ' + (c.heats.join('، ') || '—') + ' — آزمون: ' + (c.tests_ready ? 'کامل ✓' : 'ناکامل ✗ (ابتدا آزمون ورودی تأییدشده یا آزمایشگاه QC لازم است)'), !c.tests_ready);
+        });
+        on('qcMtcSave24', 'click', async () => {
+            const exitId = qe24('qcMtcExit24').value;
+            if (!exitId) { qcMsg24b('qcMtcMsg24', 'انتخاب حواله الزامی است.', true); return; }
+            try {
+                const r = await fetch('/api/qcpro/mtc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exit_id: exitId, heat_number: qe24('qcMtcHeat24').value.trim(), notes: qe24('qcMtcNotes24').value.trim() }) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24b('qcMtcMsg24', j.error || 'خطا', true); return; }
+                toast('گواهی ' + j.record.mtc_no + ' صادر شد.', 'ok');
+                qe24('qcMtcForm24').classList.add('hidden');
+                await qcLoadRep24();
+                qcShowSheet24(j.record);
+            } catch (e) { qcMsg24b('qcMtcMsg24', 'خطا: ' + e.message, true); }
+        });
+        on('qcMtcPrint24', 'click', qcPrintSheet24);
+        on('qcMtcPdf24', 'click', qcPdfSheet24);
+        on('qcMtcClose24', 'click', () => qe24('mtcSheetWrap24').classList.add('hidden'));
+        on('qcNcrAdd24', 'click', () => {
+            qe24('qcNcrForm24').classList.remove('hidden');
+            const bs = qe24('qcNcrBundle24');
+            if (bs && !bs.options.length) bs.innerHTML = '<option value="">— انتخاب باندل —</option>' + (((qcRep24 && qcRep24.bundles_ref) || [])).map((b) => '<option value="' + esc(b.bundle_code) + '" data-heat="' + esc(b.heat_number) + '" data-size="' + esc(b.rebar_size) + '" data-qty="' + (b.net_weight_kg / 1000) + '">' + esc(b.bundle_code) + ' — هیت ' + esc(b.heat_number) + ' — سایز ' + toFaDigits(b.rebar_size) + ' — ' + qcTons24(b.net_weight_kg / 1000) + ' تن</option>').join('');
+            qcMsg24b('qcNcrMsg24', '');
+        });
+        on('qcNcrCancel24', 'click', () => qe24('qcNcrForm24').classList.add('hidden'));
+        on('qcNcrScope24', 'change', () => {
+            const s = qe24('qcNcrScope24').value;
+            const lbl = { bundle: 'باندل تولید', heat: 'هیت (کلی)', receipt: 'رسید خرید' }[s];
+            qcMsg24b('qcNcrMsg24', 'محدودهٔ انتخابی: ' + lbl + ' — فیلد مرتبط را کامل کنید.');
+        });
+        on('qcNcrBundle24', 'change', () => {
+            const o = qe24('qcNcrBundle24').selectedOptions[0]; if (!o || !o.value) return;
+            qe24('qcNcrHeat24').value = o.dataset.heat || '';
+            qe24('qcNcrSize24').value = o.dataset.size || '';
+            if (!qe24('qcNcrQty24').value) qe24('qcNcrQty24').value = o.dataset.qty ? Math.round(Number(o.dataset.qty) * 1000) / 1000 : '';
+        });
+        on('qcNcrSave24', 'click', async () => {
+            const payload = { scope: qe24('qcNcrScope24').value, bundle_code: qe24('qcNcrBundle24').value, heat_number: qe24('qcNcrHeat24').value.trim(), receipt_no: qe24('qcNcrRcpt24').value.trim(), size: qe24('qcNcrSize24').value.trim(), ntype: qe24('qcNcrType24').value, severity: qe24('qcNcrSev24').value, action: qe24('qcNcrAct24').value, quantity_ton: qe24('qcNcrQty24').value, description: qe24('qcNcrDesc24').value.trim() };
+            if (!payload.description) { qcMsg24b('qcNcrMsg24', 'شرح عدم انطباق الزامی است.', true); return; }
+            try {
+                const r = await fetch('/api/qcpro/ncr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24b('qcNcrMsg24', j.error || 'خطا', true); return; }
+                toast('NCR ' + j.record.ncr_no + ' ثبت شد — ' + (payload.severity === 'minor' ? 'بدون مسدودسازی' : 'فروش این باندل/هیت تا بستن NCR مسدود است.'), payload.severity === 'minor' ? 'ok' : 'err');
+                qe24('qcNcrForm24').classList.add('hidden');
+                qe24('qcNcrDesc24').value = '';
+                await qcLoadRep24();
+            } catch (e) { qcMsg24b('qcNcrMsg24', 'خطا: ' + e.message, true); }
+        });
+        on('qcNcrXls24', 'click', () => {
+            const rows = ((qcRep24 && qcRep24.ncr) || []).map((n) => ({ no: n.ncr_no, date: n.date_jalali, scope: n.scope, bundle: n.bundle_code, heat: n.heat_number, rc: n.receipt_no, size: n.size, type: n.ntype_fa, sev: n.severity_fa, act: n.action_fa, qty: n.quantity_ton, status: n.status === 'open' ? 'باز' : 'بسته', by: n.opened_by, ca: n.corrective_action }));
+            downloadXls('عدم_انطباق_NCR', [{ label: 'شماره', key: 'no' }, { label: 'تاریخ', key: 'date' }, { label: 'محدوده', key: 'scope' }, { label: 'باندل', key: 'bundle' }, { label: 'هیت', key: 'heat' }, { label: 'رسید', key: 'rc' }, { label: 'سایز', key: 'size' }, { label: 'نوع', key: 'type' }, { label: 'شدت', key: 'sev' }, { label: 'اقدام', key: 'act' }, { label: 'تناژ (تن)', key: 'qty' }, { label: 'وضعیت', key: 'status' }, { label: 'ثبت‌کننده', key: 'by' }, { label: 'اقدام اصلاحی', key: 'ca' }], rows, 'عدم انطباق (NCR) — کنترل کیفیت حرفه‌ای');
+        });
+        on('qcMtcXls24', 'click', () => {
+            const rows = qcMtcFilter24().map((m) => ({ no: m.mtc_no, date: m.date_jalali, exit: m.exit_no, order: m.order_no, cust: m.customer_name, size: m.size, grade: m.grade, std: m.standard, heats: (m.heat_numbers || []).join('، '), wt: m.weight_ton, kind: m.is_export ? 'صادراتی' : 'داخلی', by: m.issued_by, vid: m.verify_id }));
+            downloadXls('گواهی_کیفیت_MTC', [{ label: 'شماره MTC', key: 'no' }, { label: 'تاریخ', key: 'date' }, { label: 'حواله', key: 'exit' }, { label: 'سفارش', key: 'order' }, { label: 'مشتری', key: 'cust' }, { label: 'سایز', key: 'size' }, { label: 'گرید', key: 'grade' }, { label: 'استاندارد', key: 'std' }, { label: 'هیت‌ها', key: 'heats' }, { label: 'وزن (تن)', key: 'wt' }, { label: 'نوع', key: 'kind' }, { label: 'صادره از', key: 'by' }, { label: 'شناسهٔ تأیید', key: 'vid' }], rows, 'گواهی‌های کیفیت MTC (EN 10204 3.1)');
+        });
+        on('qcRepSupXls24', 'click', () => {
+            const rows = ((qcRep24 && qcRep24.supplier_reject) || []).map((r) => ({ sup: r.supplier, total: r.total, rej: r.rejected, pend: r.pending, rate: r.rate_percent }));
+            downloadXls('نرخ_رد_QC_ورودی', [{ label: 'تأمین‌کننده', key: 'sup' }, { label: 'کل آزمون', key: 'total' }, { label: 'ردشده', key: 'rej' }, { label: 'در انتظار', key: 'pend' }, { label: 'نرخ رد (٪)', key: 'rate' }], rows, 'نرخ رد QC ورودی per تأمین‌کننده — مکمل ارزیابی فاز ۱۴');
+        });
+        on('qcRepNcrXls24', 'click', () => {
+            const rows = [];
+            ((qcRep24 && qcRep24.ncr_by_grade) || []).forEach((r) => rows.push({ kind: 'گرید', key: r.key, count: r.count, open: r.open, crit: r.critical }));
+            ((qcRep24 && qcRep24.ncr_by_size) || []).forEach((r) => rows.push({ kind: 'سایز', key: r.key, count: r.count, open: r.open, crit: r.critical }));
+            ((qcRep24 && qcRep24.ncr_by_month) || []).forEach((r) => rows.push({ kind: 'ماه', key: r.key, count: r.count, open: r.open, crit: r.critical }));
+            downloadXls('NCR_تجمیعی', [{ label: 'نوع تجمیع', key: 'kind' }, { label: 'گروه', key: 'key' }, { label: 'تعداد', key: 'count' }, { label: 'باز', key: 'open' }, { label: 'بحرانی', key: 'crit' }], rows, 'نرخ عدم انطباق per گرید/سایز/ماه');
+        });
+        on('qcRepLoad24', 'click', () => qcLoadRep24());
+        ['qcRepFrom24', 'qcRepTo24', 'qcRepCust24'].forEach((id) => on(id, 'input', qcRenderMtcList24));
+    }
+    try { qcWire24b(); } catch (e) { /* بی‌ضرر */ }
+    /* بارگذاری گزارش‌ها هنگام ورود به تب کیفیت و تب فروش — deferred تا loaders مقداردهی شود */
+    function qcWrapLoaders24b() {
+        try {
+            const origQ24 = loaders.quality;
+            loaders.quality = async function () { await origQ24(); try { await qcLoadRep24(); } catch (e) { /* بی‌ضرر */ } };
+        } catch (e) { /* بی‌ضرر */ }
+        try {
+            const origS24 = loadSales;
+            loadSales = async function () { await origS24(); try { await qcLoadRep24(); } catch (e) { /* بی‌ضرر */ } };
+            loaders.sales = loadSales;
+        } catch (e) { /* بی‌ضرر */ }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', qcWrapLoaders24b); else setTimeout(qcWrapLoaders24b, 0);
+})();
+// ===== FEAT-QC-PRO-24b (end) =====
+
 })();
 // ===== FEAT-FIN-13b (end) =====
 // ===== FEAT-PWA-8b (begin): ثبت سرویس‌ورکر + بنر نصب دوستانه (Android: beforeinstallprompt — iOS: راهنمای Share → Add to Home Screen) =====

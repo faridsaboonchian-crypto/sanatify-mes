@@ -4986,6 +4986,36 @@ live.inventory_reservations.splice(idx, 1);
         return;
     }
 
+    // ===== FEAT-QC-PRO-24b (begin): ثابت‌ها و توابع NCR/MTC — قبل از هندلرهای فروش تا گارد حواله (qcExitBlock24b) بدون TDZ کار کند =====
+    const NCR_TYPE_FA_24B = { chem: 'شیمیایی', mech: 'مکانیکی', dim: 'ابعادی', visual: 'ظاهری' };
+    const NCR_SEV_FA_24B = { minor: 'جزئی (Minor)', major: 'عمده (Major)', critical: 'بحرانی (Critical)' };
+    const NCR_ACTION_FA_24B = { rework: 'دوباره‌کاری', concession: 'ارفاق استفاده', rejection: 'رد (Rejection)' };
+    const QC_MTC_W_24B = ['admin', 'qc'];
+    const QC_NCR_W_24B = ['admin', 'qc'];
+    /* هیت‌های میلگرد یک سایز از باندل‌ها — برای گارد حواله */
+    function qcHeatsOfSize24b(live, size) {
+        const set = new Set();
+        (live.rebar_bundles || []).forEach((b) => { if (b && String(b.rebar_size) === String(size) && b.heat_number) set.add(String(b.heat_number)); });
+        return set;
+    }
+    /* آیا برای این سایز NCR بازِ مسدودکننده وجود دارد؟ (Major/Critical یا اقدام رد) */
+    function qcExitBlock24b(live, size) {
+        const heats = qcHeatsOfSize24b(live, size);
+        const blocking = (live.qc_ncr_24 || []).filter((n) => n && n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection'));
+        return blocking.find((n) => (n.heat_number && heats.has(String(n.heat_number))) || (!n.heat_number && n.size && String(n.size) === String(size))) || null;
+    }
+    /* نتایج آزمون یک هیت برای MTC — اولویت: آزمون ورودی تأییدشده ← QC آزمایشگاه (مکانیکی) ← null */
+    function qcTestForHeat24b(live, heat) {
+        const inc = (live.qc_incoming_24 || []).find((t) => t.status === 'approved' && String(t.heat_number) === String(heat));
+        const lab = (live.quality_inspections || []).filter((q) => String(q.heat_number || '') === String(heat)).slice(-1)[0] || null;
+        return {
+            chem: inc ? inc.chem : null,
+            mech: inc ? inc.mech : (lab ? { ReH: Number(lab.yield_strength) || 0, Rm: Number(lab.tensile_strength) || 0, A: Number(lab.elongation_percent) || 0, bend: !!Number(lab.bend_test_passed) } : null),
+            source: inc ? 'آزمون ورودی تأییدشده (اسپکترومتری/کشش)' : (lab ? 'آزمایشگاه QC تولید' : ''),
+            inc_test_no: inc ? inc.test_no : '',
+        };
+    }
+    // ===== FEAT-QC-PRO-24b (helpers end) =====
     if (req.method === 'POST' && pathname === '/api/sales/orders') {
         if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت سفارش فقط برای واحد فروش مجاز است.' }, 403);
         readBody(req).then((raw) => {
@@ -5028,6 +5058,7 @@ live.inventory_reservations.splice(idx, 1);
                     customer_id: cust.id, customer_name: cust.name,
                     items: items, date_jalali: dj, due_date_jalali: ddj,
                     vat_rate: vatRate, status: 'draft', notes: String(b.notes || '').trim().slice(0, 300),
+                    is_export: b.is_export === true, /* FEAT-QC-PRO-24b: سفارش صادراتی — صدور MTC الزامی می‌شود (EN 10204 3.1) */
                     created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
                     confirmed_at: null, cancelled_at: null,
                 };
@@ -5120,6 +5151,10 @@ live.inventory_reservations.splice(idx, 1);
                 const size = String(b.size || '').trim();
                 const line = (order.items || []).find((it) => String(it.size) === size);
                 if (!line) return sendJson(res, { error: 'سایز «' + size + '» در اقلام این سفارش نیست.' }, 400);
+                /* ===== FEAT-QC-PRO-24b (begin): گارد عدم انطباق باز (NCR) — باندل/هیت دارای NCR باز (Major/Critical یا اقدام رد) حواله نمی‌شود ===== */
+                const ncrHit24b = qcExitBlock24b(live, size);
+                if (ncrHit24b) return sendJson(res, { error: 'حواله مجاز نیست: عدم انطباق باز (NCR ' + ncrHit24b.ncr_no + ' — ' + (NCR_SEV_FA_24B[ncrHit24b.severity] || ncrHit24b.severity) + ') روی ' + (ncrHit24b.heat_number ? 'هیت ' + ncrHit24b.heat_number : 'سایز ' + (ncrHit24b.size || size)) + ' ثبت شده است — ابتدا در کنترل کیفیت (QC-PRO) بسته شود.', code: 'NCR_OPEN', ncr_no: ncrHit24b.ncr_no }, 409);
+                /* ===== FEAT-QC-PRO-24b (end) ===== */
                 const weight = round2(Number(finDigitsEn(b.weight_ton)) || 0);
                 if (!(weight > 0)) return sendJson(res, { error: 'وزن باسکول باید بزرگ‌تر از صفر باشد (تن).' }, 400);
                 const dj = salesValidJalali21a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
@@ -5279,6 +5314,10 @@ live.inventory_reservations.splice(idx, 1);
                 /* اقلام فاکتور = حواله‌های واقعی فاکتورنشده (وزن باسکول) */
                 const openExits = (live.sales_exits || []).filter((e) => e.order_id === order.id && !e.invoice_no);
                 if (!openExits.length) return sendJson(res, { error: 'حوالهٔ خروج فاکتورنشده‌ای برای این سفارش نیست — ابتدا حواله ثبت کنید.' }, 409);
+                /* ===== FEAT-QC-PRO-24b: الزام MTC برای سفارش صادراتی (EN 10204 3.1) — فاکتور صادرات بدون گواهی کیفیت صادر نمی‌شود ===== */
+                if (order.is_export && !(live.qc_mtc_24 || []).some((m) => m.order_id === order.id)) {
+                    return sendJson(res, { error: 'سفارش صادراتی است — صدور گواهی کیفیت (MTC) الزامی است. ابتدا از پنل کنترل کیفیت حرفه‌ای، MTC این سفارش/حواله را صادر کنید.', code: 'MTC_REQUIRED' }, 409);
+                }
                 const bySize = {};
                 openExits.forEach((e) => {
                     const k = String(e.size);
@@ -6694,6 +6733,239 @@ live.inventory_reservations.splice(idx, 1);
         return;
     }
     // ===== FEAT-QC-PRO-24a (end) =====
+
+    // ================================================================
+    // ===== FEAT-QC-PRO-24b (begin): گواهی کیفیت (MTC طبق EN 10204 3.1)
+    // + عدم انطباق (NCR) + گزارش‌های QC. کاملاً افزاینده — finPostDoc فقط
+    // «فراخوانی» می‌شود (source «qc_ncr» — همان موتور واحد و idempotent).
+    // MTC: per حوالهٔ فروش/سفارش — Heat Number + آنالیز شیمیایی + مکانیکی
+    // + VID تأیید آنلاین (GET عمومی /api/qcpro/mtc/verify/:vid با حداقل داده).
+    // الزام صادرات: سفارش صادراتی بدون MTC → فاکتور ۴۰۹ MTC_REQUIRED.
+    // NCR: باندل/هیت/رسید با NCR باز (Major/Critical یا Rejection) → حواله ۴۰۹.
+    // بستن NCR با اقدام رد → قرنطینه + سند زیان ضایعات (۵۲۰۰۰۱/۱۱۰xxx).
+    // ================================================================
+    function qcEnsure24b(live) {
+        live.qc_mtc_24 = Array.isArray(live.qc_mtc_24) ? live.qc_mtc_24 : [];
+        live.qc_ncr_24 = Array.isArray(live.qc_ncr_24) ? live.qc_ncr_24 : [];
+        if (live.qc_seq_24.mtc == null) live.qc_seq_24.mtc = 0;
+        if (live.qc_seq_24.ncr == null) live.qc_seq_24.ncr = 0;
+        return live;
+    }
+    if (req.method === 'POST' && pathname === '/api/qcpro/mtc') {
+        if (!auth.requireRole(req, QC_MTC_W_24B)) return sendJson(res, { error: 'دسترسی غیرمجاز: صدور گواهی کیفیت (MTC) فقط برای کنترل کیفیت مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcEnsure24b(qcEnsure24a(invEnsure(readLive())));
+                let order = null, exit = null, size = '', weight = 0, pieces = 0, custName = '', cust = null, dj = '';
+                const exits = (live.sales_exits || []);
+                if (b.exit_id) {
+                    exit = exits.find((e) => e.id === String(b.exit_id) || e.exit_no === String(b.exit_id));
+                    if (!exit) return sendJson(res, { error: 'حوالهٔ فروش یافت نشد.' }, 404);
+                    if ((live.qc_mtc_24 || []).some((m) => m.exit_no === exit.exit_no)) return sendJson(res, { error: 'برای حوالهٔ ' + exit.exit_no + ' قبلاً MTC صادر شده است (شماره: ' + ((live.qc_mtc_24 || []).find((m) => m.exit_no === exit.exit_no) || {}).mtc_no + ').' }, 409);
+                    order = (live.sales_orders || []).find((o) => o.id === exit.order_id);
+                    size = String(exit.size); weight = Number(exit.weight_ton) || 0; pieces = Number(exit.pieces) || 0; dj = exit.date_jalali || finIsoToJalali(exit.created_at);
+                } else if (b.order_id) {
+                    order = (live.sales_orders || []).find((o) => o.id === String(b.order_id) || o.order_no === String(b.order_id));
+                    if (!order) return sendJson(res, { error: 'سفارش فروش یافت نشد.' }, 404);
+                    const covered = (live.qc_mtc_24 || []).filter((m) => m.order_id === order.id);
+                    const its = order.items || [];
+                    if (covered.length >= its.length) return sendJson(res, { error: 'برای همهٔ سایزهای این سفارش MTC صادر شده است.' }, 409);
+                    const done = its.map((i) => String(i.size)).filter((s) => !covered.some((m) => m.size === s));
+                    size = done[0]; weight = round2(((order.items || []).find((i) => String(i.size) === size) || {}).qty_ton || 0); dj = order.date_jalali || finIsoToJalali(order.created_at);
+                } else return sendJson(res, { error: 'انتخاب حواله (exit_id) یا سفارش (order_id) الزامی است.' }, 400);
+                if (!order) return sendJson(res, { error: 'سفارش حواله یافت نشد.' }, 404);
+                cust = (live.customers || []).find((c) => c.id === order.customer_id);
+                custName = (cust && cust.name) || order.customer_name || '—';
+                /* هیت‌های مرجع: باندل‌های همین سایز + هیت حواله در صورت وجود (اختیاری بدنهٔ درخواست) */
+                let heats = b.heat_number ? [String(b.heat_number).trim().slice(0, 40)] : Array.from(qcHeatsOfSize24b(live, size));
+                if (!heats.length) return sendJson(res, { error: 'هیت مرجع برای سایز ' + size + ' یافت نشد — باندل/کد هیت تولید ثبت نشده است.' }, 409);
+                if (heats.length > 6) heats = heats.slice(0, 6);
+                /* گرید و استاندارد: از باندل/مشخصات فنی/پیش‌فرض گرید فعال */
+                const bundles = (live.rebar_bundles || []).filter((x) => String(x.rebar_size) === String(size));
+                const spec24b = (live.qc_specs_24 || []).find((s) => String(s.size) === String(size) && s.active !== false);
+                const gradeName = String(b.grade || (bundles[0] && bundles[0].rebar_grade) || (spec24b && spec24b.grade) || 'A3').trim();
+                const grade24b = (live.qc_grades_24 || []).find((g) => g.name === gradeName && g.active !== false) || (live.qc_grades_24 || []).find((g) => g.name === gradeName) || (live.qc_grades_24 || []).find((g) => g.active !== false);
+                /* نتایج آزمون per هیت — بدون نتیجهٔ واقعی، MTC صادر نمی‌شود (صحت گواهی) */
+                const tests = {};
+                let missing = [];
+                heats.forEach((h) => { const t = qcTestForHeat24b(live, h); tests[h] = t; if (!t.chem || !t.mech) missing.push(h); });
+                if (missing.length) return sendJson(res, { error: 'برای هیت ' + missing.join(', ') + ' نتایج آزمون (شیمیایی/مکانیکی) کامل یافت نشد — ابتدا آزمون ورودی را ثبت و از QC تأیید کنید یا آزمایشگاه QC را تکمیل کنید.', missing: missing }, 409);
+                const mtcNo = qcNextNo24a(live, 'mtc', 'MTC');
+                const vid = 'MTCV' + crypto.createHash('sha1').update(mtcNo + '|' + Date.now() + '|' + Math.random()).digest('hex').slice(0, 10).toUpperCase();
+                const rec = {
+                    id: 'mtc24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    mtc_no: mtcNo, verify_id: vid, cert_type: 'EN 10204 — Type 3.1',
+                    order_id: order.id, order_no: order.order_no, exit_no: exit ? exit.exit_no : '',
+                    invoice_no: exit ? (exit.invoice_no || '') : '',
+                    customer_id: order.customer_id, customer_name: custName,
+                    size: size, grade: gradeName, standard: grade24b ? grade24b.standard : '',
+                    weight_ton: weight, pieces: pieces, date_jalali: dj,
+                    is_export: order.is_export === true,
+                    heat_numbers: heats, tests: tests, test_source: tests[heats[0]] && tests[heats[0]].source,
+                    tol_weight_percent: spec24b ? spec24b.tol_weight_percent : null, piece_length_m: spec24b ? spec24b.piece_length_m : null,
+                    issued_by: String((req.user && (req.user.name || req.user.username)) || ''), issued_at: new Date().toISOString(),
+                    notes: String(b.notes || '').slice(0, 300),
+                };
+                rec.hash = crypto.createHash('sha256').update(JSON.stringify([mtcNo, vid, order.order_no, exit ? exit.exit_no : '', size, gradeName, weight, heats, rec.issued_by])).digest('hex').slice(0, 32);
+                live.qc_mtc_24.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ MTC انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.mtc.issue', { mtc_no: mtcNo, exit_no: rec.exit_no, order_no: rec.order_no, heats: heats });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'صدور MTC ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    /* تأیید آنلاین MTC — عمومی (مشتری/گمر QR را اسکن می‌کند) با حداقل دادهٔ امن */
+    let QCV_M;
+    if (req.method === 'GET' && (QCV_M = pathname.match(/^\/api\/qcpro\/mtc\/verify\/([A-Za-z0-9]+)$/))) {
+        const live = qcEnsure24b(qcEnsure24a(readLive()));
+        const m = (live.qc_mtc_24 || []).find((x) => x.verify_id === QCV_M[1]);
+        if (!m) return sendJson(res, { ok: true, valid: false, message: 'گواهی یافت نشد — شمارهٔ تأیید نامعتبر است.' });
+        return sendJson(res, {
+            ok: true, valid: true, mtc_no: m.mtc_no, cert_type: m.cert_type, tenant: (function () { try { return loadTenant15a().name || 'Sanatify'; } catch (e) { return 'Sanatify'; } })(),
+            customer: m.customer_name, order_no: m.order_no, exit_no: m.exit_no || '', size: m.size, grade: m.grade, standard: m.standard,
+            weight_ton: m.weight_ton, heat_numbers: m.heat_numbers, date_jalali: m.date_jalali, issued_at: m.issued_at, hash: m.hash,
+        });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/qcpro/ncr') {
+        if (!auth.requireRole(req, QC_NCR_W_24B)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت عدم انطباق (NCR) فقط برای کنترل کیفیت مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcEnsure24b(qcEnsure24a(readLive()));
+                const scope = ['bundle', 'heat', 'receipt'].indexOf(b.scope) !== -1 ? b.scope : 'heat';
+                const ntype = ['chem', 'mech', 'dim', 'visual'].indexOf(b.ntype) !== -1 ? b.ntype : 'visual';
+                const severity = ['minor', 'major', 'critical'].indexOf(b.severity) !== -1 ? b.severity : 'minor';
+                const action = ['rework', 'concession', 'rejection'].indexOf(b.action) !== -1 ? b.action : 'rework';
+                const desc = String(b.description || '').trim();
+                if (desc.length < 5) return sendJson(res, { error: 'شرح عدم انطباق الزامی است (حداقل ۵ نویسه).' }, 400);
+                const rec = { id: 'ncr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ncr_no: qcNextNo24a(live, 'ncr', 'NCR'), date_jalali: finIsoToJalali(new Date().toISOString()), scope: scope, bundle_code: String(b.bundle_code || '').trim().slice(0, 40), heat_number: String(b.heat_number || '').trim().slice(0, 40), receipt_no: String(b.receipt_no || '').trim().slice(0, 40), size: String(b.size || '').trim().slice(0, 12), ntype: ntype, severity: severity, action: action, quantity_ton: round2(Number(b.quantity_ton) || 0), description: desc.slice(0, 500), status: 'open', opened_by: String((req.user && (req.user.name || req.user.username)) || ''), opened_at: new Date().toISOString(), closed_at: null, closed_by: '', corrective_action: '' };
+                if (rec.scope === 'heat' && !rec.heat_number) return sendJson(res, { error: 'برای NCR هیت، کد هیت الزامی است.' }, 400);
+                if (rec.scope === 'bundle' && !rec.bundle_code) return sendJson(res, { error: 'برای NCR باندل، کد باندل الزامی است.' }, 400);
+                if (rec.scope === 'receipt' && !rec.receipt_no) return sendJson(res, { error: 'برای NCR رسید، شمارهٔ رسید خرید الزامی است.' }, 400);
+                /* پرکردن خودکار هیت/سایز/تناژ از باندل یا رسید (برای گارد حواله و سند مالی) */
+                if (rec.scope === 'bundle') {
+                    const bd = (live.rebar_bundles || []).find((x) => String(x.bundle_code) === rec.bundle_code);
+                    if (bd) { rec.heat_number = rec.heat_number || String(bd.heat_number || ''); rec.size = rec.size || String(bd.rebar_size || ''); rec.quantity_ton = rec.quantity_ton || round2((Number(bd.net_weight_kg) || 0) / 1000); }
+                }
+                if (rec.scope === 'receipt') {
+                    const gr = (live.purchase_receipts || []).find((x) => x.receipt_no === rec.receipt_no);
+                    if (gr) { rec.quantity_ton = rec.quantity_ton || round2((gr.lines || []).reduce((s, l) => s + (Number(l.qty) || 0), 0)); const hl = (gr.lines || []).find((l) => l.heat_number); rec.heat_number = rec.heat_number || (hl ? hl.heat_number : ''); }
+                }
+                if (!rec.quantity_ton) rec.quantity_ton = 0;
+                live.qc_ncr_24.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ NCR انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.ncr.open', { ncr_no: rec.ncr_no, scope: rec.scope, severity: rec.severity, action: rec.action, heat: rec.heat_number });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت NCR ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/qcpro/ncr/close') {
+        if (!auth.requireRole(req, QC_NCR_W_24B)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcEnsure24b(qcEnsure24a(invEnsure(readLive())));
+                const n = (live.qc_ncr_24 || []).find((x) => x.id === String(b.id || '') || x.ncr_no === String(b.id || ''));
+                if (!n) return sendJson(res, { error: 'NCR یافت نشد.' }, 404);
+                if (n.status !== 'open') return sendJson(res, { error: 'این NCR قبلاً بسته شده است.' }, 409);
+                n.corrective_action = String(b.corrective_action || '').trim().slice(0, 400);
+                if (n.corrective_action.length < 3) return sendJson(res, { error: 'اقدام اصلاحی الزامی است.' }, 400);
+                n.status = 'closed'; n.closed_at = new Date().toISOString(); n.closed_by = String((req.user && (req.user.name || req.user.username)) || '');
+                let quarantined = 0, docRef = '';
+                if (n.action === 'rejection') {
+                    /* ===== FEAT-QC-PRO-24b: اقدام «رد» → قرنطینهٔ فیزیکی + سند زیان ضایعات از موتور واحد finPostDoc (idempotent per ncr_no) ===== */
+                    let qrows = [];
+                    (live.inventory_receipts || []).forEach((r) => {
+                        if (!r || r.stock_status !== 'available') return;
+                        const hit = (n.receipt_no && String(r.source_ref || '') === String(n.receipt_no)) ||
+                            (n.heat_number && (String(r.heat_number || '') === String(n.heat_number) || String(r.lot_no || '') === String(n.heat_number)) && (n.scope === 'heat' || n.scope === 'bundle'));
+                        if (hit) qrows.push(r);
+                    });
+                    qrows.forEach((r) => { r.stock_status = 'quarantine'; r.qc_note_24 = 'قرنطینه — NCR ' + n.ncr_no + ' (اقدام: رد)'; quarantined++; });
+                    n.quarantine_count = quarantined;
+                    if (!live._fin_v1) finSeed(live); /* اگر مالی هرگز seed نشده بود — همان مسیر رسمی (حساب‌های ۵۲۰۰۰۱/۱۱۰xxx) */
+                    const finCfg24b = live.fin_config || {};
+                    const isProduct = n.scope === 'bundle' || (n.size && Number(n.size) > 0 && n.scope !== 'receipt');
+                    const invAccCode = isProduct ? '110003' : '110001';
+                    const accBy24b = {}; (live.fin_accounts || []).forEach((a) => { accBy24b[a.code] = a; });
+                    if (accBy24b['520001'] && accBy24b[invAccCode] && (Number(n.quantity_ton) || 0) > 0) {
+                        let cost = 0;
+                        if (isProduct) {
+                            const bom24b = (live.fin_bom || []).find((x) => String(x.size) === String(n.size));
+                            cost = bom24b ? finStdCostPerTon(bom24b, finCfg24b) : Math.round((Number(finCfg24b.billet_rial_per_kg) || 0) * 1.035 * 1000 + 110 * (Number(finCfg24b.energy_tariff_rial_per_kwh) || 0) + 2500000 + 4000000 + 350000);
+                        } else cost = Math.round((Number(finCfg24b.billet_rial_per_kg) || 0) * 1000);
+                        const amt = Math.round((Number(n.quantity_ton) || 0) * cost);
+                        if (amt > 0) {
+                            const doc = finPostDoc(live, { source: 'qc_ncr', ref_module: 'quality', ref_id: 'ncr:' + n.ncr_no, date_jalali: n.date_jalali, desc: 'زیان ضایعات عدم انطباق — NCR ' + n.ncr_no + ' (' + NCR_TYPE_FA_24B[n.ntype] + ' / ' + NCR_SEV_FA_24B[n.severity] + ') — ' + n.quantity_ton + ' تن' + (n.heat_number ? ' — هیت ' + n.heat_number : ''), lines: [ { account_id: accBy24b['520001'].id, debit: amt, ref_id: n.ncr_no }, { account_id: accBy24b[invAccCode].id, credit: amt, ref_id: n.ncr_no } ], created_by: n.closed_by });
+                            docRef = doc && doc.doc && doc.doc.doc_no ? 'F-' + String(doc.doc.doc_no).padStart(5, '0') : '';
+                        }
+                    }
+                }
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ بستن NCR انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.ncr.close', { ncr_no: n.ncr_no, action: n.action, quarantined: quarantined, doc: docRef });
+                return sendJson(res, { ok: true, record: n, quarantined: quarantined, doc_no: docRef });
+            } catch (e) { return sendJson(res, { error: 'بستن NCR ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/qcpro/reports') {
+        if (!auth.requireRole(req, QC_READ_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = qcEnsure24b(qcEnsure24a(readLive()));
+        /* نرخ رد QC ورودی per تأمین‌کننده — اتصال به ارزیابی فاز ۱۴ */
+        const supMap24b = {};
+        (live.purchase_receipts || []).forEach((r) => { supMap24b[r.receipt_no] = r.supplier_name || '—'; });
+        const bySup24b = {};
+        (live.qc_incoming_24 || []).forEach((t) => {
+            const sup = t.supplier_name || supMap24b[t.receipt_no] || '—';
+            bySup24b[sup] = bySup24b[sup] || { supplier: sup, total: 0, rejected: 0, pending: 0 };
+            bySup24b[sup].total++;
+            if (t.status === 'rejected') bySup24b[sup].rejected++;
+            if (t.status === 'draft') bySup24b[sup].pending++;
+        });
+        const supplier_reject = Object.keys(bySup24b).map((k) => { const r = bySup24b[k]; return Object.assign(r, { rate_percent: r.total ? Math.round(r.rejected * 1000 / r.total) / 10 : 0 }); }).sort((a, b2) => b2.rate_percent - a.rate_percent);
+        /* نرخ عدم انطباق per گرید/سایز/ماه */
+        const aggNcr24b = (keyFn) => {
+            const m = {};
+            (live.qc_ncr_24 || []).forEach((n) => { const k = keyFn(n) || '—'; m[k] = m[k] || { key: k, count: 0, open: 0, critical: 0 }; m[k].count++; if (n.status === 'open') m[k].open++; if (n.severity === 'critical') m[k].critical++; });
+            return Object.keys(m).map((k) => m[k]).sort((a, b2) => b2.count - a.count);
+        };
+        const bundlesGrade24b = {};
+        (live.rebar_bundles || []).forEach((x) => { bundlesGrade24b[String(x.bundle_code || '')] = x.rebar_grade || '—'; });
+        const ncr_by_grade = aggNcr24b((n) => (bundlesGrade24b[String(n.bundle_code || '')] || (n.size ? 'سایز ' + n.size : '—')));
+        const ncr_by_size = aggNcr24b((n) => (n.size ? 'سایز ' + n.size : '—'));
+        const ncr_by_month = aggNcr24b((n) => String(n.date_jalali || '').slice(0, 7));
+        const mtc = (live.qc_mtc_24 || []).slice().sort((a, b2) => String(b2.issued_at || '').localeCompare(String(a.issued_at || '')));
+        return sendJson(res, {
+            ok: true, today_jalali: finIsoToJalali(new Date().toISOString()),
+            supplier_reject: supplier_reject,
+            ncr_summary: { total: (live.qc_ncr_24 || []).length, open: (live.qc_ncr_24 || []).filter((n) => n.status === 'open').length, rejection: (live.qc_ncr_24 || []).filter((n) => n.action === 'rejection').length },
+            ncr_by_grade: ncr_by_grade, ncr_by_size: ncr_by_size, ncr_by_month: ncr_by_month,
+            ncr: (live.qc_ncr_24 || []).slice().sort((a, b2) => String(b2.opened_at || '').localeCompare(String(a.opened_at || ''))).map((n) => Object.assign({}, n, { ntype_fa: NCR_TYPE_FA_24B[n.ntype] || n.ntype, severity_fa: NCR_SEV_FA_24B[n.severity] || n.severity, action_fa: NCR_ACTION_FA_24B[n.action] || n.action })),
+            mtc: mtc,
+            /* باندل‌های اخیر برای فرم NCR (نقش qc به /api/bundles دسترسی ندارد — مرجع فقط‌خواندنی همین‌جا) */
+            bundles_ref: (live.rebar_bundles || []).slice(-120).reverse().map((b) => ({ bundle_code: String(b.bundle_code || ''), heat_number: String(b.heat_number || ''), rebar_size: String(b.rebar_size || ''), rebar_grade: String(b.rebar_grade || ''), net_weight_kg: Number(b.net_weight_kg) || 0 })),
+            /* کاندیدهای صدور MTC — حواله‌های بدون گواهی + آمادگی آزمون (برای دراپ‌داون UI) */
+            mtc_candidates: (live.sales_exits || []).filter((e) => !(live.qc_mtc_24 || []).some((m) => m.exit_no === e.exit_no)).map((e) => {
+                const ord = (live.sales_orders || []).find((o) => o.id === e.order_id) || {};
+                const heatsE = Array.from(qcHeatsOfSize24b(live, String(e.size)));
+                const ready = heatsE.length > 0 && heatsE.every((h) => { const t = qcTestForHeat24b(live, h); return t.chem && t.mech; });
+                return { exit_id: e.id, exit_no: e.exit_no, order_id: e.order_id, order_no: e.order_no, customer_name: ord.customer_name || '—', size: e.size, weight_ton: e.weight_ton, date_jalali: e.date_jalali, is_export: ord.is_export === true, heats: heatsE.slice(0, 6), tests_ready: ready, has_bundle: heatsE.length > 0 };
+            }),
+            export_orders_without_mtc: (live.sales_orders || []).filter((o) => o.is_export === true && !(live.qc_mtc_24 || []).some((m) => m.order_id === o.id)).map((o) => ({ order_no: o.order_no, customer_name: o.customer_name, sizes: (o.items || []).map((i) => i.size) })),
+            blocked_heats: (function () { const s = new Set(); (live.qc_ncr_24 || []).forEach((n) => { if (n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection') && n.heat_number) s.add(String(n.heat_number)); }); return Array.from(s); })(),
+        });
+    }
+    // ===== FEAT-QC-PRO-24b (end) =====
 
 
 

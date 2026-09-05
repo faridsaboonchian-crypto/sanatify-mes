@@ -18,6 +18,15 @@ const LOCK_MS = 60 * 1000;
 
 // endpoints the mobile app / monitoring hit WITHOUT a web session
 const PUBLIC_API = ['/api/ingest', '/api/health', '/api/snapshot'];
+/* ===== FEAT-QC-PRO-24b (begin): تأیید آنلاین گواهی کیفیت MTC عمومی است (QR مشتری/گمر بدون لاگین) — فقط مسیر دقیق با VID الفبایی-عددی و پاسخ حداقلی ===== */
+function isPublicApi24(pathname) {
+    if (pathname.indexOf('/api/qcpro/mtc/verify/') === 0) {
+        const v = pathname.slice('/api/qcpro/mtc/verify/'.length);
+        return /^[A-Za-z0-9]+$/.test(v);
+    }
+    return false;
+}
+/* ===== FEAT-QC-PRO-24b (end) ===== */
 
 const sessions = new Map();   // sid -> { user, expires, lastSeen }
 /* SEC-15b: سیستم قدیمی قفل ۶۰ثانیه‌ای per-username باregisterLoginFail15b دولایه جایگزین شد */
@@ -512,7 +521,7 @@ function doMe(req, res) {
 //  whitelisted app/monitoring endpoints. Returns TRUE if it blocked.
 // ---------------------------------------------------------------------
 function enforce(req, res, pathname) {
-    if (PUBLIC_API.indexOf(pathname) !== -1) return false; // app + monitoring stay open
+    if (PUBLIC_API.indexOf(pathname) !== -1 || isPublicApi24(pathname)) return false; // app + monitoring + MTC verify (FEAT-QC-PRO-24b) stay open
     const s = getSession(req);
     if (s) { req.user = s.user; return false; } // authenticated -> allow
     if (pathname.indexOf('/api/') === 0) { jsonRes(res, { error: 'unauthorized' }, 401); return true; }
