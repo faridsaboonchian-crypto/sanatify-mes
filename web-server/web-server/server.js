@@ -262,7 +262,7 @@ function handleHealthFast(req, res) {
 // الگو: استقرار per-tenant (یک سرور برای هر مشتری، پیکربندی با tenant.json — الگوی standalone-app
 // الگوهای SaaS Azure با ایزوله‌سازی کامل داده؛ ERPNext هر tenant را یک site جدا می‌گیرد، ما هر استقرار را)
 const TENANT_FILE_15A = path.join(ROOT, 'tenant.json');
-const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance'];
+const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance', 'sales']; /* FEAT-SALES-21a: +ماژول فروش (گیت لایسنس مثل بقیه) */
 const DEFAULT_TENANT_15A = {
     tenant_id: 'sanatify', name: 'صنعتی فای', logo: '', brand_colors: {},
     active_modules: MODULES_15A.slice(), max_users: 0, max_records: 0,
@@ -323,6 +323,7 @@ function checkTenantLimits15a() {
 }
 // نگاشت مسیر API → ماژول لایسنس (null = عمومی/مستثنی)
 function moduleForPath15a(pathname) {
+    if (pathname.indexOf('/api/sales') === 0) return 'sales'; /* FEAT-SALES-21a: گیت لایسنس ماژول فروش */
     if (pathname.indexOf('/api/fin') === 0) return 'finance';
     if (pathname.indexOf('/api/energy/') === 0) return 'em';
     if (pathname.indexOf('/api/planning/') === 0) return 'planning';
@@ -450,8 +451,8 @@ function tenantPublicShape15c(cfg) {
     };
 }
 // ===== FEAT-ADMIN-17a (begin): ثابت‌های نقش + خوانندهٔ فایل کاربران =====
-const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer']; /* همان کلیدهای ROLE_VIEW — دست نخورده */
-const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده' };
+const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش */
+const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش' }; /* FEAT-SALES-21a: +نقش فروش */
 function readUsers17a() {
     try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; }
 }
@@ -4305,6 +4306,373 @@ live.inventory_reservations.splice(idx, 1);
         }).catch(e => sendJson(res, { error: e.message }, 500));
         return;
     }
+
+
+    // ================================================================
+    // ===== FEAT-SALES-21a (begin): ماژول فروش — مشتریان / لیست قیمت /
+    // سفارش فروش / رزرو موجودی (موتور رزرو موجود FIX-RES-1) / حوالهٔ خروج
+    // فروش (حرکت خروج انبار با مقصد «فروش») — همهٔ داده‌ها افزاینده در live.json
+    // نقش‌ها: sales/admin ثبت و تأیید؛ warehouse فقط ثبت حواله؛
+    // manager/finance فقط‌خواندن — گیت لایسنس ماژول «sales» مثل بقیهٔ ماژول‌ها
+    // ================================================================
+    function salesEnsure21a(live) {
+        live.customers = Array.isArray(live.customers) ? live.customers : [];
+        live.price_list = Array.isArray(live.price_list) ? live.price_list : [];
+        live.sales_orders = Array.isArray(live.sales_orders) ? live.sales_orders : [];
+        live.sales_exits = Array.isArray(live.sales_exits) ? live.sales_exits : [];
+        live.sales_seq = live.sales_seq && typeof live.sales_seq === 'object' ? live.sales_seq : { order: 0, exit: 0 };
+        return live;
+    }
+    const SALES_SIZES_21A = ['8', '10', '12', '14', '16', '18', '20', '22', '25', '28', '32', '5SP'];
+    const SALES_STATUS_FA_21A = { draft: 'پیش‌نویس', reserved: 'تأیید شده (رزروشده)', completed: 'تکمیل', cancelled: 'لغو شده' };
+    function salesNextNo21a(live, key, prefix) { live.sales_seq[key] = (Number(live.sales_seq[key]) || 0) + 1; return prefix + '-' + String(live.sales_seq[key]).padStart(5, '0'); }
+    function salesFmt21a(n) { return groupFaFa(Number(n) || 0); }
+    function groupFaFa(n) { try { return Number(n).toLocaleString('fa-IR', { maximumFractionDigits: 3 }); } catch (e) { return String(n); } }
+    /* کالای محصول per سایز — اگر در انبار تعریف نشده باشد، افزاینده ساخته می‌شود (واحد تن، انبار محصول) */
+    function salesItemForSize21a(live, size) {
+        const want = String(size) === '5SP' ? '5SP' : 'RB-' + String(size);
+        let it = (live.inventory_items || []).find((x) => String(x.code || '').toUpperCase() === want.toUpperCase() && x.active !== false);
+        if (!it) {
+            it = { id: 'itm-sls-' + String(size) + '-' + Date.now().toString(36), code: want, name: String(size) === '5SP' ? 'میلگرد گرید 5SP' : ('میلگرد آجدار سایز ' + String(size)), unit: 'تن', category: 'محصول', active: true, min_stock: 0, reorder_point: 0, batch_tracking: false, _sales21a: true };
+            live.inventory_items.push(it);
+        }
+        return it;
+    }
+    function salesValidJalali21a(d) { const s = finDigitsEn(String(d || '')).trim(); return /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.test(s) && planJalaliToTs(s, 12) ? s : null; }
+    function salesOpenResOf21a(live, orderId, size, itemId) {
+        return (live.inventory_reservations || []).filter((r) => r.status === 'open' && r.sales_order_id === orderId && (size == null || String(r.sales_size) === String(size)) && (itemId == null || r.item_id === itemId));
+    }
+    const SALES_READ_21A = ['sales', 'manager', 'finance', 'warehouse'];
+    const SALES_WRITE_21A = ['sales']; /* admin همیشه با requireRole عبور می‌کند */
+    const SALES_EXIT_21A = ['warehouse', 'sales'];
+
+    if (req.method === 'GET' && pathname === '/api/sales/overview') {
+        if (!auth.requireRole(req, SALES_READ_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ فروش برای نقش شما مجاز نیست.' }, 403);
+        const live = salesEnsure21a(invEnsure(readLive()));
+        const stockBySize = {};
+        SALES_SIZES_21A.forEach((sz) => {
+            const want = sz === '5SP' ? '5SP' : 'RB-' + sz;
+            const it = (live.inventory_items || []).find((x) => String(x.code || '').toUpperCase() === want.toUpperCase() && x.active !== false);
+            if (!it) { stockBySize[sz] = { available: 0, physical: 0, reserved: 0, item_id: null, defined: false }; return; }
+            const agg = invAggWarehouse(live, it.id, 'product');
+            stockBySize[sz] = { available: agg.available, physical: agg.physical, reserved: agg.reserved, item_id: it.id, defined: true };
+        });
+        const orders = (live.sales_orders || []).map((o) => {
+            const exitsOf = (live.sales_exits || []).filter((e) => e.order_id === o.id);
+            const items = (o.items || []).map((it) => {
+                const ex = round2(exitsOf.filter((e) => String(e.size) === String(it.size)).reduce((s, e) => s + (Number(e.weight_ton) || 0), 0));
+                const res = round2(salesOpenResOf21a(live, o.id, it.size).reduce((s, r) => s + (Number(r.quantity) || 0), 0));
+                return Object.assign({}, it, { exited_ton: ex, remaining_ton: round2(Math.max(0, (Number(it.qty_ton) || 0) - ex)), reserved_ton: res, line_total_rial: Math.round((Number(it.qty_ton) || 0) * (Number(it.unit_price_rial) || 0)) });
+            });
+            const total = items.reduce((s, it) => s + it.line_total_rial, 0);
+            return Object.assign({}, o, { items, total_rial: total, status_fa: SALES_STATUS_FA_21A[o.status] || o.status, exits_count: exitsOf.length });
+        });
+        return sendJson(res, {
+            ok: true,
+            customers: live.customers || [],
+            price_list: (live.price_list || []).slice().sort((a, b) => String(b.effective_date_jalali || '').localeCompare(String(a.effective_date_jalali || ''))),
+            orders: orders.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))),
+            exits: (live.sales_exits || []).slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))),
+            stock_by_size: stockBySize,
+            sizes: SALES_SIZES_21A,
+            vat_rate: (live.fin_config && Number(live.fin_config.vat_rate)) || 10,
+            today_jalali: finIsoToJalali(new Date().toISOString()),
+            status_fa: SALES_STATUS_FA_21A,
+        });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/customers') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت مشتری فقط برای واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const name = String(b.name || '').trim();
+                if (name.length < 2) return sendJson(res, { error: 'نام مشتری الزامی است.' }, 400);
+                if (!/^[0-9۰-۹]{10,14}$/.test(finDigitsEn(String(b.national_id || '')).trim())) return sendJson(res, { error: 'شناسهٔ ملی/کد ملی باید ۱۰ تا ۱۴ رقم باشد (اقلام الزامی مؤدیان).' }, 400);
+                const rec = {
+                    id: 'cust-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    name: name.slice(0, 120),
+                    national_id: finDigitsEn(String(b.national_id || '')).trim(),
+                    economic_id: finDigitsEn(String(b.economic_id || '')).trim().slice(0, 20),
+                    address: String(b.address || '').trim().slice(0, 300),
+                    phone: finDigitsEn(String(b.phone || '')).trim().slice(0, 20),
+                    credit_limit_rial: Math.max(0, Math.round(Number(finDigitsEn(b.credit_limit_rial)) || 0)),
+                    payment_term_days: Math.max(0, Math.round(Number(finDigitsEn(b.payment_term_days)) || 0)),
+                    active: b.active === false ? false : true,
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(), updated_at: null,
+                };
+                live.customers.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ مشتری انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.customer.create', { id: rec.id, name: rec.name });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/sales/customers') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ویرایش مشتری فقط برای واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const rec = (live.customers || []).find((x) => x.id === String(b.id || ''));
+                if (!rec) return sendJson(res, { error: 'مشتری یافت نشد.' }, 404);
+                if (b.name != null) rec.name = String(b.name).trim().slice(0, 120) || rec.name;
+                if (b.national_id != null) { const nid = finDigitsEn(String(b.national_id)).trim(); if (!/^[0-9]{10,14}$/.test(nid)) return sendJson(res, { error: 'شناسهٔ ملی/کد ملی باید ۱۰ تا ۱۴ رقم باشد.' }, 400); rec.national_id = nid; }
+                if (b.economic_id != null) rec.economic_id = finDigitsEn(String(b.economic_id)).trim().slice(0, 20);
+                if (b.address != null) rec.address = String(b.address).trim().slice(0, 300);
+                if (b.phone != null) rec.phone = finDigitsEn(String(b.phone)).trim().slice(0, 20);
+                if (b.credit_limit_rial != null) rec.credit_limit_rial = Math.max(0, Math.round(Number(finDigitsEn(b.credit_limit_rial)) || 0));
+                if (b.payment_term_days != null) rec.payment_term_days = Math.max(0, Math.round(Number(finDigitsEn(b.payment_term_days)) || 0));
+                if (b.active != null) rec.active = !!b.active;
+                rec.updated_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ مشتری انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.customer.update', { id: rec.id });
+                return sendJson(res, { ok: true, record: rec });
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/price-list') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت قیمت فقط برای واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const size = String(b.size || '').trim();
+                if (SALES_SIZES_21A.indexOf(size) === -1) return sendJson(res, { error: 'سایز نامعتبر است — سایزهای مجاز: ۸ تا ۳۲ و 5SP.' }, 400);
+                const price = Math.round(Number(finDigitsEn(b.price_rial_per_ton)) || 0);
+                if (price <= 0) return sendJson(res, { error: 'قیمت پایهٔ هر تن باید بزرگ‌تر از صفر باشد (ریال).' }, 400);
+                const dj = salesValidJalali21a(b.effective_date_jalali);
+                if (!dj) return sendJson(res, { error: 'تاریخ اثر شمسی نامعتبر است (نمونه: ۱۴۰۵/۰۶/۰۱).' }, 400);
+                const rec = { id: 'price-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), size: size, grade: String(b.grade || '').trim().slice(0, 20), price_rial_per_ton: price, effective_date_jalali: dj, active: b.active === false ? false : true, created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
+                live.price_list.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ قیمت انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.price.create', { id: rec.id, size: size, price: price });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/sales/price-list') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const rec = (live.price_list || []).find((x) => x.id === String(b.id || ''));
+                if (!rec) return sendJson(res, { error: 'ردیف قیمت یافت نشد.' }, 404);
+                if (b.price_rial_per_ton != null) { const p = Math.round(Number(finDigitsEn(b.price_rial_per_ton)) || 0); if (p <= 0) return sendJson(res, { error: 'قیمت باید بزرگ‌تر از صفر باشد.' }, 400); rec.price_rial_per_ton = p; }
+                if (b.effective_date_jalali != null) { const dj = salesValidJalali21a(b.effective_date_jalali); if (!dj) return sendJson(res, { error: 'تاریخ اثر شمسی نامعتبر است.' }, 400); rec.effective_date_jalali = dj; }
+                if (b.active != null) rec.active = !!b.active;
+                if (b.grade != null) rec.grade = String(b.grade).trim().slice(0, 20);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ قیمت انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.price.update', { id: rec.id });
+                return sendJson(res, { ok: true, record: rec });
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/orders') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت سفارش فقط برای واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const cust = (live.customers || []).find((c) => c.id === String(b.customer_id || '') && c.active !== false);
+                if (!cust) return sendJson(res, { error: 'مشتری فعال انتخاب نشده است — ابتدا مشتری را ثبت/فعال کنید.' }, 400);
+                const dj = salesValidJalali21a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                const ddj = salesValidJalali21a(b.due_date_jalali);
+                if (!ddj) return sendJson(res, { error: 'سررسید شمسی نامعتبر است (نمونه: ۱۴۰۵/۰۶/۱۵).' }, 400);
+                const itemsIn = Array.isArray(b.items) ? b.items.slice(0, 30) : [];
+                const merged = {};
+                for (const it of itemsIn) {
+                    const size = String((it && it.size) || '').trim();
+                    if (SALES_SIZES_21A.indexOf(size) === -1) return sendJson(res, { error: 'سایز اقلام سفارش نامعتبر است: ' + (size || 'خالی') }, 400);
+                    const qty = round2(Number(finDigitsEn(it.qty_ton)) || 0);
+                    if (!(qty > 0)) return sendJson(res, { error: 'تناژ درخواستی سایز ' + size + ' باید بزرگ‌تر از صفر باشد.' }, 400);
+                    const price = Math.round(Number(finDigitsEn(it.unit_price_rial)) || 0);
+                    if (price <= 0) return sendJson(res, { error: 'قیمت هر تن برای سایز ' + size + ' الزامی است (از لیست قیمت پیش‌فرض می‌شود).' }, 400);
+                    if (merged[size]) merged[size].qty_ton = round2(merged[size].qty_ton + qty);
+                    else merged[size] = { size: size, qty_ton: qty, pieces: Math.max(0, Math.round(Number(finDigitsEn(it.pieces)) || 0)), unit_price_rial: price };
+                }
+                const items = Object.keys(merged).map((k) => merged[k]);
+                if (!items.length) return sendJson(res, { error: 'حداقل یک قلم کالا به سفارش اضافه کنید.' }, 400);
+                const vatRate = (live.fin_config && Number(live.fin_config.vat_rate)) || 10;
+                const orderTotal = items.reduce((s, it) => s + Math.round((Number(it.qty_ton) || 0) * (Number(it.unit_price_rial) || 0)), 0);
+                /* سقف اعتبار: مجموع سفارش‌های باز/جاری مشتری + این سفارش (هشدار — مسدودکننده نیست) */
+                let exposure = orderTotal;
+                (live.sales_orders || []).forEach((o) => { if (o.customer_id === cust.id && (o.status === 'draft' || o.status === 'reserved')) { (o.items || []).forEach((it) => { exposure += Math.round((Number(it.qty_ton) || 0) * (Number(it.unit_price_rial) || 0)); }); } });
+                let credit_warning = '';
+                if ((Number(cust.credit_limit_rial) || 0) > 0 && exposure > Number(cust.credit_limit_rial)) {
+                    credit_warning = 'هشدار سقف اعتبار: مجموع تعهدات باز مشتری ' + salesFmt21a(exposure) + ' ریال از سقف اعتبار ' + salesFmt21a(cust.credit_limit_rial) + ' ریال عبور می‌کند.';
+                }
+                const rec = {
+                    id: 'so-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    order_no: salesNextNo21a(live, 'order', 'SO'),
+                    customer_id: cust.id, customer_name: cust.name,
+                    items: items, date_jalali: dj, due_date_jalali: ddj,
+                    vat_rate: vatRate, status: 'draft', notes: String(b.notes || '').trim().slice(0, 300),
+                    created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
+                    confirmed_at: null, cancelled_at: null,
+                };
+                live.sales_orders.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ سفارش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.order.create', { order_no: rec.order_no, customer: cust.name, items: items.length });
+                return sendJson(res, { ok: true, record: rec, credit_warning: credit_warning }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/orders/confirm') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: تأیید سفارش فقط برای واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const order = (live.sales_orders || []).find((o) => o.id === String(b.id || '') || o.order_no === String(b.id || ''));
+                if (!order) return sendJson(res, { error: 'سفارش یافت نشد.' }, 404);
+                if (order.status !== 'draft') return sendJson(res, { error: 'فقط سفارش پیش‌نویس قابل تأیید است (وضعیت فعلی: ' + (SALES_STATUS_FA_21A[order.status] || order.status) + ').' }, 409);
+                /* گام ۱ — بررسی موجودی قابل‌فروش برای همهٔ اقلام (اتمیک: همه پاس شد → رزرو) */
+                const plan = [];
+                for (const it of (order.items || [])) {
+                    const item = salesItemForSize21a(live, it.size);
+                    const agg = invAggWarehouse(live, item.id, 'product');
+                    if (agg.available < (Number(it.qty_ton) || 0) - 1e-9) {
+                        return sendJson(res, { error: 'موجودی قابل‌فروش کافی نیست (موجودی ' + salesFmt21a(agg.physical) + ' / رزرو ' + salesFmt21a(agg.reserved) + ' / قابل‌فروش ' + salesFmt21a(agg.available) + ' تن) — سایز ' + it.size + ' — درخواست ' + salesFmt21a(it.qty_ton) + ' تن', available: agg.available, physical: agg.physical, reserved: agg.reserved }, 409);
+                    }
+                    plan.push({ it: it, item: item });
+                }
+                /* گام ۲ — رزرو از موتور رزرو موجود (inventory_reservations — تب انبار ستون «رزرو» را نشان می‌دهد) */
+                const nowIso = new Date().toISOString();
+                const reservations = [];
+                plan.forEach((p) => {
+                    const rec = { id: 'res-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: 'sales:' + order.order_no + ':' + p.it.size, reservation_no: 'SRES-' + Date.now() + '-' + p.it.size, item_id: p.item.id, warehouse: 'product', quantity: Number(p.it.qty_ton) || 0, status: 'open', reason: 'فروش — ' + order.order_no, work_order: order.order_no, sales_order_id: order.id, sales_size: String(p.it.size), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: nowIso, closed_at: null };
+                    live.inventory_reservations.push(rec);
+                    live.inventory_reservation_logs = Array.isArray(live.inventory_reservation_logs) ? live.inventory_reservation_logs : [];
+                    live.inventory_reservation_logs.push({ id: 'rlog-' + rec.id, tx_type: 'reserve', receipt_no: rec.reservation_no, item_id: rec.item_id, quantity: rec.quantity, warehouse: rec.warehouse, lot_no: '', destination: rec.reason, timestamp: rec.created_at });
+                    reservations.push(rec);
+                });
+                order.status = 'reserved'; order.confirmed_at = nowIso;
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ تأیید سفارش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.order.confirm', { order_no: order.order_no, reservations: reservations.map((r) => r.reservation_no) });
+                return sendJson(res, { ok: true, record: order, reservations: reservations });
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/orders/cancel') {
+        if (!auth.requireRole(req, SALES_WRITE_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const order = (live.sales_orders || []).find((o) => o.id === String(b.id || '') || o.order_no === String(b.id || ''));
+                if (!order) return sendJson(res, { error: 'سفارش یافت نشد.' }, 404);
+                if (order.status === 'cancelled') return sendJson(res, { error: 'این سفارش قبلاً لغو شده است.' }, 409);
+                if (order.status === 'completed') return sendJson(res, { error: 'سفارش تکمیل‌شده قابل لغو نیست.' }, 409);
+                const nowIso = new Date().toISOString();
+                /* آزادسازی رزروهای باز فروش این سفارش */
+                let released = 0;
+                salesOpenResOf21a(live, order.id, null, null).forEach((r) => {
+                    r.status = 'released'; r.closed_at = nowIso; released += Number(r.quantity) || 0;
+                    live.inventory_reservation_logs = Array.isArray(live.inventory_reservation_logs) ? live.inventory_reservation_logs : [];
+                    live.inventory_reservation_logs.push({ id: 'rlog-rel-' + r.id + '-' + Date.now().toString(36), tx_type: 'release', issue_no: 'REL-' + Date.now(), item_id: r.item_id, quantity: r.quantity, warehouse: r.warehouse, lot_no: '', destination: 'لغو سفارش فروش ' + order.order_no, timestamp: nowIso });
+                });
+                order.status = 'cancelled'; order.cancelled_at = nowIso; order.cancel_reason = String(b.reason || '').trim().slice(0, 200);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ لغو سفارش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.order.cancel', { order_no: order.order_no, released_ton: released });
+                return sendJson(res, { ok: true, record: order, released_ton: round2(released) });
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/sales/exits') {
+        if (!auth.requireRole(req, SALES_EXIT_21A)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت حوالهٔ خروج فقط برای انباردار/واحد فروش مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = salesEnsure21a(invEnsure(readLive()));
+                const order = (live.sales_orders || []).find((o) => o.id === String(b.order_id || '') || o.order_no === String(b.order_id || ''));
+                if (!order) return sendJson(res, { error: 'سفارش یافت نشد.' }, 404);
+                if (order.status !== 'reserved') return sendJson(res, { error: 'حوالهٔ خروج فقط برای سفارش تأیید/رزروشده مجاز است (وضعیت فعلی: ' + (SALES_STATUS_FA_21A[order.status] || order.status) + ').' }, 409);
+                const size = String(b.size || '').trim();
+                const line = (order.items || []).find((it) => String(it.size) === size);
+                if (!line) return sendJson(res, { error: 'سایز «' + size + '» در اقلام این سفارش نیست.' }, 400);
+                const weight = round2(Number(finDigitsEn(b.weight_ton)) || 0);
+                if (!(weight > 0)) return sendJson(res, { error: 'وزن باسکول باید بزرگ‌تر از صفر باشد (تن).' }, 400);
+                const dj = salesValidJalali21a(b.date_jalali) || finIsoToJalali(new Date().toISOString());
+                /* ماندهٔ رزرو باز همین سفارش/سایز — حواله از رزرو کم می‌کند */
+                const openRes = salesOpenResOf21a(live, order.id, size, null).sort((x, y) => String(x.created_at).localeCompare(String(y.created_at)));
+                let reserved = round2(openRes.reduce((s, r) => s + (Number(r.quantity) || 0), 0));
+                if (weight > reserved + 1e-9) {
+                    return sendJson(res, { error: 'حواله بیش از ماندهٔ رزرو این سفارش است (ماندهٔ رزرو: ' + salesFmt21a(reserved) + ' تن — وزن: ' + salesFmt21a(weight) + ' تن).' }, 409);
+                }
+                const item = salesItemForSize21a(live, size);
+                const agg = invAggWarehouse(live, item.id, 'product');
+                if (agg.physical < weight - 1e-9) {
+                    return sendJson(res, { error: 'موجودی فیزیکی انبار محصول کافی نیست (فیزیکی: ' + salesFmt21a(agg.physical) + ' تن).' }, 409);
+                }
+                /* انتخاب از ردیف‌های فیزیکی — همان الگوی reserve/consume (FIX-RES-1)؛ رزرو پس از انتخاب کم می‌شود */
+                const availRows = agg.rows.filter((x) => x.stock_status === 'available' && Number(x.quantity) > 0).sort((a, b2) => Number(b2.quantity) - Number(a.quantity));
+                let pickRemain = weight; const sources = [];
+                for (const row of availRows) {
+                    if (pickRemain <= 1e-9) break;
+                    const take = round2(Math.min(Number(row.quantity), pickRemain));
+                    if (take <= 1e-9) continue;
+                    sources.push({ location: row.location, lot_no: row.lot_no, qty: take });
+                    pickRemain = round2(pickRemain - take);
+                }
+                if (pickRemain > 1e-9) return sendJson(res, { error: 'موجودی فیزیکی قابل خروج یافت نشد.', physical: agg.physical }, 409);
+                const nowIso = new Date().toISOString();
+                /* ۱) کم‌کردن رزرو به‌اندازهٔ حواله (الگوی reserve/consume موجود — FIX-RES-1) */
+                let remain = weight;
+                openRes.forEach((r) => {
+                    if (remain <= 1e-9) return;
+                    const take = round2(Math.min(Number(r.quantity) || 0, remain));
+                    r.quantity = round2((Number(r.quantity) || 0) - take);
+                    remain = round2(remain - take);
+                    if (r.quantity <= 1e-9) { r.status = 'consumed'; r.closed_at = nowIso; }
+                    live.inventory_reservation_logs = Array.isArray(live.inventory_reservation_logs) ? live.inventory_reservation_logs : [];
+                    live.inventory_reservation_logs.push({ id: 'rlog-con-' + r.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 5), tx_type: 'consume', issue_no: '', item_id: r.item_id, quantity: take, warehouse: r.warehouse, lot_no: '', destination: 'حوالهٔ فروش — ' + order.order_no, timestamp: nowIso });
+                });
+                /* ۲) حرکت خروج انبار با نوع «فروش» + ref به سفارش (همان قالب /api/inventory/issue — بدون تغییر در آن API) */
+                const baseNo = 'GIN-' + Date.now();
+                let mainIssue = null;
+                sources.forEach((src, idx) => {
+                    const iss = { id: 'gin-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), request_id: 'sales-exit:' + order.order_no + ':' + size + ':' + Date.now() + (idx > 0 ? '-' + (idx + 1) : ''), issue_no: baseNo + (idx > 0 ? '-' + (idx + 1) : ''), item_id: item.id, quantity: src.qty, unit: item.unit || 'تن', lot_no: src.lot_no, warehouse: 'product', location: src.location, destination: 'فروش — ' + order.order_no, destination_ref: order.order_no, work_order: order.order_no, description: ('حوالهٔ خروج فروش ' + order.order_no + ' — سایز ' + size + ' — باسکول ' + weight + ' تن').slice(0, 500), timestamp: nowIso, operator_id: String((req.user && (req.user.name || req.user.username)) || '') };
+                    live.inventory_issues.push(iss);
+                    if (!mainIssue) mainIssue = iss;
+                });
+                /* ۳) رکورد حوالهٔ فروش */
+                const rec = { id: 'sexit-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), exit_no: salesNextNo21a(live, 'exit', 'EX'), order_id: order.id, order_no: order.order_no, customer_id: order.customer_id, size: size, weight_ton: weight, pieces: Math.max(0, Math.round(Number(finDigitsEn(b.pieces)) || 0)), truck_plate: String(b.truck_plate || '').trim().slice(0, 30), driver: String(b.driver || '').trim().slice(0, 60), date_jalali: dj, issue_no: mainIssue ? mainIssue.issue_no : '', reservation_left: round2(reserved - weight), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: nowIso };
+                live.sales_exits.push(rec);
+                /* ۴) تکمیل سفارش اگر همهٔ اقلام کاملاً حواله شد */
+                const doneAll = (order.items || []).every((it) => round2((live.sales_exits || []).filter((e) => e.order_id === order.id && String(e.size) === String(it.size)).reduce((s, e) => s + (Number(e.weight_ton) || 0), 0)) >= (Number(it.qty_ton) || 0) - 1e-9);
+                if (doneAll) order.status = 'completed';
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ حوالهٔ فروش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'sales.exit.create', { exit_no: rec.exit_no, order_no: order.order_no, size: size, weight_ton: weight, issue_no: rec.issue_no });
+                return sendJson(res, { ok: true, record: rec, issue: mainIssue, order_status: order.status }, 201);
+            } catch (e) { return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    // ===== FEAT-SALES-21a (end) =====
+
 
    if (pathname.startsWith('/api/')) {
         loadData().then((d) => {
