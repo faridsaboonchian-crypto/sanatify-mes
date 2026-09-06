@@ -93,6 +93,30 @@ function rotateBaks18A(file) { /* بکاپ از نسخهٔ سالمِ قبلی �
         lastBakAt18A = now;
     } catch (e) { /* بکاپ اختیاری است — نوشتن اصلی ادامه می‌یابد */ }
 }
+/* ===== HARDEN-18K (begin): محکم‌سازی آپلود — magic-bytes + پیوستن امن مسیر سراسری =====
+   این دو کمک‌تابع در سطح ماژول‌اند تا هر endpoint آینده هم از آن‌ها استفاده کند (قاعدهٔ ضد path-traversal سراسری) */
+function hardSafeJoin18K(baseDir, relName) {
+    /* فقط نام فایل سادهٔ کوتاه؛ هرگونه / یا \ یا .. یا بایت تهی یا پیشوند درایو ویندوزی = رد قطعی */
+    const rel = String(relName || '').trim();
+    if (!rel || rel.length > 200) return null;
+    if (rel.indexOf('\0') !== -1) return null;
+    if (/[\\\/]/.test(rel) || /\.\./.test(rel) || /^[A-Za-z]:/.test(rel)) return null;
+    const full = path.resolve(baseDir, rel);
+    const base18k = path.resolve(baseDir) + path.sep;
+    if (full.indexOf(base18k) !== 0) return null; /* حتماً داخل پوشهٔ پایه بماند (حتی پس از resolve) */
+    return full;
+}
+function hardMagicOk18K(buf, ext) {
+    /* تشخیص نوع واقعی فایل از امضای بایتی — نه اعتماد به پسوند/نام */
+    try {
+        if (!Buffer.isBuffer(buf) || buf.length < 8) return false;
+        if (ext === 'pdf') return buf.slice(0, 5).toString('latin1') === '%PDF-';
+        if (ext === 'png') { const p18k = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]; for (let i = 0; i < 8; i++) { if (buf[i] !== p18k[i]) return false; } return true; }
+        if (ext === 'jpg') return buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
+        return false;
+    } catch (e) { return false; }
+}
+/* ===== HARDEN-18K (end) ===== */
 function recoverFromBaks18A(file) { /* جدیدترین → قدیمی‌ترین؛ اولین نسخهٔ سالم برنده است */
     const chain = bakChainPaths18A(file);
     for (let i = 0; i < chain.length; i++) {
@@ -6203,6 +6227,20 @@ live.inventory_reservations.splice(idx, 1);
 
     /* پوشهٔ آپلود گواهی ذوب — در کنار سرور (خارج از public) */
     const PUR_UPLOAD_DIR_22A = path.join(__dirname, 'uploads', 'purchase');
+    /* ===== HARDEN-18K (begin): قرنطینهٔ آپلود مشکوک — رد پای جرمی بدون اجرا ===== */
+    const PUR_QUARANTINE_DIR_18K = path.join(__dirname, 'uploads', '_quarantine');
+    function hardQuarantine18K(buf, reason) {
+        try {
+            fs.mkdirSync(PUR_QUARANTINE_DIR_18K, { recursive: true });
+            const qname = 'q-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.bin'; /* پسوند بی‌اثر — هرگز اجرا/سرو نمی‌شود */
+            fs.writeFileSync(path.join(PUR_QUARANTINE_DIR_18K, qname), buf);
+            const entry18k = { ts: new Date().toISOString(), user: (req && req.user && req.user.username) || 'system', role: (req && req.user && req.user.role) || 'system', ip: clientIp15b(req), action: 'upload.quarantine', endpoint: 'purchase/cert', status: 400, user_agent: 'HARDEN-18K', payload_hash: crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16), ms: 0, detail: String(reason).slice(0, 120) };
+            const t18k = setTimeout(() => { try { writeAudit15b(entry18k); } catch (e) { /* بی‌ضرر */ } }, 0);
+            if (t18k.unref) t18k.unref();
+            return qname;
+        } catch (e) { return ''; }
+    }
+    /* ===== HARDEN-18K (end) ===== */
     function purSaveCert22a(base64, name, receiptNo, lineIdx) {
         const clean = String(base64 || '').replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
         if (!clean) return null;
@@ -6212,10 +6250,21 @@ live.inventory_reservations.splice(idx, 1);
         const nm = String(name || '').toLowerCase();
         if (/\.png$/.test(nm)) ext = 'png'; else if (/\.jpe?g$/.test(nm)) ext = 'jpg'; else if (/\.pdf$/.test(nm)) ext = 'pdf'; else ext = '';
         if (!ext) throw new Error('فرمت گواهی ذوب باید PDF یا JPG/PNG باشد.');
+        const buf18k = Buffer.from(clean, 'base64'); /* HARDEN-18K: یک‌بار decode — سقف رمزگشایی‌شده هم صریح است */
+        if (buf18k.length > 2500000) throw new Error('حجم فایل گواهی ذوب بیش از حد مجاز است (حداکثر ~۲ مگابایت).');
+        /* HARDEN-18K: magic-bytes — محتوای واقعی باید با پسوند بخواند؛ تخلف ⇒ قرنطینه + audit (نوشتن در پوشهٔ گواهی ممنوع) */
+        if (!hardMagicOk18K(buf18k, ext)) {
+            hardQuarantine18K(buf18k, 'magic-bytes mismatch: claimed=' + ext);
+            throw new Error('محتوای فایل گواهی با فرمت اعلام‌شده (' + ext.toUpperCase() + ') هم‌خوان نیست — فایل در قرنطینه ثبت و درخواست رد شد.');
+        }
         try { fs.mkdirSync(PUR_UPLOAD_DIR_22A, { recursive: true }); } catch (e) { /* موجود */ }
         const fname = 'cert-' + String(receiptNo).replace(/[^A-Za-z0-9-]/g, '') + '-L' + lineIdx + '-' + Date.now() + '.' + ext;
-        fs.writeFileSync(path.join(PUR_UPLOAD_DIR_22A, fname), Buffer.from(clean, 'base64'));
-        return { file: fname, name: String(name || '').slice(0, 120), size: Buffer.from(clean, 'base64').length };
+        const dst18k = hardSafeJoin18K(PUR_UPLOAD_DIR_22A, fname); /* HARDEN-18K: ضد path-traversal حتی برای نامِ تولیدی سرور */
+        if (!dst18k) throw new Error('نام فایل گواهی نامعتبر است.');
+        const tmp18k = dst18k + '.tmp'; /* HARDEN-18K: نوشتن اتمیک — نیمه‌نوشته روی دیسک نمی‌ماند */
+        fs.writeFileSync(tmp18k, buf18k);
+        try { fs.renameSync(tmp18k, dst18k); } catch (e) { try { fs.unlinkSync(tmp18k); } catch (e2) { /* noop */ } throw e; }
+        return { file: fname, name: String(name || '').slice(0, 120), size: buf18k.length };
     }
 
     if (req.method === 'GET' && pathname === '/api/purchase/cert') {
@@ -6226,12 +6275,14 @@ live.inventory_reservations.splice(idx, 1);
         const live = purEnsure22a(invEnsure(readLive()));
         const rec = (live.purchase_receipts || []).find((x) => x.id === recId);
         const line = rec && (rec.lines || []).find((l) => l.cert_file === file);
-        if (!rec || !line || !file || file.indexOf('/') !== -1 || file.indexOf('..') !== -1 || !line.cert_file) return sendJson(res, { error: 'گواهی یافت نشد.' }, 404);
-        const full = path.join(PUR_UPLOAD_DIR_22A, file);
-        if (!full.startsWith(PUR_UPLOAD_DIR_22A) || !fs.existsSync(full)) return sendJson(res, { error: 'فایل گواهی روی دیسک یافت نشد.' }, 404);
+        /* HARDEN-18K: الگوی سخت‌گیرانهٔ نام — فقط خروجی تولیدی سرور پذیرفته است (ضد هرگونه نام دست‌کاری‌شده) */
+        const certNameOk18k = /^cert-[A-Za-z0-9-]+-L\d+-\d+\.(pdf|png|jpg)$/.test(file);
+        if (!rec || !line || !certNameOk18k || !line.cert_file) return sendJson(res, { error: 'گواهی یافت نشد.' }, 404);
+        const full = hardSafeJoin18K(PUR_UPLOAD_DIR_22A, file); /* HARDEN-18K: پیوستن امن مسیر به‌جای چک‌های دستی */
+        if (!full || !fs.existsSync(full)) return sendJson(res, { error: 'فایل گواهی روی دیسک یافت نشد.' }, 404);
         const ext = file.slice(file.lastIndexOf('.') + 1);
         const mime = ext === 'pdf' ? 'application/pdf' : (ext === 'png' ? 'image/png' : 'image/jpeg');
-        res.writeHead(200, { 'Content-Type': mime, 'Content-Disposition': 'attachment; filename="' + file + '"', 'Cache-Control': 'no-store' });
+        res.writeHead(200, { 'Content-Type': mime, 'Content-Disposition': 'attachment; filename="' + file + '"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); /* HARDEN-18K: nosniff صریح + اجبار دانلود */
         res.end(fs.readFileSync(full));
         return;
     }
