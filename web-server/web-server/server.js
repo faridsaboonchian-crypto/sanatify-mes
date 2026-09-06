@@ -7350,3 +7350,81 @@ async function runBackup() {
 }
 setTimeout(runBackup, 30 * 1000);              // first backup 30s after boot
 setInterval(runBackup, 24 * 60 * 60 * 1000);   // then every 24 hours
+
+// ===== HARDEN-18B (begin): بکاپ خودکار داخلی رمزنگاری‌شده (gzip + AES-256-GCM) با چرخش ۷ روزانه + ۴ هفتگی + ۳ ماهانه + restore drill =====
+// فرمت فایل: "SNBK1\n" + هدر JSON یک‌خطی (ات، الگوریتم، iv/tag/salt، سایز، sha256 متن اصلی) + payload رمزشده
+// کلید: env SANATIFY_BACKUP_KEY (passphrase → scrypt با salt تصادفی per-بکاپ) وگرنه کلید تصادفی ۰۶۰۰ در backups/.backup-key-18b
+// بازیابی/اثبات: node tools/restore-drill.js  (صفر وابستگی)
+const zlib = require('zlib');
+const ENC_BACKUP_DIR_18B = path.join(BACKUP_DIR, 'encrypted');
+const ENC_MAGIC_18B = 'SNBK1';
+const ENC_BACKUP_INTERVAL_18B = Math.max(1, Number(process.env.BACKUP_INTERVAL_MIN_18B) || 60) * 60 * 1000; /* هر N دقیقه — قابل تنظیم */
+function backupKey18B() {
+    const envKey = String(process.env.SANATIFY_BACKUP_KEY || '').trim();
+    if (envKey) return { kind: 'pass', pass: envKey };
+    try {
+        const kf = path.join(BACKUP_DIR, '.backup-key-18b');
+        if (fs.existsSync(kf)) { const raw = Buffer.from(fs.readFileSync(kf, 'utf8').trim(), 'hex'); if (raw.length === 32) return { kind: 'raw', key: raw }; }
+        const key = crypto.randomBytes(32);
+        fs.writeFileSync(kf, key.toString('hex') + String.fromCharCode(10), { mode: 0o600 });
+        console.warn('[HARDEN-18B] SANATIFY_BACKUP_KEY تنظیم نشد — کلید تصادفی ۰۶۰۰ در backups/.backup-key-18b ساخته شد (برای استقرار واقعی به env منتقل کنید).');
+        return { kind: 'raw', key: key };
+    } catch (e) { return null; }
+}
+function deriveKey18B(km, salt) { return km.kind === 'raw' ? km.key : crypto.scryptSync(km.pass, salt, 32, { N: 16384, r: 8, p: 1 }); }
+function isoWeekKey18B(ymd) { /* کلید هفتگی ISO برای چرخش — YYYYMMDD → YYYY-Wnn */
+    try {
+        const d = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8))));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return d.getUTCFullYear() + '-W' + Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    } catch (e) { return ymd; }
+}
+function encBackupRun18B() {
+    try {
+        if (!fs.existsSync(LIVE_FILE)) return;
+        ensureBackupDir();
+        try { if (!fs.existsSync(ENC_BACKUP_DIR_18B)) fs.mkdirSync(ENC_BACKUP_DIR_18B, { recursive: true }); } catch (e) { /* موجود */ }
+        const km = backupKey18B();
+        if (!km || (km.kind === 'raw' && (!km.key || km.key.length !== 32)) || (km.kind === 'pass' && !km.pass)) { backupLog('HARDEN-18B: کلید بکاپ در دسترس نیست — رد شد'); return; }
+        const plain = fs.readFileSync(LIVE_FILE);
+        if (!parseWithIntegrity18A(plain.toString('utf8')).ok) { backupLog('HARDEN-18B: live.json سالم نیست — بکاپ از نسخهٔ مشکوک رد شد (بازیابی 18A باید اول انجام شود)'); return; }
+        const salt = km.kind === 'pass' ? crypto.randomBytes(16) : Buffer.alloc(0);
+        const key = deriveKey18B(km, salt);
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        const enc = Buffer.concat([cipher.update(zlib.gzipSync(plain)), cipher.final()]);
+        const header = JSON.stringify({ v: 1, at: new Date().toISOString(), algo: 'aes-256-gcm', kdf: km.kind === 'pass' ? 'scrypt-16384-8-1' : 'raw-hex', salt: salt.toString('base64'), iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), size: plain.length, sha256: sha256Hex18A(plain), source: 'live.json' });
+        const headBuf = Buffer.from(ENC_MAGIC_18B + String.fromCharCode(10) + header + String.fromCharCode(10), 'utf8');
+        const dst = path.join(ENC_BACKUP_DIR_18B, 'live_' + stamp() + '_' + Date.now() + '.snbak');
+        const tmp = dst + '.tmp';
+        fs.writeFileSync(tmp, Buffer.concat([headBuf, enc]));
+        fs.renameSync(tmp, dst);
+        rotateEncBackups18B();
+        backupLog('HARDEN-18B: بکاپ رمزنگاری‌شده: ' + path.basename(dst) + ' (' + Math.round(enc.length / 1024) + 'KB فشرده/رمز از ' + Math.round(plain.length / 1024) + 'KB)');
+    } catch (e) { backupLog('HARDEN-18B ERROR: ' + ((e && e.message) || e)); }
+}
+function rotateEncBackups18B() { /* چرخش GFS: ۷ روز اخیر + ۴ هفته + ۳ ماه — بقیه حذف */
+    try {
+        const files = fs.readdirSync(ENC_BACKUP_DIR_18B).filter((f) => f.endsWith('.snbak')).sort().reverse(); /* جدیدترین اول */
+        const days = new Set(), weeks = new Set(), months = new Set();
+        let dCount = 0, wCount = 0, mCount = 0;
+        for (const f of files) {
+            const m = f.match(/^live_(\d{8})_\d{4}_\d+\.snbak$/);
+            const d = m ? m[1] : '';
+            if (!d) continue;
+            let keep = false;
+            if (!days.has(d) && dCount < 7) { days.add(d); dCount++; keep = true; }
+            const wk = isoWeekKey18B(d);
+            if (!weeks.has(wk) && wCount < 4) { weeks.add(wk); wCount++; keep = true; }
+            const mo = d.slice(0, 6);
+            if (!months.has(mo) && mCount < 3) { months.add(mo); mCount++; keep = true; }
+            if (!keep) { try { fs.unlinkSync(path.join(ENC_BACKUP_DIR_18B, f)); backupLog('HARDEN-18B rotate: حذف ' + f); } catch (e) { /* noop */ } }
+        }
+    } catch (e) { /* بی‌ضرر */ }
+}
+setTimeout(encBackupRun18B, 60 * 1000); /* اولین بکاپ رمز ۶۰ ثانیه پس از بوت */
+const encBakTimer18B = setInterval(encBackupRun18B, ENC_BACKUP_INTERVAL_18B);
+if (encBakTimer18B.unref) encBakTimer18B.unref();
+// ===== HARDEN-18B (end) =====
