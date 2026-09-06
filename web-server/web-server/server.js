@@ -7677,3 +7677,47 @@ setTimeout(encBackupRun18B, 60 * 1000); /* اولین بکاپ رمز ۶۰ ثا�
 const encBakTimer18B = setInterval(encBackupRun18B, ENC_BACKUP_INTERVAL_18B);
 if (encBakTimer18B.unref) encBakTimer18B.unref();
 // ===== HARDEN-18B (end) =====
+
+/* ===== HARDEN-18N (begin): توقف نجیب + مقاومت در برابر استثنای مهار‌نشده — دسترس‌پذیری کارخانه =====
+   · SIGTERM/SIGINT: پذیرش اتصال جدید قطع → صف تک‌نویسنده (18D) تخلیه → audit پایانی → خروج تمیز
+   · uncaughtException/unhandledRejection: ثبت کامل + ادامهٔ سرویس (سرور کارخانه هرگز نمی‌میرد) با throttle ضد طغیان */
+let shuttingDown18N = false;
+let lastCrashLog18N = 0;
+function hardenLogException18N(kind, err) {
+    const now = Date.now();
+    const msg = (err && (err.stack || err.message)) || String(err);
+    console.error('[' + kind + '] خطای مهارنشده — سرور سالم ماند و به سرویس ادامه می‌دهد:', msg);
+    if (now - lastCrashLog18N < 2000) return; /* حداکثر یک audit در ۲ ثانیه — ضد طغیان */
+    lastCrashLog18N = now;
+    try {
+        if (typeof writeAudit15b === 'function') writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: 'server.' + (kind === 'uncaughtException' ? 'uncaught' : 'unhandled_rejection'), endpoint: '-', status: 500, user_agent: 'HARDEN-18N', payload_hash: '', ms: 0, detail: String(msg).slice(0, 300) });
+    } catch (e) { /* audit اختیاری است */ }
+}
+process.on('uncaughtException', (err) => hardenLogException18N('uncaughtException', err));
+process.on('unhandledRejection', (reason) => hardenLogException18N('unhandledRejection', reason));
+
+function gracefulShutdown18N(signal) {
+    if (shuttingDown18N) { console.warn('[HARDEN-18N] سیگنال دوم (' + signal + ') — خروج فوری.'); process.exit(1); }
+    shuttingDown18N = true;
+    const t0 = Date.now();
+    console.log('[HARDEN-18N] توقف نجیب آغاز شد (' + signal + ') — پذیرش اتصال جدید متوقف، تخلیهٔ صف نوشتن…');
+    /* ۱) هیچ اتصال جدیدی پذیرفته نمی‌شود */
+    try { if (typeof redirectServer !== 'undefined' && redirectServer.listening) redirectServer.close(); } catch (e) { /* noop */ }
+    try { if (tlsMode === 'HTTPS' && typeof demuxServer !== 'undefined' && demuxServer.listening) demuxServer.close(); } catch (e) { /* noop */ }
+    try { if (mainServer.listening) mainServer.close(); } catch (e) { /* noop */ }
+    /* ۲) تخلیهٔ صف تک‌نویسندهٔ 18D با سقف زمانی — نیمه‌تمامِ نوشتن روی دیسک نمی‌ماند (نوشتن اتمیک 18A) */
+    const drainTimeout18N = setTimeout(() => { console.warn('[HARDEN-18N] تخلیهٔ صف به سقف ۸ ثانیه خورد — ادامهٔ خروج.'); finish18N(); }, 8000);
+    const finish18N = () => {
+        clearTimeout(drainTimeout18N);
+        try {
+            if (typeof writeAudit15b === 'function') writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: 'server.shutdown', endpoint: '-', status: 200, user_agent: 'HARDEN-18N', payload_hash: '', ms: Date.now() - t0, detail: signal });
+        } catch (e) { /* noop */ }
+        console.log('[HARDEN-18N] صف تخلیه شد و audit پایانی نوشته شد — خروج. (مدت: ' + (Date.now() - t0) + 'ms)');
+        setTimeout(() => process.exit(0), 150).unref();
+    };
+    const p18n = (typeof liveWriteChain18D !== 'undefined') ? Promise.resolve(liveWriteChain18D) : Promise.resolve();
+    p18n.then(finish18N, finish18N);
+}
+process.on('SIGTERM', () => gracefulShutdown18N('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown18N('SIGINT'));
+/* ===== HARDEN-18N (end) ===== */
