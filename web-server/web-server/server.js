@@ -1126,7 +1126,8 @@ function appRequestHandler(req, res) {
                 if (!name17a) return sendJson(res, { error: 'نام کامل کاربر الزامی است.' }, 400);
                 if (ROLES_17A.indexOf(role17a) === -1) return sendJson(res, { error: 'نقش انتخاب‌شده نامعتبر است.' }, 400);
                 if (role17a === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
-                if (password17a.length < 6 || password17a.length > 128) return sendJson(res, { error: 'رمز موقت باید حداقل ۶ کاراکتر باشد.' }, 400);
+                const polErr18p = auth.passwordPolicyError18P(password17a, username17a); /* HARDEN-18P: حداقل ۸ + پیچیدگی */
+                if (polErr18p) return sendJson(res, { error: polErr18p }, 400);
                 const users17a = readUsers17a();
                 if (users17a.some((u) => String(u.username || '').toLowerCase() === username17a.toLowerCase())) return sendJson(res, { error: 'این نام کاربری قبلاً ثبت شده است.' }, 400);
                 /* سقف سراسری کاربران لایسنس (۰ = بی‌سقف) — همان شمارندهٔ موتور لایسنس */
@@ -1238,7 +1239,8 @@ function appRequestHandler(req, res) {
                 const username17a = String(b17a.username || '').trim();
                 const pw17a = b17a.new_password != null ? String(b17a.new_password) : '';
                 if (!username17a) return sendJson(res, { error: 'نام کاربری الزامی است.' }, 400);
-                if (pw17a.length < 6 || pw17a.length > 128) return sendJson(res, { error: 'رمز موقت جدید باید حداقل ۶ کاراکتر باشد.' }, 400);
+                const polErr18p = auth.passwordPolicyError18P(pw17a, username17a); /* HARDEN-18P: حداقل ۸ + پیچیدگی */
+                if (polErr18p) return sendJson(res, { error: polErr18p }, 400);
                 const users17a = readUsers17a();
                 const u17a = users17a.find((x) => String(x.username || '').toLowerCase() === username17a.toLowerCase());
                 if (!u17a) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
@@ -1247,6 +1249,7 @@ function appRequestHandler(req, res) {
                 delete u17a.password;
                 u17a.password_hash = auth.hashPassword(pw17a);
                 u17a.password_changed_at = new Date().toISOString();
+                u17a.must_change_pw = true; /* HARDEN-18P: رمز موقتِ دستِ مدیر باید در ورود بعدی عوض شود */
                 if (!auth.writeUsers17a(users17a)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
                 const killed17a = auth.killSessionsByUsername17a(u17a.username);
                 auditLog(req, 'admin.user_reset_password', { username: u17a.username, sessions_killed: killed17a }); /* plaintext هرگز در audit نمی‌آید */
@@ -7795,3 +7798,56 @@ process.on('SIGINT', () => gracefulShutdown18N('SIGINT'));
     } catch (e) { console.warn('[HARDEN-18O] خودآزمایی بوت ناموفق (غیرمرگبار):', (e && e.message) || e); }
 })();
 /* ===== HARDEN-18O (end) ===== */
+
+/* ===== HARDEN-18P (begin): اسکن پس‌زمینهٔ رمز ضعیف + تضمین کاربر planner — سه ثانیه پس از بوت (غیرمسدودکننده) =====
+   · هر کاربر یک‌بار (_pw_scanned_18p) در برابر نام کاربری و رمزهای رایج (۱۲۳۴/۵۶۷۸/…) آزمایش می‌شود؛
+     ضعیف ⇒ پرچم must_change_pw (صفحهٔ لاگین فرم تغییر اجباری نشان می‌دهد) + audit
+   · اگر هیچ کاربر فعال planner نباشد، planner1 با رمز تصادفی قوی (فقط یک‌بار در کنسول) و تغییر اجباری ساخته می‌شود */
+setTimeout(function pwScan18P() {
+    try {
+        const file18p = path.join(ROOT, 'web-users.json');
+        let users18p = [];
+        try { users18p = JSON.parse(fs.readFileSync(file18p, 'utf8')); } catch (e) { return; }
+        if (!Array.isArray(users18p) || !users18p.length) return;
+        let changed18p = false;
+        const weakCands18p = ['1234', '5678', '123456', '12345678', '123456789', 'password', 'admin', 'admin123', '111111', '000000', '1234567890'];
+        const flagged18p = [];
+        users18p.forEach((u18p) => {
+            if (!u18p || typeof u18p !== 'object' || u18p._pw_scanned_18p) return;
+            u18p._pw_scanned_18p = true; changed18p = true;
+            const stored18p = u18p.password_hash != null ? u18p.password_hash : u18p.password;
+            if (stored18p == null) return;
+            const cands18p = [String(u18p.username || '')].concat(weakCands18p);
+            let weakKind18p = '';
+            for (let i18p = 0; i18p < cands18p.length; i18p++) {
+                const c18p = cands18p[i18p];
+                if (c18p && c18p.length >= 3 && auth.verifyPassword(c18p, stored18p)) { weakKind18p = (i18p === 0 ? 'username' : 'common'); break; }
+            }
+            if (weakKind18p) { u18p.must_change_pw = true; flagged18p.push(u18p.username + '(' + weakKind18p + ')'); }
+            if (u18p.password != null) {
+                /* HARDEN-18P-اصلاح: plaintext باقیمانده حذف نمی‌شود (کاربر قفل می‌شد) — همان‌جا به هش ارتقا می‌یابد
+                   (نسخهٔ امن‌ترِ مهاجرت نرم SEC-15b: دیگر منتظر اولین ورود نمی‌مانیم؛ plaintext هرگز روی دیسک نمی‌ماند) */
+                try { u18p.password_hash = auth.hashPassword(String(u18p.password)); delete u18p.password; changed18p = true; } catch (e) { /* دفعهٔ بعد */ }
+            }
+        });
+        let plannerLog18p = '';
+        if (!users18p.some((u18p) => u18p && u18p.role === 'planner' && u18p.active !== false)) {
+            const rp18p = crypto.randomBytes(12).toString('base64').replace(/[^A-Za-z0-9]/g, '');
+            const pw18p = ('P1an' + rp18p + '99').slice(0, 16) + 'x7'; /* حرف+رقم، ≥۱۲ */
+            users18p.push({ username: 'planner1', name: 'برنامه‌ریز تولید', role: 'planner', active: true, password_hash: auth.hashPassword(pw18p), must_change_pw: true, _pw_scanned_18p: true, created_at: new Date().toISOString(), created_by: 'seed-18p' });
+            changed18p = true;
+            plannerLog18p = 'کاربر planner1 (برنامه‌ریز) ساخته شد — رمز اولیه فقط همین‌جا چاپ می‌شود و در اولین ورود اجباری به تغییر است: ' + pw18p;
+            console.log('[HARDEN-18P] ' + plannerLog18p);
+        }
+        if (changed18p) {
+            if (auth.writeUsers17a(users18p)) {
+                if (flagged18p.length) {
+                    console.warn('[HARDEN-18P] رمز ضعیف شناسایی شد — «تغییر اجباری در ورود بعدی»: ' + flagged18p.join(', '));
+                    const d18p = flagged18p.map((x) => x.split('(')[0]).join(',');
+                    try { writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: 'auth.weak_password_flagged', endpoint: 'web-users.json', status: 200, user_agent: 'HARDEN-18P', payload_hash: '', ms: 0, detail: 'users=' + d18p }); } catch (e) { /* noop */ }
+                }
+            } else console.warn('[HARDEN-18P] نوشتن فایل کاربران پس از اسکن ناموفق بود.');
+        }
+    } catch (e) { console.warn('[HARDEN-18P] اسکن رمز ضعیف ناموفق (غیرمرگبار):', (e && e.message) || e); }
+}, 3000).unref();
+/* ===== HARDEN-18P (end) ===== */

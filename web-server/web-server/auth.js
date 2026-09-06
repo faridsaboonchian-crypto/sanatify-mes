@@ -104,13 +104,35 @@ function findUser17a(username) {
     return loadUsers().find((x) => safeEqual(x.username, un)) || null;
 }
 function isUserInactive17a(username) { const u = findUser17a(username); return !!(u && u.active === false); }
+/* ===== HARDEN-18P (begin): سیاست رمز عبور — حداقل ۸ + پیچیدگی (حرف+رقم) + ممنوعیت هم‌نامی با کاربر ===== */
+function passwordPolicyError18P(pw, username) {
+    const p = String(pw || '');
+    if (p.length < 8 || p.length > 128) return 'رمز عبور باید ۸ تا ۱۲۸ کاراکتر باشد (حداقل ۸ کاراکتر).';
+    if (!/[A-Za-z]/.test(p) || !/[0-9]/.test(p)) return 'رمز عبور باید هم حرف و هم رقم داشته باشد (مثل sanatify2024).';
+    const u = String(username || '').toLowerCase();
+    if (u && (p.toLowerCase().indexOf(u) !== -1 || u.indexOf(p.toLowerCase()) !== -1)) return 'رمز عبور نباید شامل نام کاربری یا برابر آن باشد.';
+    return null;
+}
+/* ===== HARDEN-18P (end) ===== */
 function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore *.bak-*) + نوشتن اتمیک — سازگار با migrate-hashes */
     try {
         try {
             if (fs.existsSync(USERS_FILE)) {
                 const d = new Date();
                 const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + String(d.getSeconds()).padStart(2, '0');
-                fs.copyFileSync(USERS_FILE, USERS_FILE + '.bak-' + stamp);
+                /* ===== HARDEN-18P (begin): گارد بکاپ — بکاپ کاربران هرگز plaintext نمی‌شود؛
+                   اگر فیلد plaintext (password) در فایل بود، بکاپ نسخهٔ پاک‌سازی‌شده (فقط هش) می‌شود ===== */
+                let backupArr = null;
+                try {
+                    const raw18p = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+                    if (Array.isArray(raw18p) && raw18p.some((u) => u && u.password != null)) {
+                        backupArr = raw18p.map((u) => { const c = Object.assign({}, u); delete c.password; return c; });
+                        console.warn('[HARDEN-18P] بکاپ کاربران: فیلد plaintext یافت شد — بکاپ فقط با نسخهٔ هش/پاک‌سازی‌شده نوشته شد (plaintext هرگز بکاپ نمی‌شود).');
+                    }
+                } catch (e2) { /* خواندن ناموفق — بکاپ خام مثل قبل */ }
+                if (backupArr) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, JSON.stringify(backupArr, null, 2) + String.fromCharCode(10), 'utf8');
+                else fs.copyFileSync(USERS_FILE, USERS_FILE + '.bak-' + stamp);
+                /* ===== HARDEN-18P (end) ===== */
                 /* نگه‌داری حداکثر ۱۰ بکاپ اخیر */
                 const dir = path.dirname(USERS_FILE);
                 const baks = fs.readdirSync(dir).filter((f) => f.indexOf('web-users.json.bak-') === 0).sort();
@@ -309,7 +331,8 @@ function verify(username, password) {
             if (usersWrite15b(upgraded)) console.log('[Auth] SEC-15b: رمز کاربر', username, 'به hash ارتقا یافت');
         } catch (e) { /* بی‌ضرر — دفعهٔ بعد دوباره تلاش می‌شود */ }
     }
-    return { username: u.username, role: u.role || 'viewer', name: u.name || u.username };
+    /* HARDEN-18P: پرچم تغییر اجباری رمز همراه نشست حمل می‌شود (پاسخ لاگین + /api/auth/me) */
+    return { username: u.username, role: u.role || 'viewer', name: u.name || u.username, must_change_pw: u.must_change_pw === true };
 }
 function getSession(req) {
     const sid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
@@ -416,6 +439,20 @@ const LOGIN_HTML = `<!DOCTYPE html>
     <button class="submit" id="btn" type="submit">ورود به پنل</button>
     <div class="secure-note">🔒 دسترسی محدود به پرسنل مجاز — تمام ورودها ثبت می‌شود</div>
   </form>
+  <!-- ===== HARDEN-18P: فرم تغییر اجباری رمز (پیش از ورود به اپ) ===== -->
+  <form class="card" id="chg" style="display:none" autocomplete="off">
+    <div class="card-head">
+      <div class="t">🔑 تغییر رمز عبور الزامی است</div>
+      <div class="s">رمز فعلی شما ضعیف تشخیص داده شده است — برای ادامه، یک رمز جدید (حداقل ۸ کاراکتر، شامل حرف و رقم) بگذارید.</div>
+    </div>
+    <label for="np">رمز جدید</label>
+    <input id="np" type="password" minlength="8" required autocomplete="new-password" />
+    <label for="np2">تکرار رمز جدید</label>
+    <input id="np2" type="password" minlength="8" required autocomplete="new-password" />
+    <div class="err" id="chgErr"></div>
+    <button class="submit" id="chgBtn" type="submit">ذخیره و ورود</button>
+    <div class="secure-note">🔒 رمز جدید فقط به‌صورت هش (scrypt) ذخیره می‌شود</div>
+  </form>
   <div class="page-foot">Sanatify ERP/MES v2.6<span class="sep">|</span>© ۱۴۰۵ صنعتی فای — تمام حقوق محفوظ است</div>
   <script>
     var f = document.getElementById('lf');
@@ -440,13 +477,47 @@ const LOGIN_HTML = `<!DOCTYPE html>
       })
       .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
       .then(function (o) {
-        if (o.body && o.body.ok) { window.location.href = '/'; return; }
+        if (o.body && o.body.ok) {
+          /* HARDEN-18P: تغییر اجباری رمز در ورود بعدی — فرم دوم روی همان صفحه */
+          if (o.body.must_change_pw) { showChange18P(); return; }
+          window.location.href = '/'; return;
+        }
         if (o.status === 429) { err.textContent = 'تلاش بیش از حد؛ لطفاً کمی صبر کنید.'; }
         else { err.textContent = 'نام کاربری یا رمز عبور اشتباه است.'; }
         btn.disabled = false; btn.textContent = 'ورود به پنل';
       })
       .catch(function () { err.textContent = 'خطا در ارتباط با سرور.'; btn.disabled = false; btn.textContent = 'ورود به پنل'; });
     });
+    /* ===== HARDEN-18P (begin): فرم تغییر اجباری رمز — تا تغییر، خروج به اپ ممکن نیست ===== */
+    function showChange18P() {
+      var lf18p = document.getElementById('lf'); if (lf18p) lf18p.style.display = 'none';
+      var c2 = document.getElementById('chg');
+      c2.style.display = 'block';
+      c2.querySelector('#np').focus();
+    }
+    var chgForm = document.getElementById('chg'); /* همان فرم — شناسهٔ یکتا */
+    if (chgForm) chgForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var chgErr = document.getElementById('chgErr');
+      chgErr.textContent = '';
+      var np = document.getElementById('np').value, np2 = document.getElementById('np2').value;
+      if (np !== np2) { chgErr.textContent = 'تکرار رمز مطابقت ندارد.'; return; }
+      var btn2 = document.getElementById('chgBtn');
+      btn2.disabled = true; btn2.textContent = 'در حال ذخیره...';
+      fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: pw.value, new_password: np })
+      })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+      .then(function (o) {
+        if (o.body && o.body.ok) { window.location.href = '/'; return; }
+        chgErr.textContent = (o.body && o.body.message) || 'تغییر رمز ناموفق بود.';
+        btn2.disabled = false; btn2.textContent = 'ذخیره و ورود';
+      })
+      .catch(function () { chgErr.textContent = 'خطا در ارتباط با سرور.'; btn2.disabled = false; btn2.textContent = 'ذخیره و ورود'; });
+    });
+    /* ===== HARDEN-18P (end) ===== */
   </script>
 </body>
 </html>`;
@@ -462,6 +533,9 @@ function handlePublic(req, res, pathname) {
         return true;
     }
     if (req.method === 'POST' && pathname === '/api/auth/login') { doLogin(req, res); return true; }
+    /* ===== HARDEN-18P (begin): تغییر رمز توسط خود کاربر (جریان تغییر اجباری پس از لاگین) ===== */
+    if (req.method === 'POST' && pathname === '/api/auth/change-password') { doChangePassword18P(req, res); return true; }
+    /* ===== HARDEN-18P (end) ===== */
     if ((req.method === 'GET' || req.method === 'POST') && pathname === '/api/auth/logout') { doLogout(req, res); return true; }
     if (req.method === 'GET' && pathname === '/api/auth/me') { doMe(req, res); return true; }
     return false;
@@ -506,9 +580,53 @@ function doLogin(req, res) {
         setCookie(res, sid);
         audit15b({ ts: new Date().toISOString(), user: user.username, role: user.role, ip: ip15b, action: 'auth.login_ok', endpoint: '/api/auth/login', status: 200, user_agent: String(req.headers['user-agent'] || '').slice(0, 200) });
         console.log('[Auth] login OK ->', user.username, '(' + user.role + ')', ip15b);
-        return jsonRes(res, { ok: true, user: user });
+        /* HARDEN-18P: پرچم «تغییر اجباری رمز در ورود بعدی» به پاسخ لاگین می‌آید — صفحهٔ لاگین فرم اجباری نشان می‌دهد */
+        return jsonRes(res, { ok: true, user: user, must_change_pw: user.must_change_pw === true });
     }).catch((e) => {
         if (e && e.code15b === 'PAYLOAD_TOO_LARGE') return jsonRes(res, { ok: false, error: 'payload_too_large', message: 'حجم درخواست بیش از حد مجاز است.' }, 413);
+        return jsonRes(res, { ok: false, error: String(e && e.message ? e.message : e) }, 500);
+    });
+}
+/* ===== HARDEN-18P: تغییر رمز توسط خود کاربر — نیازمند نشست فعال + رمز فعلی + رعایت سیاست ===== */
+function doChangePassword18P(req, res) {
+    const s = getSession(req);
+    if (!s) return jsonRes(res, { ok: false, error: 'unauthorized' }, 401);
+    readBody(req).then((body) => {
+        let b = {};
+        try { b = JSON.parse(body || '{}'); } catch (e) { return jsonRes(res, { ok: false, error: 'invalid' }, 400); }
+        const curPw = b.current_password != null ? String(b.current_password) : '';
+        const newPw = b.new_password != null ? String(b.new_password) : '';
+        const ip18p = clientIp15b(req);
+        const u = findUser17a(s.user.username);
+        if (!u) return jsonRes(res, { ok: false, error: 'invalid', message: 'کاربر یافت نشد.' }, 401);
+        const okCur = (() => { const uu = findUser17a(s.user.username); try { return verifyPassword(curPw, (uu && (uu.password_hash != null ? uu.password_hash : uu.password)) || ''); } catch (e) { return false; } })();
+        if (!okCur) {
+            audit15b({ ts: new Date().toISOString(), user: s.user.username, role: s.user.role, ip: ip18p, action: 'auth.change_pw_wrong_current', endpoint: '/api/auth/change-password', status: 403, user_agent: String(req.headers['user-agent'] || '').slice(0, 200) });
+            return jsonRes(res, { ok: false, error: 'wrong_current', message: 'رمز فعلی اشتباه است.' }, 403);
+        }
+        const polErr = passwordPolicyError18P(newPw, s.user.username);
+        if (polErr) return jsonRes(res, { ok: false, error: 'policy', message: polErr }, 400);
+        const users18p = loadUsers();
+        const target18p = users18p.find((x) => String(x.username || '').toLowerCase() === String(s.user.username).toLowerCase());
+        if (!target18p) return jsonRes(res, { ok: false, error: 'invalid' }, 401);
+        delete target18p.password; /* هر باقیماندهٔ plaintext پاک می‌شود */
+        target18p.password_hash = hashPassword(newPw);
+        target18p.password_changed_at = new Date().toISOString();
+        target18p.must_change_pw = false;
+        if (!writeUsers17a(users18p)) return jsonRes(res, { ok: false, error: 'write_failed', message: 'خطا در ذخیره‌سازی — دوباره تلاش کنید.' }, 500);
+        /* rotation نشست: sid جدید برای همین کاربر با اسنپ‌شات تازه (پرچم must_change_pw=false) */
+        const freshUser18p = Object.assign({}, s.user, { must_change_pw: false });
+        const oldSid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+        for (const [k, v] of sessions) { if (v.user && v.user.username === s.user.username && k !== oldSid) sessions.delete(k); }
+        const newSid = crypto.randomBytes(32).toString('hex');
+        sessions.delete(oldSid);
+        sessions.set(newSid, { user: freshUser18p, expires: Date.now() + SESSION_MS, lastSeen: Date.now() });
+        setCookie(res, newSid);
+        audit15b({ ts: new Date().toISOString(), user: s.user.username, role: s.user.role, ip: ip18p, action: 'auth.password_changed', endpoint: '/api/auth/change-password', status: 200, user_agent: String(req.headers['user-agent'] || '').slice(0, 200) });
+        console.log('[Auth] password changed (self) ->', s.user.username);
+        return jsonRes(res, { ok: true });
+    }).catch((e) => {
+        if (e && e.code15b === 'PAYLOAD_TOO_LARGE') return jsonRes(res, { ok: false, error: 'payload_too_large' }, 413);
         return jsonRes(res, { ok: false, error: String(e && e.message ? e.message : e) }, 500);
     });
 }
@@ -561,5 +679,6 @@ module.exports = {
     setTenantBranding15a: setTenantBranding15a,
     setSecureCookie15b: setSecureCookie15b, setCorsConfig15b: setCorsConfig15b, isOriginAllowed15b: isOriginAllowed15b,
     hashPassword: hashPassword, verifyPassword: verifyPassword, clientIp15b: clientIp15b, setAuditWriter15b: setAuditWriter15b, activeSessions15c: activeSessions15c, /* SEC-15b + SAAS-15c */
+    passwordPolicyError18P: passwordPolicyError18P, /* HARDEN-18P: سیاست رمز برای endpoints ساخت/بازنشانی کاربر */
     killSessionsByUsername17a: killSessionsByUsername17a, activeSessionCount17a: activeSessionCount17a, refreshSessionUser17a: refreshSessionUser17a, isUserInactive17a: isUserInactive17a, writeUsers17a: writeUsers17a, findUser17a: findUser17a, /* FEAT-ADMIN-17a */
 };
