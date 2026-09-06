@@ -40,8 +40,122 @@ function isSupabaseConfigured() {
         !SUPABASE_ANON_KEY.includes('YOUR-ANON-PUBLIC-KEY') &&
         !SUPABASE_ANON_KEY.includes('PASTE_YOUR_ANON_KEY');
 }
-function readJson(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; } }
-function writeJson(file, obj) { try { fs.writeFileSync(file, JSON.stringify(obj, null, 2), 'utf8'); return true; } catch (e) { console.warn('[Server] writeJson failed:', e.message); return false; } }
+// ===== HARDEN-18A (begin): لایهٔ محکم‌سازی ذخیره‌سازی — نوشتن اتمیک (tmp→fsync→rename) + checksum SHA-256 + بازیابی خودکار از زنجیرهٔ .bak شماره‌دار =====
+const INTEG_FIELD_18A = '__integrity_18a'; /* فیلد checksum داخل خود JSON — خودکفا و مقاوم به کپی */
+const BAK_CHAIN_LEN_18A = 5; /* زنجیرهٔ بازیابی: .bak.1 (تازه‌ترین) تا .bak.5 */
+const BAK_MIN_INTERVAL_18A = Math.max(10, Number(process.env.HARDEN_BAK_MIN_SEC_18A) || 180) * 1000; /* حداقل فاصلهٔ بکاپ‌گیری (پیش‌فرض ۳ دقیقه) */
+let lastBakAt18A = 0;
+function sha256Hex18A(s) { return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
+function integrityHash18A(obj) {
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        const c = Object.assign({}, obj); delete c[INTEG_FIELD_18A];
+        return sha256Hex18A(JSON.stringify(c, null, 2));
+    }
+    return sha256Hex18A(JSON.stringify(obj));
+}
+function atomicWriteText18A(file, text) { /* نوشتن اتمیک: tmp → fsync → rename → fsync پوشه (الگوی بهترین‌روال) */
+    const tmp = file + '.tmp18a';
+    const fd = fs.openSync(tmp, 'w');
+    try { fs.writeFileSync(fd, text, 'utf8'); fs.fsyncSync(fd); } finally { try { fs.closeSync(fd); } catch (e0) { /* noop */ } }
+    fs.renameSync(tmp, file);
+    try { const dfd = fs.openSync(path.dirname(file), 'r'); try { fs.fsyncSync(dfd); } finally { try { fs.closeSync(dfd); } catch (e2) { /* noop */ } } } catch (e) { /* fsync پوشه اختیاری است (ویندوز پشتیبانی نمی‌کند) */ }
+}
+function parseWithIntegrity18A(text) {
+    /* خروجی: { ok, value } — فایل بدون فیلد integrity = legacy سالم (سازگاری به‌عقب) */
+    let v;
+    try { v = JSON.parse(text); } catch (e) { return { ok: false, value: null }; }
+    if (v && typeof v === 'object' && !Array.isArray(v) && typeof v[INTEG_FIELD_18A] === 'string') {
+        const sig = v[INTEG_FIELD_18A];
+        const expect = 'sha256:' + integrityHash18A(v);
+        if (sig !== expect) return { ok: false, value: null }; /* دستکاری/خرابی جزئی */
+        delete v[INTEG_FIELD_18A];
+        return { ok: true, value: v };
+    }
+    return { ok: true, value: v };
+}
+function emergencyKeep18A(file, text) { /* نگه‌داری نسخهٔ خراب برای بازیابی دستی — دادهٔ کاربر هرگز از بین نمی‌رود */
+    try { const p = file + '.corrupt-' + Date.now(); fs.writeFileSync(p, String(text || ''), 'utf8'); return p; } catch (e) { return ''; }
+}
+function bakChainPaths18A(file) { const out = []; for (let i = 1; i <= BAK_CHAIN_LEN_18A; i++) out.push(file + '.bak.' + i); return out; }
+function rotateBaks18A(file) { /* بکاپ از نسخهٔ سالمِ قبلی پیش از بازنویسی — با throttle زمانی */
+    const now = Date.now();
+    if (now - lastBakAt18A < BAK_MIN_INTERVAL_18A) return;
+    try {
+        if (!fs.existsSync(file)) return;
+        const cur = fs.readFileSync(file, 'utf8');
+        if (!parseWithIntegrity18A(cur).ok) return; /* از نسخهٔ مشکوک بکاپ نمی‌گیریم */
+        const chain = bakChainPaths18A(file);
+        for (let i = BAK_CHAIN_LEN_18A; i > 1; i--) {
+            try { if (fs.existsSync(chain[i - 2])) fs.renameSync(chain[i - 2], chain[i - 1]); else { try { fs.unlinkSync(chain[i - 1]); } catch (e2) { /* noop */ } } } catch (e) { /* noop */ }
+        }
+        fs.writeFileSync(chain[0], cur, 'utf8');
+        lastBakAt18A = now;
+    } catch (e) { /* بکاپ اختیاری است — نوشتن اصلی ادامه می‌یابد */ }
+}
+function recoverFromBaks18A(file) { /* جدیدترین → قدیمی‌ترین؛ اولین نسخهٔ سالم برنده است */
+    const chain = bakChainPaths18A(file);
+    for (let i = 0; i < chain.length; i++) {
+        try {
+            if (!fs.existsSync(chain[i])) continue;
+            const text = fs.readFileSync(chain[i], 'utf8');
+            const r = parseWithIntegrity18A(text);
+            if (r.ok) return { text: text, value: r.value, from: path.basename(chain[i]) };
+        } catch (e) { /* بکاپ بعدی */ }
+    }
+    return null;
+}
+function alarm18A(msg) { /* گزارش خرابی در audit + کنسول — الگوی SEC-LIC-24 */
+    console.error('[HARDEN-18A] ' + msg);
+    try {
+        if (typeof writeAudit15b === 'function') writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: 'storage.integrity', endpoint: 'hardening-18a', status: 500, user_agent: 'HARDEN-18A', payload_hash: '', ms: 0, detail: String(msg).slice(0, 300) });
+    } catch (e) { /* noop */ }
+}
+function readJson(file) { /* HARDEN-18A: خواندن با اعتبارسنجی checksum + بازیابی خودکار از زنجیرهٔ .bak */
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); }
+    catch (e) { if (e && e.code === 'ENOENT') return null; /* فایل موجود نیست — رفتار قدیمی حفظ شد */ text = ''; }
+    const r = parseWithIntegrity18A(text);
+    if (r.ok) return r.value;
+    /* خرابی/دستکاری → نگه‌داری نسخهٔ خراب + بازیابی خودکار */
+    const kept = text ? emergencyKeep18A(file, text) : '';
+    const rec = recoverFromBaks18A(file);
+    if (rec) {
+        try { atomicWriteText18A(file, rec.text); } catch (e) { /* بازیابی روی دیسک ناموفق — مقدار از حافظه برمی‌گردد */ }
+        alarm18A('فایل ' + path.basename(file) + ' خراب/دستکاری‌شده بود → بازیابی خودکار از ' + rec.from + (kept ? ' (نسخهٔ خراب حفظ شد: ' + path.basename(kept) + ')' : ''));
+        return rec.value;
+    }
+    if (text) alarm18A('فایل ' + path.basename(file) + ' غیرقابل‌خواندن است و بکاپ سالمی یافت نشد' + (kept ? ' — نسخهٔ خراب حفظ شد: ' + path.basename(kept) : ''));
+    return null; /* رفتار قدیمی (null) حفظ شد */
+}
+function writeJson(file, obj) { /* HARDEN-18A: اتمیک + checksum — امضای قدیمی (true/false) حفظ شد */
+    try {
+        const isObj = obj && typeof obj === 'object' && !Array.isArray(obj);
+        const out = isObj ? Object.assign({}, obj) : obj;
+        if (isObj) out[INTEG_FIELD_18A] = 'sha256:' + integrityHash18A(obj); /* آرایه‌ها (audit.json) بدون فیلد — زنجیرهٔ هش 18-m پوشش می‌دهد */
+        const body = JSON.stringify(out, null, 2);
+        rotateBaks18A(file);
+        atomicWriteText18A(file, body);
+        return true;
+    } catch (e) { console.warn('[Server] writeJson failed:', e.message); return false; }
+}
+function bootValidate18A() { /* HARDEN-18A: validation اسکیما در بوت + گزارش یک‌خطی */
+    const out18a = [];
+    try {
+        const live18a = readJson(LIVE_FILE);
+        if (!live18a) out18a.push('live.json: خالی/ناموجد');
+        else {
+            const okT18a = TABLES.filter((t) => Array.isArray(live18a[t])).length;
+            const miss18a = TABLES.filter((t) => !Array.isArray(live18a[t]));
+            out18a.push('live.json: OK (' + okT18a + '/' + TABLES.length + ' جدول' + (miss18a.length ? '؛ غایب: ' + miss18a.join(',') : '') + ')');
+        }
+        const u18a = readJson(path.join(ROOT, 'web-users.json'));
+        out18a.push('web-users.json: ' + (Array.isArray(u18a) ? 'OK (' + u18a.length + ' کاربر)' : 'ناموجد/خراب'));
+        const a18a = readJson(AUDIT_FILE_15B);
+        out18a.push('audit.json: ' + (Array.isArray(a18a) ? 'OK (' + a18a.length + ' رکورد)' : 'جدید/ناموجد'));
+    } catch (e) { out18a.push('خطا: ' + ((e && e.message) || e)); }
+    console.log('[HARDEN-18A] اعتبارسنجی بوت → ' + out18a.join(' | '));
+}
+// ===== HARDEN-18A (end) =====
 // ===== REVERT-STEEL-4: مهاجرت امن و برگشت‌پذیر انبار فولادی — ادغام spare→raw (مواد اولیه/قطعات/ملزومات) =====
 function migrateSteelWarehouses(live) {
     if (!live || live._steel_wh_v1) return live;
@@ -500,9 +614,12 @@ function requireModule15c(req, res, moduleId) {
 function writeTenantFile15c(cfg) {
     const clean24 = Object.assign({}, cfg); delete clean24.__lic_invalid_24; /* SEC-LIC-24: پرچم زمان‌اجر هرگز در فایل ذخیره نمی‌شود */
     const out = JSON.stringify(clean24, null, 2) + String.fromCharCode(10);
+    /* ===== HARDEN-18A (begin): fsync پیش از rename — مقاوم به قطع برق ===== */
     const tmp = TENANT_FILE_15A + '.tmp';
-    fs.writeFileSync(tmp, out, 'utf8');
+    const fd18a = fs.openSync(tmp, 'w');
+    try { fs.writeFileSync(fd18a, out, 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
     fs.renameSync(tmp, TENANT_FILE_15A);
+    /* ===== HARDEN-18A (end) ===== */
 }
 function tenantPublicShape15c(cfg) {
     return {
@@ -7023,6 +7140,7 @@ const server = http.createServer(appRequestHandler);
 
 // ===== REVERT-STEEL-4: اجرای یک‌بارهٔ مهاجرت انبار هنگام راه‌اندازی =====
 try { migrateSteelWarehouses(readLive()); } catch (e) { console.warn('[STEEL-WH] startup migration failed:', e.message); }
+try { bootValidate18A(); } catch (e18a) { console.warn('[HARDEN-18A] boot validation failed:', (e18a && e18a.message) || e18a); } /* HARDEN-18A: چک اسکیما/فایل‌های حیاتی در بوت */
 // ===== FEAT-HTTPS-11c (begin): سرویس HTTPS روی پورت اصلی با گواهی mkcert (cert.pem/key.pem در همین پوشه) =====
 // اگر گواهی/کلید موجود نبود، سرویس خودکار روی همان پورت با HTTP بالا می‌آید (سرور کارخانه هرگز نمی‌میرد).
 let tlsMode = 'HTTP';

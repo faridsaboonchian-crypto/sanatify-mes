@@ -77,7 +77,14 @@ function verifyPassword(plain, stored) {
     } catch (e) { return false; }
 }
 function usersWrite15b(arr) { /* نوشتن اتمیک web-users.json — برای ارتقای خودکار per-user */
-    try { const tmp = USERS_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.renameSync(tmp, USERS_FILE); return true; } catch (e) { return false; }
+    try {
+        /* ===== HARDEN-18A (begin): fsync پیش از rename — مقاوم به قطع برق ===== */
+        const tmp = USERS_FILE + '.tmp';
+        const fd18a = fs.openSync(tmp, 'w');
+        try { fs.writeFileSync(fd18a, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
+        fs.renameSync(tmp, USERS_FILE);
+        /* ===== HARDEN-18A (end) ===== */
+        return true; } catch (e) { return false; }
 }
 // ===== FEAT-ADMIN-17a (begin): مدیریت کاربران از پنل سازمان — نشست‌ها + گارد غیرفعال + نوشتن با بکاپ =====
 function sessionsOfUser17a(username) {
@@ -111,7 +118,10 @@ function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore 
             }
         } catch (eb) { /* بکاپ اختیاری است — نوشتن اصلی ادامه می‌یابد */ }
         const tmp = USERS_FILE + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8');
+        /* ===== HARDEN-18A (begin): fsync پیش از rename — مقاوم به قطع برق ===== */
+        const fd18a = fs.openSync(tmp, 'w');
+        try { fs.writeFileSync(fd18a, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
+        /* ===== HARDEN-18A (end) ===== */
         fs.renameSync(tmp, USERS_FILE);
         return true;
     } catch (e) { return false; }
