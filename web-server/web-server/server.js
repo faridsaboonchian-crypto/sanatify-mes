@@ -490,9 +490,50 @@ function licVerify24(cfg) {
     } catch (e) { return false; }
 }
 let licGuardLogged24 = ''; /* هر نسخهٔ فایل فقط یک‌بار audit — ضد طغیان لاگ */
+/* ===== HARDEN-18J (begin): ارتقای امضای لایسنس به Ed25519 — کلید خصوصی فقط سمت فروشنده (env در CLI)؛ کلید عمومی در سرور (env) =====
+   قواعد مهاجرت:
+   • license_sig2 غایب ⇒ مسیر HMAC قبلی (سازگاری کامل — فایل‌های فعلی بایت‌به‌بایت معتبر می‌مانند)
+   • license_sig2 موجود + SANATIFY_LIC_ED_PUB تنظیم ⇒ امضای Ed25519 الزامی؛ نامعتبر ⇒ لایسنس پایه (ضد دستکاری)
+   • license_sig2 موجود + کلید عمومی تنظیم نیست ⇒ صرف‌نظر از sig2 + هشدار یک‌باره (فروشنده هنوز کلید عمومی را مستقر نکرده) */
+let licEdWarned18J = false;
+function loadLicEdPub18J() {
+    const b64 = String(process.env.SANATIFY_LIC_ED_PUB || '').trim();
+    if (!b64) return null;
+    try { return crypto.createPublicKey({ key: Buffer.from(b64, 'base64'), format: 'der', type: 'spki' }); }
+    catch (e) { return null; }
+}
+function licVerifyEd18J(cfg) {
+    try {
+        const pub18j = loadLicEdPub18J();
+        const sig18j = String((cfg && cfg.license_sig2) || '').trim();
+        if (!pub18j || !sig18j) return null; /* مسیر HMAC */
+        return crypto.verify(null, Buffer.from(licCanonical24(cfg)), pub18j, Buffer.from(sig18j, 'base64'));
+    } catch (e) { return false; }
+}
 function applyLicenseSigGuard24(cfg, srcMtime) {
     if (!cfg) return cfg;
-    if (licVerify24(cfg)) { cfg.__lic_invalid_24 = false; return cfg; }
+    const hasSig2_18j = String((cfg && cfg.license_sig2) || '').trim() !== '';
+    const ed18j = licVerifyEd18J(cfg);
+    if (ed18j === true) { cfg.__lic_invalid_24 = false; cfg.__lic_method_18j = 'ed25519'; return cfg; }
+    if (ed18j === false) {
+        /* امضای Ed25519 موجود ولی نامعتبر — دستکاری/کلید اشتباه ⇒ لایسنس پایه */
+        cfg.__lic_invalid_24 = true;
+        cfg.active_modules = LIC_BASE_MODULES_24.slice();
+        cfg.max_users = 0; cfg.max_records = 0; cfg.expires_at = '';
+        const fp18j = 'ed18j:' + (srcMtime != null ? String(Math.round(srcMtime)) : 'boot');
+        if (licGuardLogged24 !== fp18j) {
+            licGuardLogged24 = fp18j;
+            console.warn('[HARDEN-18J] امضای Ed25519 لایسنس نامعتبر است ⇒ لایسنس پایه — با SANATIFY_LIC_ED_PRIV و tools/license.js --sign-ed دوباره امضا کنید.');
+            const t18j = setTimeout(() => { try { writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: 'license.ed25519_invalid', endpoint: 'tenant.json', status: 200, user_agent: 'HARDEN-18J', payload_hash: '', ms: 0 }); } catch (e) { /* بی‌ضرر */ } }, 100);
+            if (t18j.unref) t18j.unref();
+        }
+        return cfg;
+    }
+    if (hasSig2_18j && !licEdWarned18J) {
+        licEdWarned18J = true;
+        console.warn('[HARDEN-18J] license_sig2 موجود است ولی SANATIFY_LIC_ED_PUB تنظیم نشده — فعلاً امضای HMAC ملاک است.');
+    }
+    if (licVerify24(cfg)) { cfg.__lic_invalid_24 = false; cfg.__lic_method_18j = 'hmac'; return cfg; }
     /* امضا غایب/نامعتبر/دستکاری‌شده → لایسنس پایه + بنر قرمز در UI + audit */
     cfg.__lic_invalid_24 = true;
     cfg.active_modules = LIC_BASE_MODULES_24.slice();
