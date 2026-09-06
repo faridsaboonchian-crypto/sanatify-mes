@@ -851,6 +851,22 @@ function appRequestHandler(req, res) {
     if (cl15b > 1024 * 1024) {
         return sendJson(res, { error: 'حجم درخواست بیش از حد مجاز است (سقف ۱ مگابایت).', code: 'PAYLOAD_TOO_LARGE' }, 413);
     }
+    /* ===== HARDEN-18Q (begin): گارد CSRF مبتنی بر Origin برای درخواست‌های تغییردهنده =====
+       مرورگرها روی هر POST/PUT/DELETE/PATCH هم‌مبدأ و غیرهم‌مبدأ هدر Origin می‌فرستند؛
+       اگر Origin آمد و نه هم‌مبدأِ Host بود و نه در فهرست مجاز تنانت ⇒ ۴۰۳ (کوکی SameSite=Lax لایهٔ اول است؛ این لایهٔ دوم سرورساید است).
+       کلاینت‌های بدون Origin (curl / اپ موبایل / ابزارها) دست‌نخورده می‌مانند — رفتار قدیمی صفر تغییر. */
+    if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE' || req.method === 'PATCH') && pathname.indexOf('/api/') === 0) {
+        const org18q = String(req.headers.origin || '');
+        if (org18q) {
+            let sameOrigin18q = false;
+            try { sameOrigin18q = (new URL(org18q).host === String(req.headers.host || '')); } catch (e) { sameOrigin18q = false; }
+            if (!sameOrigin18q && !auth.isOriginAllowed15b(org18q)) {
+                try { writeAudit15b({ ts: new Date().toISOString(), user: (req.user && req.user.username) || '-', role: (req.user && req.user.role) || '-', ip: clientIp15b(req), action: 'security.csrf_blocked', endpoint: pathname, status: 403, user_agent: String(req.headers['user-agent'] || '').slice(0, 200), payload_hash: '', ms: 0, detail: 'origin=' + org18q.slice(0, 100) }); } catch (e) { /* noop */ }
+                return sendJson(res, { error: 'درخواست از مبدأ غیرمجاز رد شد (CSRF).', code: 'CSRF_ORIGIN' }, 403);
+            }
+        }
+    }
+    /* ===== HARDEN-18Q (end) ===== */
     // ===== SEC-15b: ریت‌لیمیت عمومی — ۱۰۰/دقیقه per-IP با Retry-After =====
     const rl15b = rateLimit15b(req, pathname);
     if (rl15b > 0) {
