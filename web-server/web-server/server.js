@@ -1509,7 +1509,7 @@ function appRequestHandler(req, res) {
     if (pathname === '/api/health') return handleHealthFast(req, res);
 
     /* ===== SEC-AUDIT-13c (begin): گاردهای خواندن ماتریس دسترسی — admin همیشه مجاز ===== */
-    const R13C_PROD = ['manager', 'planner', 'operator', 'supervisor', 'finance', 'viewer']; /* تولید/ضایعات/باندل/شمش — خواندن تولید برای برنامه‌ریزی/مالی(خلاصه)/مدیریت */
+    const R13C_PROD = ['manager', 'planner', 'operator', 'supervisor', 'finance', 'viewer']; /* تولید/ضایعات/بندیل/شمش — خواندن تولید برای برنامه‌ریزی/مالی(خلاصه)/مدیریت */
     const R13C_DOWN = R13C_PROD.concat(['engineering']);
     const R13C_INV = ['manager', 'planner', 'finance', 'warehouse', 'viewer']; /* مالی/مدیریت/برنامه‌ریز خواندن انبار؛ اپراتور/qc/مهندسی خیر */
     const R13C_MNT = ['engineering', 'supervisor'];
@@ -1640,7 +1640,7 @@ function appRequestHandler(req, res) {
         return isNaN(d.getTime()) ? null : d.toISOString();
     }
 
-    /* تناژ واقعی هر برنامه از دادهٔ زندهٔ تولید (production_logs + باندل‌ها) */
+    /* تناژ واقعی هر برنامه از دادهٔ زندهٔ تولید (production_logs + بندیل‌ها) */
     function planActualTonnage(live, plan) {
         if (!plan || !plan.start_ts) return null;
         const fromMs = Date.parse(plan.start_ts); if (isNaN(fromMs)) return null;
@@ -1672,7 +1672,7 @@ function appRequestHandler(req, res) {
         const rounds = (x) => Math.round((Number(x) || 0) * 100) / 100;
         const REBAR_MIN = 6, REBAR_MAX = 50;
 
-        /* ۱) نرخ تولید واقعی per سایز (kg/day فعال) — باندل‌ها + لاگ تولید (فرمول جرم فقط برای سایز معتبر) */
+        /* ۱) نرخ تولید واقعی per سایز (kg/day فعال) — بندیل‌ها + لاگ تولید (فرمول جرم فقط برای سایز معتبر) */
         const sizes = {};
         const bump = (k) => (sizes[k] = sizes[k] || { kg: 0, bars: 0, daysMap: {} });
         const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
@@ -1868,7 +1868,7 @@ function appRequestHandler(req, res) {
     // ===== FEAT-EM-12b (begin): مدیریت انرژی — energy_logs در live.json + endpoint ثبت/فهرست/آمار با نقش و ممیزی =====
     const EM_READ_ROLES = ['admin', 'engineering', 'planner', 'manager', 'supervisor', 'operator', 'warehouse', 'viewer', 'quality', 'qc'];
     const EM_WRITE_ROLES = ['admin', 'engineering'];
-    const EM_LINES = { mill: 'خط نورد گرم', furnace: 'کوره/ذوب', pack: 'بسته‌بندی باندل', aux: 'تاسیسات و کمپرسور', plant: 'سراسر کارخانه' };
+    const EM_LINES = { mill: 'خط نورد گرم', furnace: 'کوره/ذوب', pack: 'بسته‌بندی بندیل', aux: 'تاسیسات و کمپرسور', plant: 'سراسر کارخانه' };
     function emFaToEn(s) { return String(s || '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)); }
     function emDayKey(iso) { const t = Date.parse(iso); return isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10); }
     if (req.method === 'GET' && pathname === '/api/energy/logs') {
@@ -1925,7 +1925,7 @@ function appRequestHandler(req, res) {
         const sinceIso = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
         const byDay = {};
         logs.forEach((l) => { if (!l || !l.iso_date || String(l.iso_date) < sinceIso) return; byDay[l.iso_date] = (byDay[l.iso_date] || 0) + (Number(l.kwh) || 0); });
-        /* تناژ واقعی روزانه از باندل‌های تولیدشده */
+        /* تناژ واقعی روزانه از بندیل‌های تولیدشده */
         const tonByDay = {};
         (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((r) => {
             const k = r ? emDayKey(r.produced_at) : ''; if (!k || k < sinceIso) return;
@@ -5559,7 +5559,7 @@ live.inventory_reservations.splice(idx, 1);
     const NCR_ACTION_FA_24B = { rework: 'دوباره‌کاری', concession: 'ارفاق استفاده', rejection: 'رد (Rejection)' };
     const QC_MTC_W_24B = ['admin', 'qc'];
     const QC_NCR_W_24B = ['admin', 'qc'];
-    /* هیت‌های میلگرد یک سایز از باندل‌ها — برای گارد حواله */
+    /* هیت‌های میلگرد یک سایز از بندیل‌ها — برای گارد حواله */
     function qcHeatsOfSize24b(live, size) {
         const set = new Set();
         (live.rebar_bundles || []).forEach((b) => { if (b && String(b.rebar_size) === String(size) && b.heat_number) set.add(String(b.heat_number)); });
@@ -5721,7 +5721,7 @@ live.inventory_reservations.splice(idx, 1);
                 const size = String(b.size || '').trim();
                 const line = (order.items || []).find((it) => String(it.size) === size);
                 if (!line) return sendJson(res, { error: 'سایز «' + size + '» در اقلام این سفارش نیست.' }, 400);
-                /* ===== FEAT-QC-PRO-24b (begin): گارد عدم انطباق باز (NCR) — باندل/هیت دارای NCR باز (Major/Critical یا اقدام رد) حواله نمی‌شود ===== */
+                /* ===== FEAT-QC-PRO-24b (begin): گارد عدم انطباق باز (NCR) — بندیل/هیت دارای NCR باز (Major/Critical یا اقدام رد) حواله نمی‌شود ===== */
                 const ncrHit24b = qcExitBlock24b(live, size);
                 if (ncrHit24b) return sendJson(res, { error: 'حواله مجاز نیست: عدم انطباق باز (NCR ' + ncrHit24b.ncr_no + ' — ' + (NCR_SEV_FA_24B[ncrHit24b.severity] || ncrHit24b.severity) + ') روی ' + (ncrHit24b.heat_number ? 'هیت ' + ncrHit24b.heat_number : 'سایز ' + (ncrHit24b.size || size)) + ' ثبت شده است — ابتدا در کنترل کیفیت (QC-PRO) بسته شود.', code: 'NCR_OPEN', ncr_no: ncrHit24b.ncr_no }, 409);
                 /* ===== FEAT-QC-PRO-24b (end) ===== */
@@ -7338,7 +7338,7 @@ live.inventory_reservations.splice(idx, 1);
     // MTC: per حوالهٔ فروش/سفارش — Heat Number + آنالیز شیمیایی + مکانیکی
     // + VID تأیید آنلاین (GET عمومی /api/qcpro/mtc/verify/:vid با حداقل داده).
     // الزام صادرات: سفارش صادراتی بدون MTC → فاکتور ۴۰۹ MTC_REQUIRED.
-    // NCR: باندل/هیت/رسید با NCR باز (Major/Critical یا Rejection) → حواله ۴۰۹.
+    // NCR: بندیل/هیت/رسید با NCR باز (Major/Critical یا Rejection) → حواله ۴۰۹.
     // بستن NCR با اقدام رد → قرنطینه + سند زیان ضایعات (۵۲۰۰۰۱/۱۱۰xxx).
     // ================================================================
     function qcEnsure24b(live) {
@@ -7374,11 +7374,11 @@ live.inventory_reservations.splice(idx, 1);
                 if (!order) return sendJson(res, { error: 'سفارش حواله یافت نشد.' }, 404);
                 cust = (live.customers || []).find((c) => c.id === order.customer_id);
                 custName = (cust && cust.name) || order.customer_name || '—';
-                /* هیت‌های مرجع: باندل‌های همین سایز + هیت حواله در صورت وجود (اختیاری بدنهٔ درخواست) */
+                /* هیت‌های مرجع: بندیل‌های همین سایز + هیت حواله در صورت وجود (اختیاری بدنهٔ درخواست) */
                 let heats = b.heat_number ? [String(b.heat_number).trim().slice(0, 40)] : Array.from(qcHeatsOfSize24b(live, size));
-                if (!heats.length) return sendJson(res, { error: 'هیت مرجع برای سایز ' + size + ' یافت نشد — باندل/کد هیت تولید ثبت نشده است.' }, 409);
+                if (!heats.length) return sendJson(res, { error: 'هیت مرجع برای سایز ' + size + ' یافت نشد — بندیل/کد هیت تولید ثبت نشده است.' }, 409);
                 if (heats.length > 6) heats = heats.slice(0, 6);
-                /* گرید و استاندارد: از باندل/مشخصات فنی/پیش‌فرض گرید فعال */
+                /* گرید و استاندارد: از بندیل/مشخصات فنی/پیش‌فرض گرید فعال */
                 const bundles = (live.rebar_bundles || []).filter((x) => String(x.rebar_size) === String(size));
                 const spec24b = (live.qc_specs_24 || []).find((s) => String(s.size) === String(size) && s.active !== false);
                 const gradeName = String(b.grade || (bundles[0] && bundles[0].rebar_grade) || (spec24b && spec24b.grade) || 'A3').trim();
@@ -7442,9 +7442,9 @@ live.inventory_reservations.splice(idx, 1);
                 if (desc.length < 5) return sendJson(res, { error: 'شرح عدم انطباق الزامی است (حداقل ۵ نویسه).' }, 400);
                 const rec = { id: 'ncr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ncr_no: qcNextNo24a(live, 'ncr', 'NCR'), date_jalali: finIsoToJalali(new Date().toISOString()), scope: scope, bundle_code: String(b.bundle_code || '').trim().slice(0, 40), heat_number: String(b.heat_number || '').trim().slice(0, 40), receipt_no: String(b.receipt_no || '').trim().slice(0, 40), size: String(b.size || '').trim().slice(0, 12), ntype: ntype, severity: severity, action: action, quantity_ton: round2(Number(b.quantity_ton) || 0), description: desc.slice(0, 500), status: 'open', opened_by: String((req.user && (req.user.name || req.user.username)) || ''), opened_at: new Date().toISOString(), closed_at: null, closed_by: '', corrective_action: '' };
                 if (rec.scope === 'heat' && !rec.heat_number) return sendJson(res, { error: 'برای NCR هیت، کد هیت الزامی است.' }, 400);
-                if (rec.scope === 'bundle' && !rec.bundle_code) return sendJson(res, { error: 'برای NCR باندل، کد باندل الزامی است.' }, 400);
+                if (rec.scope === 'bundle' && !rec.bundle_code) return sendJson(res, { error: 'برای NCR بندیل، کد بندیل الزامی است.' }, 400);
                 if (rec.scope === 'receipt' && !rec.receipt_no) return sendJson(res, { error: 'برای NCR رسید، شمارهٔ رسید خرید الزامی است.' }, 400);
-                /* پرکردن خودکار هیت/سایز/تناژ از باندل یا رسید (برای گارد حواله و سند مالی) */
+                /* پرکردن خودکار هیت/سایز/تناژ از بندیل یا رسید (برای گارد حواله و سند مالی) */
                 if (rec.scope === 'bundle') {
                     const bd = (live.rebar_bundles || []).find((x) => String(x.bundle_code) === rec.bundle_code);
                     if (bd) { rec.heat_number = rec.heat_number || String(bd.heat_number || ''); rec.size = rec.size || String(bd.rebar_size || ''); rec.quantity_ton = rec.quantity_ton || round2((Number(bd.net_weight_kg) || 0) / 1000); }
@@ -7549,7 +7549,7 @@ live.inventory_reservations.splice(idx, 1);
             ncr_by_grade: ncr_by_grade, ncr_by_size: ncr_by_size, ncr_by_month: ncr_by_month,
             ncr: (live.qc_ncr_24 || []).slice().sort((a, b2) => String(b2.opened_at || '').localeCompare(String(a.opened_at || ''))).map((n) => Object.assign({}, n, { ntype_fa: NCR_TYPE_FA_24B[n.ntype] || n.ntype, severity_fa: NCR_SEV_FA_24B[n.severity] || n.severity, action_fa: NCR_ACTION_FA_24B[n.action] || n.action })),
             mtc: mtc,
-            /* باندل‌های اخیر برای فرم NCR (نقش qc به /api/bundles دسترسی ندارد — مرجع فقط‌خواندنی همین‌جا) */
+            /* بندیل‌های اخیر برای فرم NCR (نقش qc به /api/bundles دسترسی ندارد — مرجع فقط‌خواندنی همین‌جا) */
             bundles_ref: (live.rebar_bundles || []).slice(-120).reverse().map((b) => ({ bundle_code: String(b.bundle_code || ''), heat_number: String(b.heat_number || ''), rebar_size: String(b.rebar_size || ''), rebar_grade: String(b.rebar_grade || ''), net_weight_kg: Number(b.net_weight_kg) || 0 })),
             /* کاندیدهای صدور MTC — حواله‌های بدون گواهی + آمادگی آزمون (برای دراپ‌داون UI) */
             mtc_candidates: (live.sales_exits || []).filter((e) => !(live.qc_mtc_24 || []).some((m) => m.exit_no === e.exit_no)).map((e) => {

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // =====================================================================
 // FIX-UI-19d — ابزار ساخت دادهٔ نمونهٔ دمو — صفر وابستگی
-// «۳۰ روز تولید + ۵۰ باندل + ۱۰ توقف + ۵ برنامهٔ PM»
+// «۳۰ روز تولید + ۵۰ بندیل + ۱۰ توقف + ۵ برنامهٔ PM»
 //
 // مصرف:
 //   node tools/demo-seed.js --url=http://localhost:3001 --user=admin --pass=PASSWORD
 //   گزینه‌ها: --days=30 --bundles=50 --stops=10 --pms=5 --prefix=demo19 --dry-run --help
 //
 // نکته‌ها:
-//  • رکوردهای تولید/باندل/توقف از POST /api/ingest عبور می‌کنند (صف تک‌نویسندهٔ 18D + نوشتن اتمیک 18A)
+//  • رکوردهای تولید/بندیل/توقف از POST /api/ingest عبور می‌کنند (صف تک‌نویسندهٔ 18D + نوشتن اتمیک 18A)
 //  • idها قطعی (prefix + شماره) هستند → اجرای مکرر «دوباره‌نویسی هم‌شناسه» است، تکراری نمی‌سازد
 //  • برنامه‌های PM از POST /api/pm/plan با نشست ادمین ثبت می‌شوند
 //  • هیچ دادهٔ مالی/فروشی/خریدی نمی‌سازد — سناریوی دموی «فقط ماژول‌های فنی» (سازگار با demo_mode)
@@ -82,7 +82,7 @@ const PM_DEFS = [
     { t: 'سرویس کوره و بازرسی مشعل‌ها', m: 'st-cut', iv: 60 },
     { t: 'کالیبراسیون دستگاه آزمون کشش', m: 'st-test', iv: 90 },
     { t: 'بازرسی سیستم آج‌زنی', m: 'st-rib', iv: 30 },
-    { t: 'سرویس هیدرولیک بسته‌بندی باندل', m: 'st-pack', iv: 45 },
+    { t: 'سرویس هیدرولیک بسته‌بندی بندیل', m: 'st-pack', iv: 45 },
     { t: 'بازرسی فن‌ها و خنک‌کنندهٔ خط', m: 'st-form', iv: 30 }
 ];
 let seedState = 987654321;
@@ -130,7 +130,7 @@ function rint(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
                 source: 'manual',
                 timestamp: new Date(ts.getTime() + s * 6 * 3600000).toISOString()
             });
-            // ۲) باندل‌ها — پخش روی روزها تا مجموع BUNDLES
+            // ۲) بندیل‌ها — پخش روی روزها تا مجموع BUNDLES
             const perShift = Math.round(BUNDLES / (DAYS * 2));
             for (let b = 0; b < perShift && bIdx < BUNDLES; b++, bIdx++) {
                 const netKg = rint(1800, 2400);
@@ -149,7 +149,7 @@ function rint(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
             }
         }
     }
-    // اگر گرد کردن، باندل کم/زیاد ماند → تکمیل/برش به دقیقاً BUNDLES
+    // اگر گرد کردن، بندیل کم/زیاد ماند → تکمیل/برش به دقیقاً BUNDLES
     while (bIdx > BUNDLES) { bundles.pop(); bIdx--; }
     for (; bIdx < BUNDLES; bIdx++) {
         const ts = new Date(now - rint(0, DAYS - 1) * DAY);
@@ -211,7 +211,7 @@ function rint(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
         const sum = await req('GET', '/api/summary');
         if (sum.status === 200) {
             const s = sum.json || {};
-            console.log('📊 خلاصه پس از seed → تولید(۳۰روز):', s.production_30d !== undefined ? s.production_30d : '-', '| باندل:', s.bundle_count !== undefined ? s.bundle_count : '-', JSON.stringify(Object.keys(s).slice(0, 8)));
+            console.log('📊 خلاصه پس از seed → تولید(۳۰روز):', s.production_30d !== undefined ? s.production_30d : '-', '| بندیل:', s.bundle_count !== undefined ? s.bundle_count : '-', JSON.stringify(Object.keys(s).slice(0, 8)));
         }
     }
     console.log('🎉 دمو آماده است — prefix: ' + PREFIX + ' (اجرای مجدد = به‌روزرسانی هم‌شناسه، بدون تکرار)');
