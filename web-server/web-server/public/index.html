@@ -8052,18 +8052,180 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             '<div style="display:flex;gap:40px;margin-top:30px;font-size:12px"><div style="flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555">نمایندهٔ بازرسی مستقل از تولید (EN 10204 3.1)<br><b>' + esc(m.issued_by || '') + '</b></div><div style="flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555">مهر و امضای کارخانه</div></div>' +
             '</div>';
     }
-    function qcEnsureQrLib24(cb) {
-        if (window.QRCode) return cb();
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js';
-        s.onload = cb; s.onerror = () => cb(); /* بدون CDN — فقط متن لینک */
-        document.head.appendChild(s);
+    /* ===== HARDEN-18L (begin): انکودر QR داخلی — حذف CDN (آفلاین کامل، الگوریتم ISO/IEC 18004 — ECC M، نسخه/ماسک خودکار) ===== */
+    function qrEncode18L(text) {
+        var ECC_CW = [-1,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28];
+        var ECC_NB = [-1,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49];
+        function gfMul(x, y) { var z = 0; for (var i = 7; i >= 0; i--) { z = ((z << 1) ^ ((z >>> 7) * 0x11D)) & 0xFFFFFFFF; if (((y >>> i) & 1) !== 0) z ^= x; } return z & 0xFF; }
+        function rawModules(v) { var r = (16 * v + 128) * v + 64; if (v >= 2) { var a = Math.floor(v / 7) + 2; r -= (25 * a - 10) * a - 55; } if (v >= 7) r -= 36; return r; }
+        function dataCw(v) { return Math.floor(rawModules(v) / 8) - ECC_CW[v] * ECC_NB[v]; }
+        function rsDivisor(deg) { var r = []; for (var i = 0; i < deg - 1; i++) r.push(0); r.push(1); var root = 1; for (var i2 = 0; i2 < deg; i2++) { for (var j = 0; j < r.length; j++) { r[j] = gfMul(r[j], root); if (j + 1 < r.length) r[j] ^= r[j + 1]; } root = gfMul(root, 0x02); } return r; }
+        function rsRemainder(data, div) { var res = div.map(function () { return 0; }); data.forEach(function (b) { var factor = b ^ res.shift(); res.push(0); div.forEach(function (c, i) { res[i] ^= gfMul(c, factor); }); }); return res; }
+        function alignPos(v) {
+            if (v === 1) return [];
+            var num = Math.floor(v / 7) + 2;
+            var step = (v === 32) ? 26 : Math.ceil((v * 4 + 4) / (num * 2 - 2)) * 2;
+            var size = v * 4 + 17, out = [6];
+            for (var pos = size - 7; out.length < num; pos -= step) out.splice(1, 0, pos);
+            return out;
+        }
+        var bytes = [];
+        (function utf8(str) {
+            for (var i = 0; i < str.length; i++) {
+                var c = str.codePointAt(i);
+                if (c > 0xFFFF) i++;
+                if (c < 0x80) bytes.push(c);
+                else if (c < 0x800) { bytes.push(0xC0 | (c >> 6), 0x80 | (c & 63)); }
+                else if (c < 0x10000) { bytes.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63)); }
+                else { bytes.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63)); }
+            }
+        })(String(text));
+        var version = -1, i, v2;
+        for (v2 = 1; v2 <= 40; v2++) { var need = 4 + (v2 < 10 ? 8 : 16) + bytes.length * 8; if (need <= dataCw(v2) * 8) { version = v2; break; } }
+        if (version === -1) throw new Error('QR: داده بلندتر از ظرفیت است');
+        var bits = [];
+        function ap(val, len) { for (var k = len - 1; k >= 0; k--) bits.push((val >>> k) & 1); }
+        ap(4, 4); ap(bytes.length, version < 10 ? 8 : 16);
+        bytes.forEach(function (b) { ap(b, 8); });
+        var cap = dataCw(version) * 8;
+        ap(0, Math.min(4, cap - bits.length));
+        ap(0, (8 - (bits.length % 8)) % 8);
+        for (var pad = 0xEC; bits.length < cap; pad ^= 0xEC ^ 0x11) ap(pad, 8);
+        var data = [];
+        for (i = 0; i < bits.length; i += 8) { var b2 = 0; for (var j = 0; j < 8; j++) b2 = (b2 << 1) | bits[i + j]; data.push(b2); }
+        var numBlocks = ECC_NB[version], blockEccLen = ECC_CW[version];
+        var rawCw = Math.floor(rawModules(version) / 8);
+        var numShort = numBlocks - (rawCw % numBlocks);
+        var shortLen = Math.floor(rawCw / numBlocks);
+        var blocks = [], div = rsDivisor(blockEccLen);
+        for (i = 0, k = 0; i < numBlocks; i++) {
+            var dat = data.slice(k, k + shortLen - blockEccLen + (i < numShort ? 0 : 1)); k += dat.length;
+            var ecc = rsRemainder(dat, div);
+            if (i < numShort) dat.push(0);
+            blocks.push(dat.concat(ecc));
+        }
+        var cws = [];
+        for (i = 0; i < blocks[0].length; i++) blocks.forEach(function (blk, bj) { if (i !== shortLen - blockEccLen || bj >= numShort) cws.push(blk[i]); });
+        var size = version * 4 + 17;
+        var modules = [], isFn = [];
+        for (i = 0; i < size; i++) { modules.push(new Array(size).fill(false)); isFn.push(new Array(size).fill(false)); }
+        function setFn(x, y, dark) { modules[y][x] = dark; isFn[y][x] = true; }
+        function drawFinder(cx, cy) { for (var dy = -4; dy <= 4; dy++) for (var dx = -4; dx <= 4; dx++) { var d = Math.max(Math.abs(dx), Math.abs(dy)); var xx = cx + dx, yy = cy + dy; if (xx >= 0 && xx < size && yy >= 0 && yy < size) setFn(xx, yy, d !== 2 && d !== 4); } }
+        function drawFormat(mask) {
+            var data2 = (0 << 3) | mask; /* ECC M = 00 */
+            var rem = data2; for (var r = 0; r < 10; r++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+            var fbits = ((data2 << 10) | rem) ^ 0x5412;
+            function gb(idx) { return (fbits >>> idx) & 1; }
+            for (var p = 0; p <= 5; p++) setFn(8, p, !!gb(p));
+            setFn(8, 7, !!gb(6)); setFn(8, 8, !!gb(7)); setFn(7, 8, !!gb(8));
+            for (var q2 = 9; q2 < 15; q2++) setFn(14 - q2, 8, !!gb(q2));
+            for (var s = 0; s < 8; s++) setFn(size - 1 - s, 8, !!gb(s));
+            for (var t = 8; t < 15; t++) setFn(8, size - 15 + t, !!gb(t));
+            setFn(8, size - 8, true);
+        }
+        drawFinder(3, 3); drawFinder(size - 4, 3); drawFinder(3, size - 4);
+        var aps = alignPos(version);
+        for (i = 0; i < aps.length; i++) for (var jj = 0; jj < aps.length; jj++) {
+            var ax = aps[jj], ay = aps[i];
+            if (isFn[ay] && isFn[ay][ax]) continue;
+            for (var dy2 = -2; dy2 <= 2; dy2++) for (var dx2 = -2; dx2 <= 2; dx2++) setFn(ax + dx2, ay + dy2, Math.max(Math.abs(dx2), Math.abs(dy2)) !== 1);
+        }
+        drawFormat(0);
+        for (i = 8; i < size - 8; i++) { if (!isFn[6][i]) setFn(i, 6, i % 2 === 0); if (!isFn[i][6]) setFn(6, i, i % 2 === 0); }
+        if (version >= 7) {
+            var rem2 = version; for (var r3 = 0; r3 < 12; r3++) rem2 = (rem2 << 1) ^ ((rem2 >>> 11) * 0x1F25);
+            var vbits = (version << 12) | rem2;
+            for (i = 0; i < 18; i++) { var dark2 = ((vbits >>> i) & 1) !== 0, a = size - 11 + (i % 3), b3 = Math.floor(i / 3); setFn(a, b3, dark2); setFn(b3, a, dark2); }
+        }
+        function drawCw() {
+            var bi = 0;
+            for (var right = size - 1; right >= 1; right -= 2) {
+                if (right === 6) right = 5;
+                for (var vert = 0; vert < size; vert++) {
+                    for (var j2 = 0; j2 < 2; j2++) {
+                        var x = right - j2, up = ((right + 1) & 2) === 0, y = up ? size - 1 - vert : vert;
+                        if (!isFn[y][x] && bi < cws.length * 8) { modules[y][x] = ((cws[bi >>> 3] >>> (7 - (bi & 7))) & 1) !== 0; bi++; }
+                    }
+                }
+            }
+        }
+        var MASKS = [
+            function (x, y) { return (x + y) % 2 === 0; },
+            function (x, y) { return y % 2 === 0; },
+            function (x, y) { return x % 3 === 0; },
+            function (x, y) { return (x + y) % 3 === 0; },
+            function (x, y) { return (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0; },
+            function (x, y) { return ((x * y) % 2 + (x * y) % 3) === 0; },
+            function (x, y) { return ((x * y) % 2 + (x * y) % 3) % 2 === 0; },
+            function (x, y) { return ((x + y) % 2 + (x * y) % 3) % 2 === 0; }
+        ];
+        function applyMask(m) { for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) if (!isFn[y][x] && MASKS[m](x, y)) modules[y][x] = !modules[y][x]; }
+        function penalty() {
+            var result = 0, x, y;
+            for (y = 0; y < size; y++) {
+                var runColor = false, runX = 0;
+                for (x = 0; x < size; x++) { if (modules[y][x] === runColor) { runX++; if (runX === 5) result += 3; else if (runX > 5) result++; } else { runColor = modules[y][x]; runX = 1; } }
+            }
+            for (x = 0; x < size; x++) {
+                var rc = false, runY = 0;
+                for (y = 0; y < size; y++) { if (modules[y][x] === rc) { runY++; if (runY === 5) result += 3; else if (runY > 5) result++; } else { rc = modules[y][x]; runY = 1; } }
+            }
+            for (y = 0; y < size - 1; y++) for (x = 0; x < size - 1; x++) { var c = modules[y][x]; if (c === modules[y][x + 1] && c === modules[y + 1][x] && c === modules[y + 1][x + 1]) result += 3; }
+            function fpRun(fixed, isRow) {
+                var cnt = 0, limit = size - 10;
+                for (var p = 0; p < limit; p++) {
+                    var ok = true, q3;
+                    for (q3 = 0; q3 < 11 && ok; q3++) {
+                        var vf;
+                        if (q3 < 4 || q3 > 10) vf = false;
+                        else vf = [true, false, true, true, true, false, true][q3 - 4];
+                        var val = isRow ? modules[fixed][p + q3] : modules[p + q3][fixed];
+                        if (val !== vf) ok = false;
+                    }
+                    if (ok) cnt++;
+                }
+                return cnt;
+            }
+            for (y = 0; y < size; y++) result += 40 * fpRun(y, true);
+            for (x = 0; x < size; x++) result += 40 * fpRun(x, false);
+            var dark = 0;
+            for (y = 0; y < size; y++) for (x = 0; x < size; x++) if (modules[y][x]) dark++;
+            var total = size * size, k3 = Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1;
+            result += k3 * 10;
+            return result;
+        }
+        drawCw();
+        var minPen = -1, best = null;
+        for (var m = 0; m < 8; m++) {
+            drawFormat(m); applyMask(m);
+            var p = penalty();
+            if (minPen === -1 || p < minPen) { minPen = p; best = modules.map(function (row) { return row.slice(); }); }
+            applyMask(m);
+        }
+        return best;
     }
+    function qrDataUrl18L(text, px) { /* برای پنجرهٔ چاپ (document جدا) — PNG از canvas */
+        try {
+            var m = qrEncode18L(text), n = m.length, q = 4, dim = px || 96;
+            var c = document.createElement('canvas'); c.width = dim; c.height = dim;
+            var ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, dim, dim);
+            ctx.fillStyle = '#000000';
+            var cell = dim / (n + q * 2);
+            for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) if (m[y][x]) ctx.fillRect(Math.floor((x + q) * cell), Math.floor((y + q) * cell), Math.ceil(cell), Math.ceil(cell));
+            return c.toDataURL('image/png');
+        } catch (e) { return ''; }
+    }
+    /* ===== HARDEN-18L (end) ===== */
+    function qcEnsureQrLib24(cb) { /* HARDEN-18L: انکودر داخلی — بارگیری CDN حذف شد (امضای تابع حفظ شد) */ if (typeof cb === 'function') cb(); }
     function qcDrawQr24(boxId, url) {
         const box = qe24(boxId); if (!box) return;
         box.innerHTML = '';
-        if (!window.QRCode) { box.innerHTML = '<div style="font-size:9px;color:#94a3b8">QR در حالت آفلاین در دسترس نیست — لینک چاپ شده معتبر است.</div>'; return; }
-        try { new window.QRCode(box, { text: url, width: 96, height: 96, correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.M : 0 }); } catch (e) { }
+        const du = qrDataUrl18L(url, 96); /* HARDEN-18L: QR همیشه آفلاین — بدون کتابخانهٔ بیرونی */
+        if (!du) { box.innerHTML = '<div style="font-size:9px;color:#94a3b8">QR ساخته نشد — لینک چاپ شده معتبر است.</div>'; return; }
+        const img = document.createElement('img');
+        img.src = du; img.width = 96; img.height = 96; img.alt = 'QR تأیید آنلاین گواهی';
+        box.appendChild(img);
     }
     function qcShowSheet24(m) {
         qcMtcCurrent24 = m;
@@ -8079,19 +8241,17 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         const m = qcMtcCurrent24;
         const w = window.open('', '_blank', 'width=920,height=1000');
         if (!w) { alert('پنجرهٔ چاپ باز نشد — popups را مجاز کنید. (در headless از PDF استفاده کنید)'); return; }
-        const qrTag = '<' + 'script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"><' + '/script>';
-        w.document.write('<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + esc(m.mtc_no) + ' — گواهی کیفیت MTC</title><style>@page{size:A4;margin:12mm}body{margin:0;background:#fff}</style>' + qrTag + '</head><body>' + qcMtcSheetHtml24(m, true) + '</body></html>');
+        /* HARDEN-18L: QR در opener ساخته می‌شود (PNG dataURL) — پنجرهٔ چاپ هیچ CDN/کتابخانهٔ بیرونی ندارد */
+        const qrData18L = qrDataUrl18L(location.origin + '/api/qcpro/mtc/verify/' + m.verify_id, 96);
+        w.document.write('<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + esc(m.mtc_no) + ' — گواهی کیفیت MTC</title><style>@page{size:A4;margin:12mm}body{margin:0;background:#fff}</style></head><body>' + qcMtcSheetHtml24(m, true) + '</body></html>');
         w.document.close();
-        /* QR پنجرهٔ چاپ — پس از لود کتابخانه در همان پنجره */
         setTimeout(function () {
             try {
-                if (w.window.QRCode) {
-                    const b = w.document.getElementById('mtcQrBox24P');
-                    if (b) { b.innerHTML = ''; new w.window.QRCode(b, { text: location.origin + '/api/qcpro/mtc/verify/' + m.verify_id, width: 96, height: 96 }); }
-                }
+                const b = w.document.getElementById('mtcQrBox24P');
+                if (b) { b.innerHTML = qrData18L ? '<img src="' + qrData18L + '" width="96" height="96" alt="QR">' : '<div style="font-size:9px;color:#64748b">QR ساخته نشد — لینک معتبر است.</div>'; }
             } catch (e) { /* QR اختیاری است — لینک چاپ شده معتبر می‌ماند */ }
-            setTimeout(function () { try { w.focus(); w.print(); } catch (e) { } }, 450);
-        }, 900);
+            setTimeout(function () { try { w.focus(); w.print(); } catch (e) { } }, 250);
+        }, 120);
     }
     function qcLoadScript24(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('CDN بارگیری نشد: ' + src)); document.head.appendChild(s); }); }
     async function qcPdfSheet24() {
