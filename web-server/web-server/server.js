@@ -421,15 +421,21 @@ function sanitizeRawJson15b(raw) {
 // ---------- محاسبات ----------
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const pct = (p, t) => (t > 0 ? round2((p / t) * 100) : 0);
+/* ===== FIX-WASTE-26a (begin): ضایعات وزنی — پایان شیفت بر اساس تُن اعلام می‌شود (مثلاً «سایز ۱۴، ۵ تن ضایعات»).
+    فیلد جدید tonnage_ton (تناژ بر حسب تن، اعشاری) + product_size (اختیاری).
+    رکوردهای قدیمی که فقط quantity (تعداد) دارند دست‌نخورده می‌مانند (legacy) و در جمع‌های وزنی حذف می‌شوند
+    (نه صفر شدن — صرفاً مشارکت ندارند)؛ ابزار مهاجرت وجود ندارد و دادهٔ قدیمی تغییر نمی‌کند. ===== */
+const wasteKgOf26a = (r) => (r && Number(r.tonnage_ton) > 0) ? Number(r.tonnage_ton) * 1000 : 0; /* kg معادل تناژ — رکورد بدون تناژ → ۰ (حذف از جمع وزنی) */
 function buildSummary(d) {
     const prodQty = (d.production_logs || []).reduce((s, r) => s + (Number(r.good_quantity) || 0), 0);
     const wasteQty = (d.waste_logs || []).reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+    const wasteTon26a = (d.waste_logs || []).reduce((s, r) => s + (Number(r.tonnage_ton) > 0 ? Number(r.tonnage_ton) : 0), 0); /* FIX-WASTE-26a: جمع تناژ (تن) */
     const downMin = (d.downtime_logs || []).reduce((s, r) => s + (Number(r.duration_minutes) || 0), 0);
     const bundleWeight = (d.rebar_bundles || []).reduce((s, r) => s + (Number(r.net_weight_kg) || 0), 0);
     const billetWeight = (d.billets || []).reduce((s, r) => s + (Number(r.initial_weight_kg) || 0), 0);
     return {
         generated_at: d.generated_at || null, production_good_quantity: prodQty, production_log_count: (d.production_logs || []).length,
-        waste_quantity: wasteQty, waste_log_count: (d.waste_logs || []).length, downtime_minutes: downMin, downtime_count: (d.downtime_logs || []).length,
+        waste_quantity: wasteQty, waste_tonnage_ton: round2(wasteTon26a) /* FIX-WASTE-26a: تناژ وزنی ضایعات (تن) */, waste_log_count: (d.waste_logs || []).length, downtime_minutes: downMin, downtime_count: (d.downtime_logs || []).length,
         quality_count: (d.quality_inspections || []).length, bundle_count: (d.rebar_bundles || []).length, bundle_weight_kg: round2(bundleWeight),
         billet_weight_kg: round2(billetWeight), yield_rate_percent: pct(bundleWeight, billetWeight),
     };
@@ -1696,7 +1702,7 @@ function appRequestHandler(req, res) {
         let wasteKg = 0;
         (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => {
             const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return;
-            wasteKg += Number(w.quantity) || 0;
+            wasteKg += wasteKgOf26a(w); /* FIX-WASTE-26a: بر پایهٔ تناژ — رکوردهای legacy (تعداد) حذف از جمع وزنی */
         });
         let prodKg30 = 0;
         Object.keys(sizes).forEach((k) => { prodKg30 += sizes[k].kg; });
@@ -3032,7 +3038,7 @@ function appRequestHandler(req, res) {
         Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.kgPerDay = s.kg / s.days; delete s.daysMap; });
         /* ضایعات ۳۰ روزه */
         let wasteKg = 0;
-        (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => { const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return; wasteKg += Number(w.quantity) || 0; });
+        (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => { const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return; wasteKg += wasteKgOf26a(w); }); /* FIX-WASTE-26a: تناژ وزنی — legacy حذف از جمع */
         let prodKg = 0; Object.keys(sizes).forEach((k) => { prodKg += sizes[k].kg; });
         const wastePct = (prodKg + wasteKg) > 0 ? Math.min(20, wasteKg / (prodKg + wasteKg) * 100) : 3;
         /* پذیرش QC (آستانه‌های A3: ReH≥400 / Rm≥600 / A≥14) */
@@ -3876,6 +3882,9 @@ function appRequestHandler(req, res) {
         req.on('end', () => {
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
+                /* FIX-WASTE-26a: ثبت وزنی — «تناژ (تن)» جای «تعداد»؛ اعشاری (۵ یا ۲٫۵ یا ۰٫۱۹۶)، سقف منطقی ۵۰۰ تن.
+                    سازگاری کامل: اگر فرستندهٔ قدیمی quantity بفرستد همان مسیر legacy حفظ می‌شود. */
+                const ton26a = Number(b.tonnage_ton);
                 const qty = Number(b.quantity);
                 const rec = {
                     id: 'web-w-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -3888,8 +3897,19 @@ function appRequestHandler(req, res) {
                     description: String(b.description || '').slice(0, 500),
                     timestamp: new Date().toISOString(),
                 };
-                if (!rec.reason_id || !rec.shift_id || !rec.machine_id || !Number.isFinite(qty) || qty <= 0) {
-                    return sendJson(res, { error: 'ایستگاه کشف، علت، شیفت و «تعداد» الزامی است.' }, 400);
+                const hasTon26a = Number.isFinite(ton26a) && ton26a > 0 && ton26a <= 500; /* FIX-WASTE-26a: سقف منطقی */
+                const hasQty26a = Number.isFinite(qty) && qty > 0;
+                if (hasTon26a) {
+                    rec.tonnage_ton = Math.round(ton26a * 1000) / 1000; /* FIX-WASTE-26a: فیلد وزنی جدید */
+                    delete rec.quantity; /* رکورد وزنی — تعداد ندارد */
+                    const ps26a = String(b.product_size || '').trim().slice(0, 24);
+                    if (ps26a) rec.product_size = ps26a; /* FIX-WASTE-26a: سایز محصول (اختیاری) — ضایعات پایان شیفت per سایز اعلام می‌شود */
+                }
+                if (Number.isFinite(ton26a) && ton26a > 0 && !hasTon26a) {
+                    return sendJson(res, { error: 'تناژ باید عددی بزرگ‌تر از صفر و حداکثر ۵۰۰ تن باشد.' }, 400);
+                }
+                if (!rec.reason_id || !rec.shift_id || !rec.machine_id || (!hasTon26a && !hasQty26a)) {
+                    return sendJson(res, { error: 'ایستگاه کشف، علت، شیفت و «تناژ (تن)» الزامی است — مثال: ۵ یا ۲٫۵ (حداکثر ۵۰۰).' }, 400);
                 }
                 const live = readLive();
                 live.waste_logs = Array.isArray(live.waste_logs) ? live.waste_logs : [];
