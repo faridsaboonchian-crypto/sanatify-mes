@@ -7483,9 +7483,14 @@ function onMainListening11d() {
 }
 if (tlsMode === 'HTTPS') {
     // 11d: دمولتی‌پلکسر خام روی پورت اصلی می‌نشیند؛ httpsServer دیگر مستقیم listen نمی‌کند
+    /* HARDEN-18O: خطای listen پورت اصلی (مثل EADDRINUSE) مرگبار است — سرور بی‌مخاطبِ زندهٔ بی‌خدمت معنا ندارد؛
+       watchdog (در صورت فعال‌بودن) ری‌استارت می‌کند، وگرنه سرورِ نگهدارندهٔ پورت در حال سرویس است */
+    demuxServer.on('error', (e18o) => { console.error('[HARDEN-18O] listen پورت اصلی ناموفق — خروج (fatal):', (e18o && e18o.code) || (e18o && e18o.message) || e18o); process.exit(1); });
     demuxServer.listen(PORT, '0.0.0.0', onMainListening11d);
 } else {
     // fallback بدون گواهی — رفتار سابق دست‌نخورده (بدون peek)
+    /* HARDEN-18O: همان گارد fatal برای listen پورت اصلی */
+    mainServer.on('error', (e18o) => { console.error('[HARDEN-18O] listen پورت اصلی ناموفق — خروج (fatal):', (e18o && e18o.code) || (e18o && e18o.message) || e18o); process.exit(1); });
     mainServer.listen(PORT, '0.0.0.0', onMainListening11d);
 }
 
@@ -7701,10 +7706,11 @@ function gracefulShutdown18N(signal) {
     shuttingDown18N = true;
     const t0 = Date.now();
     console.log('[HARDEN-18N] توقف نجیب آغاز شد (' + signal + ') — پذیرش اتصال جدید متوقف، تخلیهٔ صف نوشتن…');
-    /* ۱) هیچ اتصال جدیدی پذیرفته نمی‌شود */
-    try { if (typeof redirectServer !== 'undefined' && redirectServer.listening) redirectServer.close(); } catch (e) { /* noop */ }
-    try { if (tlsMode === 'HTTPS' && typeof demuxServer !== 'undefined' && demuxServer.listening) demuxServer.close(); } catch (e) { /* noop */ }
-    try { if (mainServer.listening) mainServer.close(); } catch (e) { /* noop */ }
+    /* ۱) هیچ اتصال جدیدی پذیرفته نمی‌شود + اتصال‌های موجود (keep-alive) بلافاصله آزاد — پورت فوراً رها می‌شود
+       (بدون این، close() تا ۵ ثانیه روی keep-alive می‌ماند و ری‌استارت‌های سریع EADDRINUSE می‌گیرند) */
+    try { if (typeof redirectServer !== 'undefined' && redirectServer.listening) { redirectServer.close(); if (redirectServer.closeAllConnections) redirectServer.closeAllConnections(); } } catch (e) { /* noop */ }
+    try { if (tlsMode === 'HTTPS' && typeof demuxServer !== 'undefined' && demuxServer.listening) { demuxServer.close(); if (demuxServer.closeAllConnections) demuxServer.closeAllConnections(); } } catch (e) { /* noop */ }
+    try { if (mainServer.listening) { mainServer.close(); if (mainServer.closeAllConnections) mainServer.closeAllConnections(); } } catch (e) { /* noop */ }
     /* ۲) تخلیهٔ صف تک‌نویسندهٔ 18D با سقف زمانی — نیمه‌تمامِ نوشتن روی دیسک نمی‌ماند (نوشتن اتمیک 18A) */
     const drainTimeout18N = setTimeout(() => { console.warn('[HARDEN-18N] تخلیهٔ صف به سقف ۸ ثانیه خورد — ادامهٔ خروج.'); finish18N(); }, 8000);
     const finish18N = () => {
@@ -7721,3 +7727,71 @@ function gracefulShutdown18N(signal) {
 process.on('SIGTERM', () => gracefulShutdown18N('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown18N('SIGINT'));
 /* ===== HARDEN-18N (end) ===== */
+
+/* ===== HARDEN-18O (begin): خودآزمایی بوت + لاگ چرخشی ماهانه + پایش حافظه =====
+   · خودآزمایی: پورت/گواهی/دسترسی نوشتن/فایل‌های حیاتی — گزارش یک‌خطی [HARDEN-18O]
+   · لاگ: تمام stdout/stderr به logs/server-YYYY-MM.log هم اضافه می‌شود (چرخش طبیعی ماهانه؛ HARDEN_LOG_18O=off برای خاموشی)
+   · پایش RSS: هر ۶۰ ثانیه؛ عبور از سقف ⇒ هشدار + audit (فاصلهٔ ۱۰ دقیقه‌ای) — سقف با HARDEN_RSS_MAX_MB_18O */
+(function hardenBoot18O() {
+    try {
+        const logsDir18o = path.join(ROOT, 'logs');
+        const LOG_OFF_18o = String(process.env.HARDEN_LOG_18O || '').toLowerCase() === 'off';
+        const LOG_MAX_18o = 100 * 1024 * 1024; /* سقف هر فایل لاگ — پس از آن تا ماه بعد نمی‌نویسد (ضد پرشدن دیسک) */
+        let curLogFile18o = '', skippedWarn18o = false;
+        function logFile18o() {
+            const d = new Date();
+            const name = 'server-' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '.log';
+            return path.join(logsDir18o, name);
+        }
+        function appendLog18o(line, isErr) {
+            if (LOG_OFF_18o) return;
+            try {
+                const f = logFile18o();
+                if (f !== curLogFile18o) { try { fs.mkdirSync(logsDir18o, { recursive: true }); } catch (e) { /* موجود */ } curLogFile18o = f; }
+                try {
+                    if (fs.existsSync(f) && fs.statSync(f).size > LOG_MAX_18o) { if (!skippedWarn18o) { skippedWarn18o = true; } return; }
+                    fs.appendFileSync(f, (isErr ? '[err] ' : '') + new Date().toISOString() + ' ' + line + (line.endsWith('\n') ? '' : '\n'), 'utf8');
+                } catch (e) { /* لاگ اختیاری است — هرگز جریان اصلی را نمی‌شکند */ }
+            } catch (e) { /* noop */ }
+        }
+        if (!LOG_OFF_18o) {
+            const origOut18o = process.stdout.write.bind(process.stdout);
+            const origErr18o = process.stderr.write.bind(process.stderr);
+            process.stdout.write = function (chunk) { try { appendLog18o(String(chunk), false); } catch (e) { /* noop */ } return origOut18o.apply(null, arguments); };
+            process.stderr.write = function (chunk) { try { appendLog18o(String(chunk), true); } catch (e) { /* noop */ } return origErr18o.apply(null, arguments); };
+        }
+        /* پایش RSS */
+        const RSS_MAX_18o = Math.max(128, Number(process.env.HARDEN_RSS_MAX_MB_18O) || 1024) * 1024 * 1024;
+        let lastRssAudit18o = 0;
+        const rssTimer18o = setInterval(() => {
+            try {
+                const rss = process.memoryUsage().rss;
+                if (rss > RSS_MAX_18o && Date.now() - lastRssAudit18o > 10 * 60 * 1000) {
+                    lastRssAudit18o = Date.now();
+                    const mb = Math.round(rss / (1024 * 1024));
+                    console.warn('[HARDEN-18O] هشدار حافظه: RSS = ' + mb + 'MB از سقف ' + Math.round(RSS_MAX_18o / (1024 * 1024)) + 'MB — بررسی نشست‌ها/کش و در صورت تداوم ری‌استارت برنامه‌ریزی‌شده (توقف نجیب 18N).');
+                    try { if (typeof writeAudit15b === 'function') writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: 'server.rss_high', endpoint: '-', status: 200, user_agent: 'HARDEN-18O', payload_hash: '', ms: 0, detail: 'rss_mb=' + mb }); } catch (e) { /* noop */ }
+                }
+            } catch (e) { /* noop */ }
+        }, 60 * 1000);
+        if (rssTimer18o.unref) rssTimer18o.unref();
+        /* خودآزمایی بوت — یک‌خطی */
+        const sc18o = [];
+        sc18o.push('port:' + PORT + '(' + tlsMode + ')');
+        try {
+            const certOk18o = fs.existsSync(path.join(ROOT, 'cert.pem')) && fs.existsSync(path.join(ROOT, 'key.pem'));
+            sc18o.push('cert:' + (tlsMode === 'HTTPS' ? 'OK(TLS1.2+)' : (certOk18o ? 'موجود-غیرفعال' : 'HTTP-fallback')));
+        } catch (e) { sc18o.push('cert:?'); }
+        const w18o = [];
+        [[ROOT, 'root'], [BACKUP_DIR, 'backups'], [path.join(__dirname, 'uploads'), 'uploads'], [logsDir18o, 'logs']].forEach((p18o) => {
+            try { fs.mkdirSync(p18o[0], { recursive: true }); fs.accessSync(p18o[0], fs.constants.W_OK); w18o.push(p18o[1] + ':OK'); } catch (e) { w18o.push(p18o[1] + ':NO-WRITE'); }
+        });
+        sc18o.push('write:' + (w18o.some((x) => x.indexOf('NO') !== -1) ? w18o.join(',') : 'OK(' + w18o.length + ')'));
+        try {
+            const rss18o = Math.round(process.memoryUsage().rss / (1024 * 1024));
+            sc18o.push('rss:' + rss18o + 'MB');
+        } catch (e) { /* noop */ }
+        console.log('[HARDEN-18O] خودآزمایی بوت → ' + sc18o.join(' | ') + (LOG_OFF_18o ? ' | log:off' : ' | log:logs/server-YYYY-MM.log'));
+    } catch (e) { console.warn('[HARDEN-18O] خودآزمایی بوت ناموفق (غیرمرگبار):', (e && e.message) || e); }
+})();
+/* ===== HARDEN-18O (end) ===== */
