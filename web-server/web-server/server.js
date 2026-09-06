@@ -7258,8 +7258,18 @@ let tlsMode = 'HTTP';
 let mainServer = server; // حالت پیش‌فرض: HTTP (بدون گواهی)
 let httpsServerRef = null; // ===== FEAT-HTTPS-11d: ارجاع سرور https برای تحویل سوکت‌های TLS =====
 try {
-    const tlsOpts = { key: fs.readFileSync(path.join(ROOT, 'key.pem')), cert: fs.readFileSync(path.join(ROOT, 'cert.pem')) };
-    const httpsServer = https.createServer(tlsOpts, appRequestHandler);
+    /* ===== HARDEN-18I (begin): محکم‌سازی TLS — فقط TLS1.2/1.3 + cipherهای مدرن (الگوی Mozilla Intermediate) + اولویت سرور ===== */
+    const tlsOpts18i = {
+        key: fs.readFileSync(path.join(ROOT, 'key.pem')),
+        cert: fs.readFileSync(path.join(ROOT, 'cert.pem')),
+        minVersion: 'TLSv1.2', /* TLS1.0/1.1 ممنوع */
+        honorCipherOrder: true, /* ترتیب cipher را سرور تعیین می‌کند نه کلاینت */
+        ecdhCurve: 'auto', /* بهترین منحنی‌های ECDHE (X25519/prime256v1) */
+        ciphers: 'TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256',
+        sessionTimeout: 300, /* ازسرگیری نشست TLS محدود و کنترل‌شده */
+    };
+    const httpsServer = https.createServer(tlsOpts18i, appRequestHandler);
+    /* ===== HARDEN-18I (end) ===== */
     // کلاینت‌های TLS خراب/ناسازگار هرگز سرور را نمی‌اندازند
     httpsServer.on('tlsClientError', (err) => console.warn('[HTTPS] tlsClientError — سرور سالم ماند:', (err && err.code) || (err && err.message) || err));
     mainServer = httpsServer;
