@@ -31,6 +31,7 @@ const FETCH_TIMEOUT_MS = 6000;
 const TABLES = ['production_logs', 'waste_logs', 'downtime_logs', 'quality_inspections', 'billets', 'furnace_logs', 'rebar_bundles'];
 
 // ---------- ابزارهای فایل ----------
+let cache = { data: null, at: 0, source: 'none' }; /* HARDEN-18F: از محل قدیمی به اینجا منتقل شد (بالای همهٔ مصرف‌کنندگان) */
 function emptyDataset() {
     return { generated_at: null, production_logs: [], waste_logs: [], downtime_logs: [], quality_inspections: [], billets: [], furnace_logs: [], rebar_bundles: [] };
 }
@@ -139,6 +140,15 @@ function writeJson(file, obj) { /* HARDEN-18A: اتمیک + checksum — امض�
         const body = JSON.stringify(out, null, 2);
         rotateBaks18A(file);
         atomicWriteText18A(file, body);
+        /* HARDEN-18F (begin): invalidation دقیق کش خواندن — پس از نوشتن موفق live.json، کش همان لحظه با نسخهٔ تازه (بدون فیلد integrity، با __ver) به‌روز می‌شود */
+        if (file === LIVE_FILE) {
+            try {
+                const fresh18f = Object.assign({}, out);
+                delete fresh18f[INTEG_FIELD_18A];
+                cache.data = fresh18f; cache.at = Date.now(); cache.source = 'live-cache';
+            } catch (e) { cache.data = null; cache.at = 0; } /* خطا ⇒ کش خالی — خواندن بعدی از دیسک */
+        }
+        /* HARDEN-18F (end) */
         return true;
     } catch (e) { console.warn('[Server] writeJson failed:', e.message); return false; }
 }
@@ -211,6 +221,10 @@ function migrateSteelWarehouses(live) {
     return live;
 }
 function readLive() { return readJson(LIVE_FILE) || emptyDataset(); }
+async function readJsonAsync18F(file) { /* HARDEN-18F: خواندن غیرمسدودکنندهٔ دیسک با fs.promises — بدون تغییر معناشناسی؛ خرابی ⇒ مسیر بازیابی همگام 18A */
+    try { return parseWithIntegrity18A(await fs.promises.readFile(file, 'utf8')).value; }
+    catch (e) { if (e && e.code === 'ENOENT') return null; return readJson(file); }
+}
 function hasAnyLive(live) { return TABLES.some((t) => Array.isArray(live[t]) && live[t].length > 0); }
 
 function withTimeout(promise, ms) {
@@ -249,13 +263,13 @@ function mergeIntoLive(incoming) {
 }
 
 // ---------- خواندن داده با ترتیبِ مقاوم ----------
-let cache = { data: null, at: 0, source: 'none' };
+/* HARDEN-18F: اعلان cache به بالای فایل منتقل شد تا writeJson بتواند پس از هر نوشتن، کش را همان لحظه تازه کند (invalidation دقیق — قبلاً تا ۴ ثانیه کهنه می‌ماند) */
 // ---------- خواندن داده با ترتیبِ مقاوم (داخلی = قلب، ابر = پشتیبان) ----------
 async function loadData() {
     const now = Date.now();
     if (cache.data && (now - cache.at) < CACHE_TTL_MS) return cache.data;
-    // ۱) داخلی اول: آینهٔ زنده کارخانه (آفلاین-اول، بدون معطلی)
-    const live = readLive();
+    // ۱) داخلی اول: آینهٔ زندهٔ کارخانه (آفلاین-اول) — HARDEN-18F: خواندن با fs.promises (غیرمسدودکننده)
+    const live = (await readJsonAsync18F(LIVE_FILE)) || emptyDataset();
     if (hasAnyLive(live)) { cache = { data: live, at: now, source: 'live-cache' }; return live; }
     // ۲) داخلی خالی است -> ابر (پشتیبان)؛ و هرگز ابرِ خالی را روی داخلی ننویس
     if (isSupabaseConfigured()) {
@@ -610,6 +624,24 @@ function rateLimit15b(req, pathname) {
 }
 var rlSweepTimer15b = setInterval(() => { try { const now = Date.now(); for (const [k, v] of rlMap15b) { const f = v.filter((t) => now - t < RL_WINDOW_MS_15B); if (f.length) rlMap15b.set(k, f); else rlMap15b.delete(k); } } catch (e) { /* noop */ } }, 5 * 60 * 1000);
 if (rlSweepTimer15b.unref) rlSweepTimer15b.unref();
+// ===== HARDEN-18F (begin): ریت‌لیمیت اختصاصی endpointهای سنگین (گزارش/اکسل/تراز/ارزیابی) — ضد DoS؛ ریت‌لیمiter عمومی 15b دست‌نخورده =====
+const RLH_WINDOW_18F = 60 * 1000;
+const RLH_MAX_18F = Math.max(5, Number(process.env.HARDEN_HEAVY_RL_18F) || 30); /* درخواست سنگین per دقیقه per IP */
+const HEAVY_RE_18F = [/^\/api\/fin\/reports\//, /^\/api\/fin\/(valuation|costing|overview)/, /^\/api\/qcpro\/reports/, /^\/api\/(genealogy|balance)\//];
+const rlhMap18f = new Map();
+function rateLimitHeavy18F(req, pathname) {
+    if (req.method !== 'GET') return 0;
+    if (!HEAVY_RE_18F.some((re) => re.test(pathname))) return 0;
+    const ip = clientIp15b(req);
+    const now = Date.now();
+    const arr = (rlhMap18f.get(ip) || []).filter((t) => now - t < RLH_WINDOW_18F);
+    if (arr.length >= RLH_MAX_18F) { rlhMap18f.set(ip, arr); return Math.ceil((arr[0] + RLH_WINDOW_18F - now) / 1000); }
+    arr.push(now); rlhMap18f.set(ip, arr);
+    return 0;
+}
+var rlhSweep18f = setInterval(() => { try { const now = Date.now(); for (const [k, v] of rlhMap18f) { const f = v.filter((t) => now - t < RLH_WINDOW_18F); if (f.length) rlhMap18f.set(k, f); else rlhMap18f.delete(k); } } catch (e) { /* noop */ } }, 5 * 60 * 1000);
+if (rlhSweep18f.unref) rlhSweep18f.unref();
+// ===== HARDEN-18F (end) =====
 // audit خودکار هر POST/PUT/DELETE + چرخش ماهانه (audit-YYYY-MM.json)
 const AUDIT_FILE_15B = path.join(ROOT, 'audit.json'); /* SEC-15b: نسخهٔ ماژول‌سطح */
 function auditRotate15b() {
@@ -696,6 +728,12 @@ function appRequestHandler(req, res) {
     if (rl15b > 0) {
         res.setHeader('Retry-After', String(rl15b));
         return sendJson(res, { error: 'تعداد درخواست‌ها بیش از حد مجاز است — لطفاً کمی صبر کنید.', code: 'RATE_LIMITED' }, 429);
+    }
+    /* HARDEN-18F: سقف اختصاصی گزارش‌های سنگین (۳۰/دقیقه per IP — ضد DoS گزارش/اکسل) */
+    const rlh18f = rateLimitHeavy18F(req, pathname);
+    if (rlh18f > 0) {
+        res.setHeader('Retry-After', String(rlh18f));
+        return sendJson(res, { error: 'حجم درخواست‌های گزارش سنگین بیش از حد مجاز است — لطفاً کمی صبر کنید.', code: 'RATE_LIMITED_HEAVY' }, 429);
     }
     // ===== SEC-15b: audit خودکار هر POST/PUT/DELETE (ip/ua/status/payload_hash) — از طریق res finish =====
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
