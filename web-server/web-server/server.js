@@ -313,6 +313,21 @@ function sendFile(res, filePath) {
         res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' }); res.end(data);
     });
 }
+/* ===== HARDEN-18G (begin): سرو HTML با nonce per درخواست — تزریق به <script>/<style> + global __CSP_NONCE__ برای پنجره‌های چاپ (about:blank CSP opener را به ارث می‌برد) ===== */
+function sendHtmlNonce18G(res, filePath, nonce18g) {
+    fs.readFile(filePath, (err, data) => {
+        if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 Not Found'); return; }
+        const n18g = String(nonce18g || '');
+        let html = data.toString('utf8');
+        if (n18g) {
+            html = html.replace('<head>', '<head><script nonce="' + n18g + '">window.__CSP_NONCE__=' + JSON.stringify(n18g) + ';</script>');
+            html = html.replace(/<script>/g, '<script nonce="' + n18g + '">').replace(/<style>/g, '<style nonce="' + n18g + '">');
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+    });
+}
+/* ===== HARDEN-18G (end) ===== */
 function readBody(req) {
     // ===== SEC-15b: سقف ۱MB روی بدنه + پاک‌سازی JSON مرکزی (همهٔ هندلرها خودکار پوشش می‌شوند) =====
     const CAP_15B = 1024 * 1024;
@@ -573,24 +588,36 @@ function resolveTenantLogoFile15a(cfg) {
 })();
 // ===== SAAS-15a (end) =====
 // ===== SEC-15b (begin): هدرهای امنیتی + ریت‌لیمیت + audit خودکار + IP کلاینت =====
-// CSP: self + inline (تک‌فایل فعلی) + Chart.js/فونت از cdn.jsdelivr.net — بدون unsafe-eval (الگوی OWASP Secure Headers)
-const CSP_15B = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-    "font-src 'self' data: https://cdn.jsdelivr.net",
-    "img-src 'self' data:",
-    "connect-src 'self'",
-    "manifest-src 'self'",
-    "worker-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-].join('; ');
+// CSP: HARDEN-18G — حذف 'unsafe-inline' با nonce per درخواست (الگوی OWASPnonce) — Chart.js/فونت/چاپ سالم می‌مانند
+function buildCSP18G(nonce18g) {
+    const n18g = nonce18g ? " 'nonce-" + nonce18g + "'" : '';
+    return [
+        "default-src 'self'",
+        /* HARDEN-18G: حذف کامل unsafe-inline از اسکریپت — nonce per درخواست */
+        "script-src 'self'" + n18g + " https://cdn.jsdelivr.net",
+        /* نکته: presence-of-nonce سبک 'unsafe-inline' را در همان directive بی‌اثر می‌کند؛
+           ویژگی‌های style="" (فراوان در UI) توسط style-src-attr مدیریت می‌شوند و عناصر <style> توسط
+           style-src-elem با nonce محکم می‌شوند — بدون شکستن لایه‌بندی در مرورگرهای قدیمی هم (fallback به style-src) */
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+        "style-src-elem 'self'" + n18g + " https://cdn.jsdelivr.net",
+        "style-src-attr 'unsafe-inline'",
+        "font-src 'self' data: https://cdn.jsdelivr.net",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "manifest-src 'self'",
+        "worker-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ].join('; ');
+}
 function applySecurityHeaders15b(res, req) {
     try {
-        res.setHeader('Content-Security-Policy', CSP_15B);
+        /* HARDEN-18G: nonce per درخواست — تزریق به سندهای HTML و هدر CSP */
+        const nonce18g = crypto.randomBytes(16).toString('base64');
+        if (req) req.__cspNonce18G = nonce18g;
+        res.setHeader('Content-Security-Policy', buildCSP18G(nonce18g));
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -7215,6 +7242,8 @@ live.inventory_reservations.splice(idx, 1);
     let rel = pathname === '/' ? '/index.html' : pathname;
     const safePath = path.normalize(path.join(PUBLIC_DIR, rel));
     if (!safePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end('Forbidden'); return; }
+    /* HARDEN-18G: سندهای HTML با nonce per درخواست سرو می‌شوند */
+    if (safePath.toLowerCase().endsWith('.html')) { sendHtmlNonce18G(res, safePath, req.__cspNonce18G); return; }
     sendFile(res, safePath);
 }
 // ===== FEAT-HTTPS-11c (end): هندلر مشترک — نمونهٔ HTTP (حالت fallback بدون گواهی) =====

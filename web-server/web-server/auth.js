@@ -190,7 +190,14 @@ function jsonRes(res, obj, code) {
     res.end(body);
 }
 function redirect(res, loc) { res.writeHead(302, { 'Location': loc }); res.end(); }
-function htmlRes(res, html) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html); }
+function htmlRes(res, html, req) {
+    /* HARDEN-18G: تزریق nonce به سند لاگین — هم‌گام با CSP هدر (همان req) */
+    const n18g = req && req.__cspNonce18G ? String(req.__cspNonce18G) : '';
+    if (n18g) {
+        html = html.replace(/<style>/g, '<style nonce="' + n18g + '">').replace(/<script>/g, '<script nonce="' + n18g + '">');
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html);
+}
 
 // ===== SEC-15b (begin): ضد-BruteForce دولایه — شمارش per-IP و per-username با پنجرهٔ لغزان =====
 // ۵ خطا در ۱۰ دقیقه ⇒ قفل ۱۵ دقیقه (۴۲۹)؛ ۱۰ خطا در ۱ ساعت ⇒ قفل ۲ ساعته + هشدار audit
@@ -451,7 +458,7 @@ const LOGIN_HTML = `<!DOCTYPE html>
 function handlePublic(req, res, pathname) {
     if (req.method === 'GET' && pathname === '/login') {
         if (getSession(req)) { redirect(res, '/'); return true; }
-        htmlRes(res, loginHtml15a()); /* SAAS-15a: برندینگ تنانت */
+        htmlRes(res, loginHtml15a(), req); /* SAAS-15a: برندینگ تنانت + HARDEN-18G: nonce */
         return true;
     }
     if (req.method === 'POST' && pathname === '/api/auth/login') { doLogin(req, res); return true; }

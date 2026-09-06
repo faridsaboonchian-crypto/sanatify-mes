@@ -2655,8 +2655,7 @@
                             ذخیره کالا
                         </button>
 
-                        <button class="act fclear"
-                            onclick="document.getElementById('invItemForm').classList.add('hidden')">
+                        <button class="act fclear" data-hide18g="invItemForm">
                             انصراف
                         </button>
 
@@ -2895,7 +2894,7 @@
 </div>
 <div class="frow" style="margin-top:8px">
 <button class="act" id="invReserveSave" data-save style="background:#15803d">ثبت رزرو</button>
-<button class="act fclear" onclick="document.getElementById('invReserveForm').classList.add('hidden')">انصراف</button>
+<button class="act fclear" data-hide18g="invReserveForm">انصراف</button>
 </div>
 <div class="note" id="invReserveMsg"></div>
 </div>
@@ -5029,8 +5028,8 @@ document.getElementById('invStockSearch')?.addEventListener('input', function ()
                 '</tbody></table>' +
                 '<div class="box">سفارش مرجع: <b>' + esc(inv.order_no) + '</b> — حواله‌ها: ' + toFaDigits((inv.exits || []).join('، ')) + ' — این صورت‌حساب مطابق اقلام الزامی صورتحساب الکترونیکی (سامانهٔ مؤدیان) تنظیم شده است.</div>' +
                 '<div class="sign"><div>مهر و امضای فروشنده</div><div>مهر و امضای خریدار</div></div>' +
-                '<div class="noprint" style="text-align:center;margin-top:18px"><button onclick="window.print()" style="padding:8px 22px;font-family:inherit">🖨 چاپ</button></div>' +
-                '<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},350)}<' + '/script></body></html>');
+                '<div class="noprint" style="text-align:center;margin-top:18px"><button id="printBtn18g" style="padding:8px 22px;font-family:inherit">🖨 چاپ</button></div>' +
+                '<script>window.addEventListener("load",function(){var b=document.getElementById("printBtn18g");if(b)b.addEventListener("click",function(){try{window.print()}catch(e){}});setTimeout(function(){try{window.print()}catch(e){}},350)})<' + '/script></body></html>');
             w.document.close();
         }
         /* ---- اکشن‌ها و خروجی‌ها ---- */
@@ -5809,8 +5808,8 @@ document.getElementById('invStockSearch')?.addEventListener('input', function ()
                 '</tbody></table>' +
                 '<div class="box">سفارش مرجع: <b>' + esc(inv.po_no) + '</b> — رسیدها: ' + toFaDigits((inv.receipts || []).join('، ')) + ' — این فاکتور مطابق اقلام الزامی صورتحساب الکترونیکی (سامانهٔ مؤدیان) تنظیم شده است.</div>' +
                 '<div class="sign"><div>مهر و امضای فروشنده</div><div>مهر و امضای خریدار</div></div>' +
-                '<div class="noprint" style="text-align:center;margin-top:18px"><button onclick="window.print()" style="padding:8px 22px;font-family:inherit">🖨 چاپ</button></div>' +
-                '<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},350)}<' + '/script></body></html>');
+                '<div class="noprint" style="text-align:center;margin-top:18px"><button id="printBtn18g" style="padding:8px 22px;font-family:inherit">🖨 چاپ</button></div>' +
+                '<script>window.addEventListener("load",function(){var b=document.getElementById("printBtn18g");if(b)b.addEventListener("click",function(){try{window.print()}catch(e){}});setTimeout(function(){try{window.print()}catch(e){}},350)})<' + '/script></body></html>');
             w.document.close();
         }
         /* ---- اکشن‌ها و خروجی‌ها ---- */
@@ -8456,4 +8455,14 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 })();
 // ===== FIX-PWA-9a (end) =====
 // ===== FEAT-PWA-8b (end) =====
+</script><script>
+/* HARDEN-18G: حذف onclickهای درون‌خطی (سازگار CSP nonce) — واگذاری رویداد */
+(function () {
+    document.addEventListener('click', function (e18g) {
+        var t18g = e18g.target && e18g.target.closest ? e18g.target.closest('[data-hide18g]') : null;
+        if (!t18g) return;
+        var el18g = document.getElementById(t18g.getAttribute('data-hide18g'));
+        if (el18g) el18g.classList.add('hidden');
+    });
+})();
 </script></body></html>
