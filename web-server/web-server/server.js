@@ -751,11 +751,47 @@ function auditRotate15b() {
 function writeAudit15b(entry) {
     try {
         auditRotate15b();
+        /* ===== HARDEN-18M (begin): زنجیرهٔ هش ضد دستکاری — هر رکورد هش رکورد قبلی را حمل می‌کند =====
+           __pc18m = هش رکورد پیشین (یا GENESIS) · __h18m = SHA-256 نسخهٔ متعارف همان رکورد
+           هر تغییر/حذف وسط زنجیره با tools/audit-verify.js کشف می‌شود (بریدن سرِ زنجیره به‌واسطهٔ نگه‌داری ۲۰۰۰تایی طبیعی است) */
         const arr = readJson(AUDIT_FILE_15B) || [];
+        if (auditChainLast18m === null) auditChainLast18m = auditTailHash18M(arr);
+        entry.__pc18m = auditChainLast18m;
+        delete entry.__h18m;
+        entry.__h18m = auditHash18M(entry);
+        auditChainLast18m = entry.__h18m;
         arr.push(entry);
         writeJson(AUDIT_FILE_15B, arr.slice(-2000));
+        /* ===== HARDEN-18M (end) ===== */
     } catch (e) { /* بی‌ضرر */ }
 }
+/* ===== HARDEN-18M (begin): کمک‌تابع‌های زنجیرهٔ audit ===== */
+function auditCanonical18M(obj) { /* stringify پایدار — کلیدها مرتب‌شده بازگشتی تا هش مستقل از ترتیب درج باشد */
+    if (obj === null || typeof obj !== 'object') return JSON.stringify(obj === undefined ? null : obj);
+    if (Array.isArray(obj)) return '[' + obj.map(auditCanonical18M).join(',') + ']';
+    const keys = Object.keys(obj).filter((k) => k !== '__h18m').sort();
+    return '{' + keys.map((k) => JSON.stringify(k) + ':' + auditCanonical18M(obj[k])).join(',') + '}';
+}
+function auditHash18M(obj) { try { return crypto.createHash('sha256').update(auditCanonical18M(obj), 'utf8').digest('hex'); } catch (e) { return 'HASH_ERROR'; } }
+function auditTailHash18M(arr) { /* دنبالهٔ زنجیره: آخرین رکورد زنجیردار فایل جاری؛ اگر فایل جاری خالی/بدون زنجیره ⇒ تلاش برای جدیدترین فایل چرخیدهٔ ماه قبل */
+    const last = Array.isArray(arr) ? arr[arr.length - 1] : null;
+    if (last && typeof last.__h18m === 'string' && last.__h18m.length === 64) return last.__h18m;
+    try {
+        const files = fs.readdirSync(ROOT).filter((f) => /^audit-\d{4}-\d{2}\.json$/.test(f)).sort().reverse();
+        for (const f of files) {
+            try {
+                const a = JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
+                if (Array.isArray(a) && a.length) {
+                    const l = a[a.length - 1];
+                    if (l && typeof l.__h18m === 'string' && l.__h18m.length === 64) return l.__h18m;
+                }
+            } catch (e) { /* فایل خراب — بعدی */ }
+        }
+    } catch (e) { /* بدون فایل چرخیده */ }
+    return 'GENESIS';
+}
+let auditChainLast18m = null; /* کش دنبالهٔ زنجیره — null = هنوز مقداردهی نشده */
+/* ===== HARDEN-18M (end) ===== */
 auth.setAuditWriter15b(writeAudit15b); /* SEC-15b: مسیر واحد audit برای auth.js (لاگین/قفل) */
 // ===== SAAS-15c (begin): پنل مدیریت تنانت (admin) + آمار مصرف + میدل‌ویر رسمی ماژول =====
 function requireModule15c(req, res, moduleId) {
