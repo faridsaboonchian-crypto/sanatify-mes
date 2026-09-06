@@ -131,7 +131,11 @@ function writeJson(file, obj) { /* HARDEN-18A: اتمیک + checksum — امض�
     try {
         const isObj = obj && typeof obj === 'object' && !Array.isArray(obj);
         const out = isObj ? Object.assign({}, obj) : obj;
-        if (isObj) out[INTEG_FIELD_18A] = 'sha256:' + integrityHash18A(obj); /* آرایه‌ها (audit.json) بدون فیلد — زنجیرهٔ هش 18-m پوشش می‌دهد */
+        if (isObj) {
+            /* HARDEN-18D: شمارندهٔ نسخهٔ داده — هر نوشتن live.json یک واحد افزایش می‌یابد (برای 409 خوش‌بینانه) */
+            if (file === LIVE_FILE) out.__ver = (Number(obj.__ver) || 0) + 1;
+            out[INTEG_FIELD_18A] = 'sha256:' + integrityHash18A(out); /* آرایه‌ها (audit.json) بدون فیلد — زنجیرهٔ هش 18-m پوشش می‌دهد */
+        }
         const body = JSON.stringify(out, null, 2);
         rotateBaks18A(file);
         atomicWriteText18A(file, body);
@@ -156,6 +160,31 @@ function bootValidate18A() { /* HARDEN-18A: validation اسکیما در بوت 
     console.log('[HARDEN-18A] اعتبارسنجی بوت → ' + out18a.join(' | '));
 }
 // ===== HARDEN-18A (end) =====
+// ===== HARDEN-18D (begin): صف تک‌نویسنده (Single-Writer Queue) + همزمانی خوش‌بینانه (__ver + 409 VER_CONFLICT) =====
+// در سرور تک‌نخ (Node) هر بخشِ همگامِ خواندن-تغییر-نوشتن ذاتاً اتمیک است؛ صف برای هر جریانی که
+// فاصلهٔ async میان خواندن و نوشتن داشته باشد ترتیب را تضمین می‌کند (ورود اپ موبایل + جریان‌های آینده).
+let liveWriteChain18D = Promise.resolve();
+function withLiveWrite18D(fn) { /* همهٔ نوشتن‌ها از یک زنجیرهٔ ترتیبی عبور می‌کنند — خطای یک کار صف را نمی‌شکند */
+    const run = liveWriteChain18D.then(() => Promise.resolve().then(fn));
+    liveWriteChain18D = run.then(() => undefined, () => undefined);
+    return run;
+}
+function currentVer18D(liveObj) { /* نسخهٔ فعلی داده — از شیء موجود یا خواندن فایل */
+    if (liveObj && typeof liveObj === 'object') return Number(liveObj.__ver) || 0;
+    try { return Number(JSON.parse(fs.readFileSync(LIVE_FILE, 'utf8')).__ver) || 0; } catch (e) { return 0; }
+}
+function assertFreshVer18D(req, liveObj) { /* خوش‌بینانه: هدر X-Base-Ver کهنه ⇒ تعارض (انتخابی — بدون هدر = رفتار قدیمی) */
+    const raw = req && req.headers ? req.headers['x-base-ver'] : null;
+    if (raw == null || String(raw).trim() === '') return null;
+    const base = Number(raw);
+    const cur = currentVer18D(liveObj);
+    if (isNaN(base) || base !== cur) return { expected: base, actual: cur };
+    return null;
+}
+function verConflict18D(res, vc) {
+    return sendJson(res, { error: 'نسخهٔ داده در این فاصله تغییر کرده است — دوباره بارگذاری و تلاش کنید.', code: 'VER_CONFLICT', base_ver: vc.expected, current_ver: vc.actual }, 409);
+}
+// ===== HARDEN-18D (end) =====
 // ===== REVERT-STEEL-4: مهاجرت امن و برگشت‌پذیر انبار فولادی — ادغام spare→raw (مواد اولیه/قطعات/ملزومات) =====
 function migrateSteelWarehouses(live) {
     if (!live || live._steel_wh_v1) return live;
@@ -366,6 +395,7 @@ function handleHealthFast(req, res) {
         configured: isSupabaseConfigured(),
         live_cache_present: hasAnyLive(live),
         generated_at: (live && live.generated_at) || null,
+        data_ver: Number(live.__ver) || 0, /* HARDEN-18D: نسخهٔ داده برای همزمانی خوش‌بینانه (افزاینده) */
         pid: process.pid,
         uptime_sec: Math.round(process.uptime()),
     });
@@ -1107,9 +1137,11 @@ function appRequestHandler(req, res) {
     if (req.method === 'POST' && pathname === '/api/ingest') {
         readBody(req).then((body) => {
             let payload; try { payload = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'invalid json' }, 400); }
-            const counts = mergeIntoLive(payload);
-            const total = Object.values(counts).reduce((s, n) => s + (n || 0), 0);
-            return sendJson(res, { ok: true, total, counts, source: 'live' });
+            /* HARDEN-18D: ادغام از صف تک‌نویسنده عبور می‌کند — ترتیب سینک‌های همزمان اپ تضمین می‌شود */
+            withLiveWrite18D(() => mergeIntoLive(payload)).then((counts) => {
+                const total = Object.values(counts).reduce((s, n) => s + (n || 0), 0);
+                return sendJson(res, { ok: true, total, counts, source: 'live' });
+            }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
         }).catch((e) => sendJson(res, { error: String(e && e.message ? e.message : e) }, 500));
         return;
     }
@@ -2050,6 +2082,9 @@ function appRequestHandler(req, res) {
         readBody(req).then((body) => {
             let b = {}; try { b = JSON.parse(body || '{}'); } catch (e) { return sendJson(res, { error: 'دادهٔ نامعتبر.' }, 400); }
             const live = readLive(); if (finSeed(live)) writeJson(LIVE_FILE, live);
+            /* HARDEN-18D: همزمانی خوش‌بینانه — X-Base-Ver کهنه ⇒ 409 VER_CONFLICT (انتخابی؛ بدون هدر = رفتار قدیمی) */
+            const vc18d = assertFreshVer18D(req, live);
+            if (vc18d) return verConflict18D(res, vc18d);
             try {
                 const r = finPostDoc(live, { source: 'manual', date_jalali: b.date_jalali, desc: b.desc, lines: b.lines });
                 if (writeJson(LIVE_FILE, live)) { auditLog(req, 'fin.doc.manual', { doc_no: r.doc.doc_no, total: r.doc.total }); return sendJson(res, { ok: true, doc: r.doc }); }
@@ -4436,6 +4471,9 @@ function appRequestHandler(req, res) {
             try {
                 const b = JSON.parse(body || '{}');
                 const live = invEnsure(readLive());
+                /* HARDEN-18D: همزمانی خوش‌بینانه — X-Base-Ver کهنه ⇒ 409 VER_CONFLICT (انتخابی؛ بدون هدر = رفتار قدیمی) */
+                const vc18d = assertFreshVer18D(req, live);
+                if (vc18d) return verConflict18D(res, vc18d);
                 const qty = Number(b.quantity);
                 const item = invFindItem(live, String(b.item_id || ''));
                 const lot = String(b.lot_no || '').trim();
@@ -4499,6 +4537,9 @@ function appRequestHandler(req, res) {
             try {
                 const b = JSON.parse(body || '{}');
                 const live = invEnsure(readLive());
+                /* HARDEN-18D: همزمانی خوش‌بینانه — X-Base-Ver کهنه ⇒ 409 VER_CONFLICT (انتخابی؛ بدون هدر = رفتار قدیمی) */
+                const vc18d = assertFreshVer18D(req, live);
+                if (vc18d) return verConflict18D(res, vc18d);
                 const qty = Number(b.quantity);
                 const item = invFindItem(live, String(b.item_id || ''));
                 const lot = String(b.lot_no || '').trim();
@@ -5262,6 +5303,9 @@ live.inventory_reservations.splice(idx, 1);
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = salesEnsure21a(invEnsure(readLive()));
+                /* HARDEN-18D: همزمانی خوش‌بینانه — X-Base-Ver کهنه ⇒ 409 VER_CONFLICT (انتخابی؛ بدون هدر = رفتار قدیمی) */
+                const vc18d = assertFreshVer18D(req, live);
+                if (vc18d) return verConflict18D(res, vc18d);
                 const order = (live.sales_orders || []).find((o) => o.id === String(b.order_id || '') || o.order_no === String(b.order_id || ''));
                 if (!order) return sendJson(res, { error: 'سفارش یافت نشد.' }, 404);
                 if (order.status !== 'reserved') return sendJson(res, { error: 'حوالهٔ خروج فقط برای سفارش تأیید/رزروشده مجاز است (وضعیت فعلی: ' + (SALES_STATUS_FA_21A[order.status] || order.status) + ').' }, 409);
