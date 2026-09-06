@@ -7717,6 +7717,18 @@ if (process.argv.indexOf('--print-hwkey') !== -1) {
     console.log('  HWKEY ماشین : ' + HWKEY_19F + '  (برای صدور/تمدید لایسنس نزد فروشنده بفرستید)');
     let cfg19f = null;
     try { cfg19f = loadTenant15a(); } catch (e19f) { cfg19f = null; }
+    /* SEC-ANTI-19h (تنگ‌ترکردن قفل در exe-mode): باینری فقط برای استقرار لایسنس‌دار ساخته می‌شود —
+       حذف/خراب‌کردن tenant.json نباید به «حالت پیش‌فرض همهٔ ماژول‌ها» (فلسفهٔ SAAS-15a برای source) برسد؛
+       در حالت source رفتار سابق دست‌نخورده است (قرمز: استقرار منبع فعلی بایت‌به‌بایت). */
+    if (EXE_MODE_19G) {
+        const hasTenant19h = fs.existsSync(TENANT_FILE_15A) || fs.existsSync(TENANT_FILE_15A + '.enc');
+        if (!hasTenant19h) {
+            fatal19g('tenant.json امضاشده کنار باینری نیست — باینری دمو بدون لایسنس بالا نمی‌آید (HWKEY بالا را برای صدور به پشتیبانی بفرستید، tenant.json را کنار exe بگذارید و دوباره اجرا کنید).', 'hwbind.tenant_missing');
+        }
+        if (cfg19f && cfg19f.__lic_invalid_24) {
+            fatal19g('امضای لایسنس (tenant.json) نامعتبر/دستکاری‌شده است — باینری دمو بالا نمی‌آید؛ tenant.json امضاشدهٔ سالم را کنار exe بگذارید.', 'hwbind.license_invalid');
+        }
+    }
     const bound19f = hwNorm19f(cfg19f && cfg19f.hwkey);
     if (bound19f && bound19f !== hwNorm19f(HWKEY_19F)) {
         console.error('========================================================');
