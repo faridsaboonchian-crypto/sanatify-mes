@@ -9,7 +9,10 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const USERS_FILE = path.join(__dirname, 'web-users.json');
+/* ===== SEC-PROTECT-19e (begin): پشتیبانی باینری pkg — web-users.json کنار exe ===== */
+const RUNTIME_ROOT_19E = (function () { try { return process.pkg ? path.dirname(process.execPath) : __dirname; } catch (e19e) { return __dirname; } })();
+/* ===== SEC-PROTECT-19e (end) ===== */
+const USERS_FILE = path.join(RUNTIME_ROOT_19E, 'web-users.json'); /* SEC-PROTECT-19e */
 const SESSION_COOKIE = 'mes_session';
 const SESSION_MS = 8 * 60 * 60 * 1000; /* SEC-15b: timeout مطلق ۸ ساعت (قبلاً ۱۲ ساعته لغزان) */
 const SESSION_IDLE_MS = 30 * 60 * 1000; /* SEC-15b: idle timeout ۳۰ دقیقه از آخرین فعالیت */

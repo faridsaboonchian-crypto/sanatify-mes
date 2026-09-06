@@ -18,8 +18,13 @@ const auth = require('./auth');
 const PORT = process.env.PORT || 3001;
 // ===== FEAT-HTTPS-11c: پورت قدیمی کارخانه (HTTP) — همهٔ درخواست‌ها 301 می‌شوند به سرویس اصلی =====
 const REDIRECT_PORT = process.env.REDIRECT_PORT || 3000;
-const ROOT = __dirname;
-const PUBLIC_DIR = path.join(ROOT, 'public');
+/* ===== SEC-PROTECT-19e (begin): پشتیبانی باینری pkg — فایل‌های داده (live.json/tenant.json/web-users.json/…) کنار exe، نه داخل snapshot فقط‌خواندنی ===== */
+const RUNTIME_ROOT_19E = (function () { try { return process.pkg ? path.dirname(process.execPath) : __dirname; } catch (e19e) { return __dirname; } })();
+/* ===== SEC-PROTECT-19e (end) ===== */
+const ROOT = RUNTIME_ROOT_19E; /* SEC-PROTECT-19e */
+const PUBLIC_DIR = path.join(__dirname, 'public'); /* SEC-PROTECT-19e: پوستهٔ استاتیک (index/sw/vendor) — در pkg از snapshot می‌خواند؛ در اجرای عادی همان قبل */
+const PUBLIC_DATA_DIR_19E = path.join(RUNTIME_ROOT_19E, 'public'); /* SEC-PROTECT-19e: فایل‌های دادهٔ public (لوگوی آپلودی تنانت) کنار exe — در اجرای عادی همان PUBLIC_DIR */
+try { fs.mkdirSync(PUBLIC_DATA_DIR_19E, { recursive: true }); } catch (e19e) { /* noop */ } /* SEC-PROTECT-19e */
 const DATA_FILE = path.join(ROOT, 'data.json');  // نمونهٔ اولیه (fallback نهایی)
 const LIVE_FILE = path.join(ROOT, 'live.json');  // آینهٔ زنده دادهٔ واقعی
 
@@ -642,8 +647,8 @@ function moduleForPath15a(pathname) {
 function resolveTenantLogoFile15a(cfg) {
     const l = String((cfg && cfg.logo) || '');
     if (!l || l.indexOf('data:') === 0) return null;
-    const p = path.normalize(path.join(PUBLIC_DIR, l));
-    if (!p.startsWith(PUBLIC_DIR)) return null;
+    const p = path.normalize(path.join(PUBLIC_DATA_DIR_19E, l)); /* SEC-PROTECT-19e */
+    if (!p.startsWith(PUBLIC_DATA_DIR_19E)) return null;
     try { return fs.existsSync(p) ? p : null; } catch (e) { return null; }
 }
 // برندینگ صفحهٔ ورود (در auth.js اعمال می‌شود) — بدون tenant.json: null = بدون تغییر
@@ -936,7 +941,7 @@ function appRequestHandler(req, res) {
         } });
     }
     if (req.method === 'GET' && (pathname === '/tenant-logo.png' || pathname === '/tenant-logo.jpg')) {
-        const lp15a = path.join(PUBLIC_DIR, pathname.slice(1));
+        const lp15a = path.join(PUBLIC_DATA_DIR_19E, pathname.slice(1)); /* SEC-PROTECT-19e */
         fs.readFile(lp15a, (e15a, d15a) => {
             if (e15a) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 Not Found'); return; }
             res.writeHead(200, { 'Content-Type': pathname.endsWith('.jpg') ? 'image/jpeg' : 'image/png', 'Cache-Control': 'no-cache' }); res.end(d15a);
@@ -1098,7 +1103,7 @@ function appRequestHandler(req, res) {
                     cfg15c.custom_settings = Object.assign({}, cfg15c.custom_settings, b15c.custom_settings); /* ادغام سطح‌اول — allowed_origins از دست نرود */
                 }
                 if (b15c.logo_clear) {
-                    try { ['tenant-logo.png', 'tenant-logo.jpg'].forEach((f15c) => { const p15c = path.join(PUBLIC_DIR, f15c); if (fs.existsSync(p15c)) fs.unlinkSync(p15c); }); } catch (e) { /* noop */ }
+                    try { ['tenant-logo.png', 'tenant-logo.jpg'].forEach((f15c) => { const p15c = path.join(PUBLIC_DATA_DIR_19E, f15c); if (fs.existsSync(p15c)) fs.unlinkSync(p15c); }); } catch (e) { /* noop */ } /* SEC-PROTECT-19e */
                     cfg15c.logo = '';
                 }
                 const du15c = String(b15c.logo_dataurl || '').match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+\/=]+)$/);
@@ -1106,7 +1111,7 @@ function appRequestHandler(req, res) {
                     const buf15c = Buffer.from(du15c[2], 'base64');
                     if (buf15c.length > 300 * 1024) return sendJson(res, { error: 'لوگو بیش از ۳۰۰ کیلوبایت است.' }, 400);
                     const ext15c = du15c[1] === 'png' ? 'png' : 'jpg';
-                    fs.writeFileSync(path.join(PUBLIC_DIR, 'tenant-logo.' + ext15c), buf15c);
+                    fs.writeFileSync(path.join(PUBLIC_DATA_DIR_19E, 'tenant-logo.' + ext15c), buf15c); /* SEC-PROTECT-19e */
                     cfg15c.logo = '/tenant-logo.' + ext15c;
                 }
                 cfg15c.license_sig = licSign24(cfg15c); /* SEC-LIC-24: هر ذخیرهٔ سرور = امضای تازه (فایل همیشه معتبر می‌ماند) */
@@ -1350,7 +1355,7 @@ function appRequestHandler(req, res) {
 
 
     // ===== ✅ ADDITIVE — ممیزی: ثبت رویدادهای ورودی وب =====
-    const AUDIT_FILE = path.join(__dirname, 'audit.json');
+    const AUDIT_FILE = path.join(RUNTIME_ROOT_19E, 'audit.json'); /* SEC-PROTECT-19e */
     function auditLog(req, action, payload) {
         /* SEC-15b: مسیر واحد audit با ip و چرخش ماهانه */
         writeAudit15b({ ts: new Date().toISOString(), user: req.user ? req.user.username : '?', role: req.user ? req.user.role : '?', ip: clientIp15b(req), action: action, payload: payload });
@@ -6298,9 +6303,9 @@ live.inventory_reservations.splice(idx, 1);
     }
 
     /* پوشهٔ آپلود گواهی ذوب — در کنار سرور (خارج از public) */
-    const PUR_UPLOAD_DIR_22A = path.join(__dirname, 'uploads', 'purchase');
+    const PUR_UPLOAD_DIR_22A = path.join(RUNTIME_ROOT_19E, 'uploads', 'purchase'); /* SEC-PROTECT-19e */
     /* ===== HARDEN-18K (begin): قرنطینهٔ آپلود مشکوک — رد پای جرمی بدون اجرا ===== */
-    const PUR_QUARANTINE_DIR_18K = path.join(__dirname, 'uploads', '_quarantine');
+    const PUR_QUARANTINE_DIR_18K = path.join(RUNTIME_ROOT_19E, 'uploads', '_quarantine'); /* SEC-PROTECT-19e */
     function hardQuarantine18K(buf, reason) {
         try {
             fs.mkdirSync(PUR_QUARANTINE_DIR_18K, { recursive: true });
@@ -7819,7 +7824,7 @@ process.on('SIGINT', () => gracefulShutdown18N('SIGINT'));
             sc18o.push('cert:' + (tlsMode === 'HTTPS' ? 'OK(TLS1.2+)' : (certOk18o ? 'موجود-غیرفعال' : 'HTTP-fallback')));
         } catch (e) { sc18o.push('cert:?'); }
         const w18o = [];
-        [[ROOT, 'root'], [BACKUP_DIR, 'backups'], [path.join(__dirname, 'uploads'), 'uploads'], [logsDir18o, 'logs']].forEach((p18o) => {
+        [[ROOT, 'root'], [BACKUP_DIR, 'backups'], [path.join(RUNTIME_ROOT_19E, 'uploads'), 'uploads'], [logsDir18o, 'logs']].forEach((p18o) => { /* SEC-PROTECT-19e */
             try { fs.mkdirSync(p18o[0], { recursive: true }); fs.accessSync(p18o[0], fs.constants.W_OK); w18o.push(p18o[1] + ':OK'); } catch (e) { w18o.push(p18o[1] + ':NO-WRITE'); }
         });
         sc18o.push('write:' + (w18o.some((x) => x.indexOf('NO') !== -1) ? w18o.join(',') : 'OK(' + w18o.length + ')'));
