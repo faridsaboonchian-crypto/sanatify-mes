@@ -32,7 +32,7 @@ echo "━━━ DEPLOY-19h — نصب Sanatify MES ━━━"
 # ---------- یافتن باینری ----------
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 BINARY=""
-for c in "$BINARY_ARG" "$SELF_DIR/sanatify-mes-node18-linux-x64" "$SELF_DIR/../dist/bin/sanatify-mes-node18-linux-x64" "./sanatify-mes-node18-linux-x64" "$SELF_DIR/dist/bin/sanatify-mes-node18-linux-x64"; do
+for c in "$BINARY_ARG" "$SELF_DIR/bin/sanatify-mes-node18-linux-x64" "./bin/sanatify-mes-node18-linux-x64" "$SELF_DIR/sanatify-mes-node18-linux-x64" "$SELF_DIR/../dist/bin/sanatify-mes-node18-linux-x64" "./sanatify-mes-node18-linux-x64" "$SELF_DIR/dist/bin/sanatify-mes-node18-linux-x64"; do
     if [ -n "$c" ] && [ -f "$c" ]; then BINARY="$(cd "$(dirname "$c")" && pwd)/$(basename "$c")"; break; fi
 done
 [ -z "$BINARY" ] && { echo "✗ باینری یافت نشد — مسیر بدهید: install.sh /path/to/sanatify-mes-node18-linux-x64"; exit 1; }

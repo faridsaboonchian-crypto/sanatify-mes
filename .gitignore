@@ -17,3 +17,5 @@ web-server/web-server/public/tenant-logo.jpg
 
 # SEC-15b: بکاپ مهاجرت رمزها هرگز commit نمی‌شود (حاوی plaintext)
 web-server/web-server/web-users.json.bak-*
+dist-deploy/
+dist-deploy.zip

@@ -29,6 +29,7 @@ const SRC_DIR = path.join(TOOLS_DIR, '..');
 const OUT_DIR = path.join(SRC_DIR, 'dist');
 const arg = (n, d) => { const a = process.argv.find((x) => x.indexOf('--' + n + '=') === 0); return a ? a.slice(n.length + 3) : d; };
 const COMPILE = process.argv.indexOf('--compile') !== -1;
+const PACKAGE = process.argv.indexOf('--package') !== -1;
 const FAST = process.argv.indexOf('--fast') !== -1;
 const TARGETS = (arg('target', 'node18-linux-x64')).split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -208,4 +209,46 @@ function protectHtml(html, outName) {
 
     console.log('✅ ساخت کامل شد در ' + ((Date.now() - t0) / 1000).toFixed(1) + 's → ' + OUT_DIR);
     console.log('   استقرار روی VM: پوشهٔ dist (یا باینری) + فایل‌های داده کنار exe + tenant.json امضاشده');
+
+    // ۹) بستهٔ استقرار — DEPLOY-19i: dist-deploy/ + zip
+    if (PACKAGE) {
+        const binSrc19i = path.join(OUT_DIR, 'bin');
+        if (!fs.existsSync(binSrc19i)) die('--package نیاز به باینری‌های --compile دارد (اول --compile بزنید یا هر دو با هم).');
+        const deployDir19i = path.join(SRC_DIR, 'dist-deploy');
+        fs.rmSync(deployDir19i, { recursive: true, force: true });
+        fs.mkdirSync(path.join(deployDir19i, 'bin'), { recursive: true });
+        log('بستهٔ استقرار: ' + deployDir19i);
+        /* باینری‌ها + مانیفست صحت (باید کنار exe بماند — SEC-ANTI-19g) */
+        for (const f19i of fs.readdirSync(binSrc19i)) fs.copyFileSync(path.join(binSrc19i, f19i), path.join(deployDir19i, 'bin', f19i));
+        /* نصب/حذف هر دو OS + قالب تنانت + راهنمای فارسی */
+        for (const f19i of ['install.sh', 'uninstall.sh', 'install.ps1', 'uninstall.ps1']) fs.copyFileSync(path.join(TOOLS_DIR, f19i), path.join(deployDir19i, f19i));
+        fs.copyFileSync(path.join(SRC_DIR, 'tenant.json.template'), path.join(deployDir19i, 'tenant.json.template'));
+        const readme19i = path.join(SRC_DIR, 'README-DEPLOY.md');
+        if (fs.existsSync(readme19i)) fs.copyFileSync(readme19i, path.join(deployDir19i, 'README-DEPLOY.md'));
+        else log('⚠ README-DEPLOY.md یافت نشد — بسته بدون راهنما ساخته شد');
+        /* مانیفست کل بسته (چک‌سام انتشار) — مانیفست ضد دستکاری باینری جدا در bin/ می‌ماند */
+        const sumLines19i = [];
+        for (const f19i of fs.readdirSync(deployDir19i)) {
+            const p19i = path.join(deployDir19i, f19i);
+            if (fs.statSync(p19i).isFile()) sumLines19i.push(crypto.createHash('sha256').update(fs.readFileSync(p19i)).digest('hex') + '  ' + f19i);
+        }
+        for (const f19i of fs.readdirSync(path.join(deployDir19i, 'bin'))) {
+            if (f19i === 'SHA256SUMS.txt') continue;
+            sumLines19i.push(crypto.createHash('sha256').update(fs.readFileSync(path.join(deployDir19i, 'bin', f19i))).digest('hex') + '  bin/' + f19i);
+        }
+        fs.writeFileSync(path.join(deployDir19i, 'SHA256SUMS.txt'), sumLines19i.join(String.fromCharCode(10)) + String.fromCharCode(10));
+        log('مانیفست انتشار: SHA256SUMS.txt (' + sumLines19i.length + ' ورودی)');
+        /* zip — اول zip داخلی، بعد PowerShell؛ نبود هر دو ⇒ هشدار (پوشه سرجایش سالم است) */
+        const zipTarget19i = path.join(SRC_DIR, 'dist-deploy.zip');
+        try { fs.rmSync(zipTarget19i, { force: true }); } catch (e19i) { /* noop */ }
+        let zipped19i = false;
+        const z19i = spawnSync('zip', ['-r', zipTarget19i, '.'], { cwd: deployDir19i, encoding: 'utf8' });
+        if (z19i.status === 0) zipped19i = true;
+        else {
+            const pwsh19i = spawnSync('powershell', ['-NoProfile', '-Command', 'Compress-Archive -Path \'*\' -DestinationPath \'' + zipTarget19i + '\' -Force'], { cwd: deployDir19i, encoding: 'utf8' });
+            zipped19i = pwsh19i.status === 0;
+        }
+        if (zipped19i) log('بستهٔ نهایی: dist-deploy.zip (' + (fs.statSync(zipTarget19i).size / 1024 / 1024).toFixed(1) + 'MB)');
+        else log('⚠ ابزار zip/PowerShell نیست — پوشهٔ dist-deploy/ آماده است (zip دستی بزنید)');
+    }
 })().catch((e) => die(e && e.stack || e));

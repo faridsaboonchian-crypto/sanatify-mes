@@ -25,6 +25,7 @@ if (-not $isAdmin) { Write-Host "✗ با «Run as administrator» اجرا کن
 # ---------- یافتن باینری ----------
 if ($SourceDir -eq "") {
     $candidates = @(
+        (Join-Path $PSScriptRoot "bin"),
         (Join-Path $PSScriptRoot "..\dist\bin"),
         (Join-Path $PSScriptRoot),
         (Get-Location).Path
