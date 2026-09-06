@@ -517,6 +517,144 @@
         }
         /* ===== FIX-UI-19b (end) ===== */
 
+        /* ===== FIX-UI-19c (begin): بازخورد تعاملی — اسکلتون جای «در حال بارگذاری» + ورود نرم KPI + hover دکمه‌ها + احترام prefers-reduced-motion ===== */
+        .skel19c {
+            position: relative;
+            overflow: hidden;
+            background: #e2e8f0;
+            border-radius: 6px
+        }
+
+        .skel19c::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            transform: translateX(100%);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+            animation: skelShimmer19c 1.4s infinite
+        }
+
+        body.theme-dark .skel19c {
+            background: #16324a
+        }
+
+        body.theme-dark .skel19c::after {
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .08), transparent)
+        }
+
+        @keyframes skelShimmer19c {
+            to {
+                transform: translateX(-100%)
+            }
+        }
+
+        .skel-chip19c {
+            display: inline-block;
+            width: 110px;
+            height: 13px;
+            vertical-align: middle
+        }
+
+        .skel-line19c {
+            height: 13px;
+            margin: 7px 0
+        }
+
+        /* اسکلتون جدول‌ها فقط تا اولین رندر (renderها همیشه thead می‌نویسند → :empty خودش خاموش می‌شود) */
+        .tablewrap table:empty::before {
+            content: "";
+            display: block;
+            height: 80px;
+            margin: 10px;
+            border-radius: 8px;
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 37%, #e2e8f0 63%);
+            background-size: 400% 100%;
+            animation: skelWave19c 1.3s ease-in-out infinite
+        }
+
+        body.theme-dark .tablewrap table:empty::before {
+            background: linear-gradient(90deg, #12283a 25%, #16324a 37%, #12283a 63%);
+            background-size: 400% 100%
+        }
+
+        @keyframes skelWave19c {
+            0% {
+                background-position: 100% 0
+            }
+            100% {
+                background-position: -100% 0
+            }
+        }
+
+        /* ورود نرم کارت‌های KPI — fade+slide ۲۰۰ms با تأخیر پلکانی */
+        .kpis>* {
+            animation: kpiIn19c 200ms ease-out both
+        }
+
+        .kpis>*:nth-child(2) {
+            animation-delay: 30ms
+        }
+
+        .kpis>*:nth-child(3) {
+            animation-delay: 60ms
+        }
+
+        .kpis>*:nth-child(4) {
+            animation-delay: 90ms
+        }
+
+        .kpis>*:nth-child(5) {
+            animation-delay: 120ms
+        }
+
+        .kpis>*:nth-child(6) {
+            animation-delay: 150ms
+        }
+
+        .kpis>*:nth-child(n+7) {
+            animation-delay: 180ms
+        }
+
+        @keyframes kpiIn19c {
+            from {
+                opacity: 0;
+                transform: translateY(8px)
+            }
+            to {
+                opacity: 1;
+                transform: none
+            }
+        }
+
+        /* hover یکدست دکمه‌ها — lift 1px + سایه */
+        button.act {
+            transition: transform .12s ease, box-shadow .12s ease
+        }
+
+        button.act:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(15, 23, 42, .16)
+        }
+
+        button.act:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: none
+        }
+
+        /* احترام کامل به کاهش انیمیشن در سیستم‌عامل کاربر */
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .01ms !important;
+                scroll-behavior: auto !important
+            }
+        }
+        /* ===== FIX-UI-19c (end) ===== */
+
         /* ===== FIX-THEME-6b: متن گزینه‌های دراپ‌داون در هر دو تم خوانا —
            ریشهٔ باگ: optionها رنگ #fff پنل فیلتر را به ارث می‌بردند و در لیست نیتیوِ
            سفیدِ تم روز «سفید-روی-سفید» می‌شدند ===== */
@@ -2496,7 +2634,7 @@
             </details>
             <!-- ===== FIX-PLAN-10d (end) ===== -->
             <div class="panel">
-                <h2>🗓️ برنامه‌ریزی تولید <span class="plan-engine" id="planEngineChip">در حال بارگذاری…</span></h2>
+                <h2>🗓️ برنامه‌ریزی تولید <span class="plan-engine" id="planEngineChip"><span class="skel19c skel-chip19c"></span></span> <!-- FIX-UI-19c: اسکلتون جای متن --></h2>
                 <div class="toolbar">
                     <button class="act" id="btnPlanSuggest">🤖 پیشنهادهای هوشمند</button>
                     <button class="act" id="btnPlanNew">➕ برنامهٔ جدید</button>
@@ -2511,7 +2649,7 @@
             </div>
             <!-- ===== FEAT-PLAN-9c (begin): سناریوهای APS ===== -->
             <div class="panel hidden" id="planApsPanel">
-                <h2>سناریوهای APS — مقایسه و رتبه‌بندی <span class="plan-engine" id="planApsEngine">در حال بارگذاری…</span></h2>
+                <h2>سناریوهای APS — مقایسه و رتبه‌بندی <span class="plan-engine" id="planApsEngine"><span class="skel19c skel-chip19c"></span></span> <!-- FIX-UI-19c: اسکلتون جای متن --></h2>
                 <div class="aps-weights">
                     <label>وزن تناژ <input type="range" id="apsW1" min="0" max="100" step="5" value="50"><b class="aps-wval" id="apsW1v">۵۰</b></label>
                     <label>وزن ریسک <input type="range" id="apsW2" min="0" max="100" step="5" value="30"><b class="aps-wval" id="apsW2v">۳۰</b></label>
@@ -2595,7 +2733,7 @@
         <!-- ===== FEAT-FIN-13b (begin): تب مالی و بهای تمام‌شده ===== -->
         <section id="tab-finance" class="hidden">
             <div class="panel">
-                <h2>💰 مالی و بهای تمام‌شده <span class="plan-engine" id="finChip">در حال بارگذاری…</span></h2>
+                <h2>💰 مالی و بهای تمام‌شده <span class="plan-engine" id="finChip"><span class="skel19c skel-chip19c"></span></span> <!-- FIX-UI-19c: اسکلتون جای متن --></h2>
                 <p class="note">دفتر کل دوطرفهٔ واقعی — اسناد خودکار از ماژول‌های عملیاتی (شمش/انرژی/تولید/ضایعات) فقط از موتور سند واحد با متادیتای منبع؛ ثبت دستی با کنترل توازن بدهکار/بستانکار؛ کدینگ گروه/کل/معین/تفضیلی؛ BOM مالی per سایز؛ دوره‌های مالی با بستن ماه. دسترسی: واحد مالی = ثبت، مدیریت = فقط مشاهده، سایر نقش‌ها = بدون دسترسی.</p>
                 <div class="kpis" id="finKpis"></div>
             </div>
@@ -3164,7 +3302,7 @@
         <!-- ===== FEAT-SALES-21a (begin): تب فروش و سفارش‌ها — زنجیرهٔ مشتری/لیست قیمت/سفارش/رزرو/حوالهٔ خروج ===== -->
         <section id="tab-sales" class="hidden">
             <div class="panel">
-                <h2>🧾 فروش و سفارش‌ها <span class="plan-engine" id="salChip">در حال بارگذاری…</span></h2>
+                <h2>🧾 فروش و سفارش‌ها <span class="plan-engine" id="salChip"><span class="skel19c skel-chip19c"></span></span> <!-- FIX-UI-19c: اسکلتون جای متن --></h2>
                 <p class="note">زنجیرهٔ فروش: مشتری → لیست قیمت → سفارش (SO-xxxxx) → تأیید و رزرو تناژ از انبار محصول (ستون «رزرو» در تب انبار) → حوالهٔ خروج با وزن واقعی باسکول (ارسال جزئی مجاز، چند حواله per سفارش) → تکمیل؛ لغو سفارش → آزادسازی رزرو. دسترسی: واحد فروش/مدیر = ثبت و تأیید، انباردار = ثبت حواله، مدیریت/مالی = فقط مشاهده. مالیات بر ارزش افزوده هنگام صدور فاکتور از fin_config اعمال می‌شود (نرخ فعلی: <span id="salVatNote">…</span>٪).</p>
                 <div class="kpis" id="salKpis"></div>
             </div>
@@ -3357,7 +3495,7 @@
         <!-- ===== FEAT-PURCHASE-22a (begin): تب خرید و تأمین — زنجیرهٔ تأمین‌کننده/درخواست/استعلام/سفارش/رسید ===== -->
         <section id="tab-purchase" class="hidden">
             <div class="panel">
-                <h2>🛒 خرید و تأمین <span class="plan-engine" id="purChip">در حال بارگذاری…</span></h2>
+                <h2>🛒 خرید و تأمین <span class="plan-engine" id="purChip"><span class="skel19c skel-chip19c"></span></span> <!-- FIX-UI-19c: اسکلتون جای متن --></h2>
                 <p class="note">زنجیرهٔ خرید: تأمین‌کننده → درخواست خرید (PR-xxxxx) → استعلام از چند تأمین‌کننده و مقایسهٔ قیمت → سفارش خرید (PO-xxxxx) → رسید انبار با وزن واقعی باسکول (شمش با کد هیت Heat Number و گواهی ذوب اختیاری) → حرکت ورود انبار با نوع «خرید» + سند خودکار مالی (بدهکار موجودی / بستانکار پرداختنی). دسترسی: واحد خرید/مدیر = ثبت و تأیید، انباردار = ثبت رسید، مدیریت/مالی = فقط مشاهده.</p>
                 <div class="kpis" id="purKpis"></div>
             </div>
@@ -3610,7 +3748,7 @@
                     </div>
                     <div class="org-card">
                         <h3>آمار مصرف</h3>
-                        <div id="orgUsage" class="org-usage">در حال بارگذاری…</div>
+                        <div id="orgUsage" class="org-usage"><!-- FIX-UI-19c: اسکلتون جای متن --><div class="skel19c skel-line19c" style="width:72%"></div><div class="skel19c skel-line19c" style="width:55%"></div><div class="skel19c skel-line19c" style="width:63%"></div></div>
                     </div>
                     <div class="org-card org-users-card">
                         <h3>👥 کاربران و دسترسی‌ها</h3>
@@ -4783,7 +4921,7 @@ document.getElementById('invStockSearch')?.addEventListener('input', function ()
             return rows.length ? Number(rows[0].price_rial_per_ton) || 0 : 0;
         }
         async function loadSales() {
-            const chip = document.getElementById('salChip'); if (chip) chip.textContent = 'در حال بارگذاری…';
+            const chip = document.getElementById('salChip'); if (chip) chip.innerHTML = '<span class="skel19c skel-chip19c"></span>'; /* FIX-UI-19c: اسکلتون جای متن */
             try {
                 const r = await fetch('/api/sales/overview', { cache: 'no-store' });
                 if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || ('HTTP ' + r.status)); }
@@ -5335,7 +5473,7 @@ document.getElementById('invStockSearch')?.addEventListener('input', function ()
         function purRoleRcpt22a() { return purRoleWrite22a() || WEB_ROLE === 'warehouse'; }
         function purMsg22a(id, text, isErr) { const el = document.getElementById(id); if (!el) return; el.textContent = text || ''; el.style.color = isErr ? '#b91c1c' : ''; }
         async function loadPurchase() {
-            const chip = document.getElementById('purChip'); if (chip) chip.textContent = 'در حال بارگذاری…';
+            const chip = document.getElementById('purChip'); if (chip) chip.innerHTML = '<span class="skel19c skel-chip19c"></span>'; /* FIX-UI-19c: اسکلتون جای متن */
             try {
                 const r = await fetch('/api/purchase/overview', { cache: 'no-store' });
                 if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || ('HTTP ' + r.status)); }
@@ -7814,7 +7952,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     function qcNum24(v) { const n = Number(String(v == null ? '' : v).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)).replace(/[,\s]/g, '')); return isNaN(n) ? null : n; }
     const QC_W_KGM_24 = { 8: 0.395, 10: 0.617, 12: 0.888, 14: 1.21, 16: 1.58, 18: 2.0, 20: 2.47, 22: 2.98, 25: 3.85, 28: 4.83, 32: 6.31 };
     async function qcLoad24() {
-        const chip = qcEl24('qcChip24'); if (chip) chip.textContent = 'در حال بارگذاری…';
+        const chip = qcEl24('qcChip24'); if (chip) chip.innerHTML = '<span class="skel19c skel-chip19c"></span>'; /* FIX-UI-19c: اسکلتون جای متن */
         try {
             const r = await fetch('/api/qcpro/overview', { cache: 'no-store' });
             if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || ('HTTP ' + r.status)); }
