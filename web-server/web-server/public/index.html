@@ -462,6 +462,61 @@
         }
         /* ===== FIX-UI-19a (end) ===== */
 
+        /* ===== FIX-UI-19b (begin): جداول حرفه‌ای — سربرگ sticky عمق‌دار + zebra ظریف تم شب + hover یکدست + ستون عملیات sticky راست‌چین در RTL (موبایل) ===== */
+        th {
+            z-index: 4;
+            box-shadow: 0 1px 0 #e2e8f0
+        }
+
+        body.theme-dark th {
+            box-shadow: 0 1px 0 #1d3a55
+        }
+
+        tbody td {
+            transition: background-color .12s ease
+        }
+
+        body.theme-dark tbody tr:nth-child(odd) td {
+            background: rgba(255, 255, 255, .025)
+        }
+
+        body.theme-dark tbody tr:hover td {
+            background: #16324a
+        }
+
+        @media (max-width: 760px) {
+
+            /* FIX-UI-19b: ستون عملیات (آخرین ستون DOM) در RTL لبهٔ inline-end را دارد —
+               با inset-inline-end در همان لبه می‌چسبد و همیشه دیده می‌شود؛ محتوا زیرش می‌لغزد */
+            .tablewrap th:last-child,
+            .tablewrap td:last-child {
+                position: sticky;
+                inset-inline-end: 0;
+                z-index: 3
+            }
+
+            .tablewrap th:last-child {
+                background: #f8fafc;
+                box-shadow: -6px 0 8px -6px rgba(15, 23, 42, .25), 0 1px 0 #e2e8f0
+            }
+
+            .tablewrap td:last-child {
+                background: #fff;
+                box-shadow: -6px 0 8px -6px rgba(15, 23, 42, .18)
+            }
+
+            body.theme-dark .tablewrap th:last-child {
+                background: #0e2233;
+                box-shadow: -6px 0 8px -6px rgba(0, 0, 0, .5), 0 1px 0 #1d3a55
+            }
+
+            body.theme-dark .tablewrap td:last-child {
+                background: #0b2233;
+                box-shadow: -6px 0 8px -6px rgba(0, 0, 0, .4)
+            }
+        }
+        /* ===== FIX-UI-19b (end) ===== */
+
         /* ===== FIX-THEME-6b: متن گزینه‌های دراپ‌داون در هر دو تم خوانا —
            ریشهٔ باگ: optionها رنگ #fff پنل فیلتر را به ارث می‌بردند و در لیست نیتیوِ
            سفیدِ تم روز «سفید-روی-سفید» می‌شدند ===== */
