@@ -505,6 +505,8 @@ function licCanonical24(cfg) {
         max_users: Number(cfg && cfg.max_users) || 0,
         max_records: Number(cfg && cfg.max_records) || 0,
         expires_at: String((cfg && cfg.expires_at) || ''),
+        /* SEC-BIND-19f: قفل سخت‌افزاری داخل امضا — حذف/تغییر hwkey ⇒ امضا نامعتبر ⇒ لایسنس پایه؛ دورزدن ممکن نیست */
+        hwkey: hwNorm19f(cfg && cfg.hwkey),
     });
 }
 function licSign24(cfg, key) {
@@ -594,6 +596,76 @@ function isOwnerReq24(req) {
     return role24 === 'owner' || (role24 === 'admin' && !ownerExists24());
 }
 // ===== SEC-LIC-24 (end) =====
+// ===== SEC-BIND-19f (begin): قفل سخت‌افزاری — Hardware ID Binding =====
+// هدف: نسخهٔ دموی تجاری فقط روی VM مشتریِ دارای لایسنس اجرا شود.
+// قواعد:
+//  • tenant.json بدون فیلد hwkey (یا خالی) ⇒ بدون قفل — رفتار سابق دست‌نخورده (سازگاری کامل با استقرارهای موجود)
+//  • tenant.json با hwkey امضاشده ⇒ عدم تطابق با ماشین فعلی ⇒ توقف بوت (exit 1) با نمایش HWKEY ماشین برای صدور لایسنس
+//  • hwkey داخل canonical امضاست ( licCanonical24 ) ⇒ حذف/تغییرش ⇒ امضا نامعتبر ⇒ لایسنس پایه (SEC-LIC-24)
+//  • الگوریتم HWKEY عیناً با tools/generate-hwkey.js یکی است — هر تغییری باید هم‌زمان در هر دو اعمال شود
+function hwNorm19f(v) { return String(v || '').trim().toUpperCase().replace(/[\s"']/g, ''); }
+function hwFactors19f() {
+    /* فقط APIهای داخلی node + دستورات سیستمی استاندارد — صفر وابستگی */
+    let machineId = '';
+    try {
+        if (process.platform === 'win32') {
+            const { execSync } = require('child_process');
+            const o19f = { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true };
+            /* ۱) MachineGuid — هنگام نصب ویندوز ساخته می‌شود، در ری‌استارت/کپونینگ پایدار است (سریع‌ترین و مطمئن‌ترین) */
+            try {
+                const m19f = String(execSync('reg query HKLM\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid', o19f)).match(/REG_SZ\s+([^\r\n\s]+)/);
+                machineId = m19f ? m19f[1] : '';
+            } catch (e19f) { machineId = ''; }
+            /* ۲) UUID مادربورد/BIOS از PowerShell (wmic در ویندوزهای جدید حذف شده) */
+            if (!machineId) { try { machineId = String(execSync('powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystemProduct).UUID"', o19f)).trim(); } catch (e19f) { machineId = ''; } }
+            /* ۳) wmic — مسیر قدیمی */
+            if (!machineId) { try { const lines19f = String(execSync('wmic csproduct get uuid', o19f)).split(/\r?\n/).filter((l) => l.trim() && l.indexOf('UUID') === -1); machineId = (lines19f[0] || '').trim(); } catch (e19f) { machineId = ''; } }
+        } else if (process.platform === 'linux') {
+            try { machineId = fs.readFileSync('/etc/machine-id', 'utf8').trim(); } catch (e19f) { machineId = ''; }
+            if (!machineId) { try { machineId = fs.readFileSync('/sys/class/dmi/id/product_uuid', 'utf8').trim(); } catch (e19f) { machineId = ''; } }
+        } else if (process.platform === 'darwin') {
+            try {
+                const { execSync } = require('child_process');
+                const m19f = String(execSync('ioreg -rd1 -c IOPlatformExpertDevice', { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] })).match(/"IOPlatformUUID"\s*=\s*"([^"]+)"/);
+                machineId = m19f ? m19f[1] : '';
+            } catch (e19f) { machineId = ''; }
+        }
+    } catch (e19f) { machineId = ''; }
+    let mac19f = '';
+    try {
+        const os19f = require('os');
+        const ifs19f = os19f.networkInterfaces();
+        const names19f = Object.keys(ifs19f);
+        for (let i = 0; i < names19f.length && !mac19f; i++) {
+            const arr19f = ifs19f[names19f[i]] || [];
+            for (let j = 0; j < arr19f.length; j++) {
+                const it19f = arr19f[j];
+                if (it19f && !it19f.internal && it19f.mac && it19f.mac !== '00:00:00:00:00:00') { mac19f = it19f.mac; break; }
+            }
+        }
+    } catch (e19f) { mac19f = ''; }
+    const os19c = require('os');
+    return {
+        machine_id: machineId || '', hostname: os19c.hostname() || '', platform: process.platform,
+        cpu_model: (os19c.cpus()[0] && os19c.cpus()[0].model) || '', cpu_count: os19c.cpus().length,
+        mem_total: os19c.totalmem(), mac: mac19f,
+    };
+}
+function hwCore19f(f19f) {
+    /* machine_id پایدار (MachineGuid ویندوز / machine-id لینوکس / IOPlatformUUID مک) تنها ملاک است —
+       تغییر IP/MAC/دیسک/حافظه اثری ندارد؛ فقط در نبودِ آن، ترکیب پایدارهای os ملاک می‌شود */
+    return f19f.machine_id
+        ? JSON.stringify({ mid: f19f.machine_id, salt: 'sanatify-mes-hw-v1' })
+        : JSON.stringify({ h: f19f.hostname, p: f19f.platform, c: f19f.cpu_model, n: f19f.cpu_count, m: f19f.mem_total, mac: f19f.mac, salt: 'sanatify-mes-hw-v1' });
+}
+function computeHwkey19f() {
+    const f19f = hwFactors19f();
+    const hex19f = crypto.createHash('sha256').update(hwCore19f(f19f)).digest('hex').slice(0, 12).toUpperCase();
+    return 'HW-' + hex19f.slice(0, 4) + '-' + hex19f.slice(4, 8) + '-' + hex19f.slice(8, 12);
+}
+let HWKEY_19F = 'HW-UNKNOWN';
+try { HWKEY_19F = computeHwkey19f(); } catch (e19f) { HWKEY_19F = 'HW-UNKNOWN'; }
+// ===== SEC-BIND-19f (end) =====
 function isLicenseExpired15a(cfg) {
     const exp = String((cfg && cfg.expires_at) || '').trim();
     if (!exp) return false;
@@ -7522,6 +7594,23 @@ function onMainListening11d() {
     console.log('  endpoint دریافت از اپ : POST /api/ingest (بدون لاگین)');
     console.log('========================================================');
 }
+// ===== SEC-BIND-19f: گیت بوت قفل سخت‌افزاری — پیش از هر listen؛ روی ماشین قفل‌شدهٔ نامعتبر سرور هرگز گوش نمی‌دهد =====
+(function hwBindBoot19f() {
+    console.log('  HWKEY ماشین : ' + HWKEY_19F + '  (برای صدور/تمدید لایسنس نزد فروشنده بفرستید)');
+    let cfg19f = null;
+    try { cfg19f = loadTenant15a(); } catch (e19f) { cfg19f = null; }
+    const bound19f = hwNorm19f(cfg19f && cfg19f.hwkey);
+    if (bound19f && bound19f !== hwNorm19f(HWKEY_19F)) {
+        console.error('========================================================');
+        console.error('  ✖ SEC-BIND-19f — این نسخه فقط روی ماشینِ دارای لایسنس اجرا می‌شود.');
+        console.error('  HWKEY این ماشین : ' + HWKEY_19F);
+        console.error('  HWKEY لایسنس    : ' + bound19f);
+        console.error('  راه‌حل: HWKEY ماشین بالا را به پشتیبانی بفرستید تا tenant.json امضاشدهٔ جدید دریافت کنید.');
+        console.error('========================================================');
+        process.exit(1);
+    }
+})();
+
 if (tlsMode === 'HTTPS') {
     // 11d: دمولتی‌پلکسر خام روی پورت اصلی می‌نشیند؛ httpsServer دیگر مستقیم listen نمی‌کند
     /* HARDEN-18O: خطای listen پورت اصلی (مثل EADDRINUSE) مرگبار است — سرور بی‌مخاطبِ زندهٔ بی‌خدمت معنا ندارد؛

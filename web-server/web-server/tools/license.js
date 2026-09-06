@@ -14,6 +14,8 @@
 //    node tools/license.js --gen-ed-keys [--out=lic-ed-keys.json]  (تولید جفت‌کلید Ed25519 — خصوصی فقط نزد فروشنده)
 //    node tools/license.js --sign-ed                        (امضای Ed25519 → license_sig2 — کلید از env: SANATIFY_LIC_ED_PRIV پایه64-PKCS8)
 //    node tools/license.js --verify                         (فقط بررسی امضا — چیزی نمی‌نویسد)
+//    node tools/license.js --hwkey=HW-XXXX-XXXX-XXXX        (SEC-BIND-19f: قفل سخت‌افزاری — فقط روی ماشین دارای این HWKEY بالا می‌آید؛ خالی = حذف قفل)
+//    (HWKEY را با tools/generate-hwkey.js روی ماشین مشتری می‌گیرید؛ حذف/تغییر hwkey = امضای نامعتبر = لایسنس پایه)
 //  چند پرچم می‌تواند همزمان بیاید؛ ترتیب اجرا: only → enable → disable → بقیه
 //  ⚠ SEC-LIC-24: tenant.json بدون امضای معتبر ⇒ سرور به لایسنس پایه (summary+production+inventory) برمی‌گردد
 // =====================================================================
@@ -34,15 +36,19 @@ const MODULE_FA = {
 function fail(msg) { console.error('✗ خطا: ' + msg); process.exit(1); }
 
 // ===== SEC-LIC-24 (begin): امضای HMAC-SHA256 لایسنس — کلید مخفی فقط از env: SANATIFY_LIC_KEY =====
-// canonical باید عیناً با licCanonical24 در server.js یکی باشد (۴ فیلد بخش لایسنس)
+// canonical باید عیناً با licCanonical24 در server.js یکی باشد (۵ فیلد بخش لایسنس — SEC-BIND-19f: +hwkey)
 function licCanonical24(cfg) {
     return JSON.stringify({
         active_modules: (Array.isArray(cfg.active_modules) ? cfg.active_modules.slice() : []).sort(),
         max_users: Number(cfg.max_users) || 0,
         max_records: Number(cfg.max_records) || 0,
         expires_at: String(cfg.expires_at || ''),
+        hwkey: normHw19f(cfg.hwkey), /* SEC-BIND-19f: قفل سخت‌افزاری داخل امضا */
     });
 }
+/* SEC-BIND-19f: نرمال‌سازی HWKEY — عیناً با hwNorm19f در server.js یکی است */
+function normHw19f(v) { return String(v || '').trim().toUpperCase().replace(/[\s"']/g, ''); }
+function hwFormatOk19f(v) { return !v || /^HW-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/.test(v) || v === 'HW-UNKNOWN'; }
 function licKey24() {
     const k = process.env.SANATIFY_LIC_KEY;
     if (!k) fail('متغیر محیطی SANATIFY_LIC_KEY تنظیم نیست — کلید مخفی هرگز در ریپو/کد ذخیره نمی‌شود.\n  نمونه:  SANATIFY_LIC_KEY="کلید-مخفی-شما" node tools/license.js --sign');
@@ -140,6 +146,7 @@ if (args.list && Object.keys(args).length === 1) {
     console.log('  شناسه: ' + (cfg.tenant_id || '?') + '   نام: ' + (cfg.name || '?'));
     console.log('  انقضا: ' + (cfg.expires_at ? cfg.expires_at + (Date.parse(cfg.expires_at) < Date.now() ? '  (منقضی!)' : '') : 'بدون محدودیت'));
     console.log('  سقف: کاربران ' + (Number(cfg.max_users) || '∞') + ' | رکوردها ' + (Number(cfg.max_records) || '∞'));
+    console.log('  قفل سخت‌افزاری: ' + (normHw19f(cfg.hwkey) ? normHw19f(cfg.hwkey) + '  (فقط همین ماشین)' : 'بدون قفل — روی هر ماشینی بالا می‌آید'));
     console.log('  ماژول‌ها:');
     MODULES.forEach((m) => console.log('   ' + (cfg.active_modules.indexOf(m) !== -1 ? '✓' : '✗') + '  ' + m.padEnd(12) + ' ' + MODULE_FA[m]));
     process.exit(0);
@@ -160,6 +167,13 @@ if (args.disable) {
 if (args.name) cfg.name = String(args.name);
 if (args['max-users'] !== undefined) cfg.max_users = Math.max(0, Number(args['max-users']) || 0);
 if (args['max-records'] !== undefined) cfg.max_records = Math.max(0, Number(args['max-records']) || 0);
+/* ===== SEC-BIND-19f (begin): قفل سخت‌افزاری — hwkey داخل canonical ⇒ حذف/تغییرش امضا را نامعتبر می‌کند ===== */
+if (args.hwkey !== undefined) {
+    const hw19f = normHw19f(args.hwkey);
+    if (hw19f && !hwFormatOk19f(hw19f)) fail('فرمت HWKEY نامعتبر است: ' + hw19f + '\n  نمونهٔ درست: HW-3F2A-91BC-04DE  (از tools/generate-hwkey.js روی ماشین مشتری بگیرید)\n  برای حذف قفل: --hwkey= (خالی)');
+    cfg.hwkey = hw19f; /* خالی ⇒ حذف قفل */
+}
+/* ===== SEC-BIND-19f (end) ===== */
 if (args.expires !== undefined) {
     const e = String(args.expires || '').trim();
     if (e) { const t = Date.parse(e); if (isNaN(t)) fail('تاریخ انقضا نامعتبر است (نمونه: 2027-03-20).'); cfg.expires_at = new Date(t).toISOString(); }
