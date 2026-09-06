@@ -397,6 +397,70 @@
             font-size: 12px;
             background: #fff
         }
+        /* ===== FIX-UI-19a (begin): ریتم «فرم مهندسی‌شده» — شبکهٔ دوستونه (gap 12/16) + fieldset با عنوان کم‌رنگ
+           الگو: فرم‌های خرید/فروش (فازهای ۱۳/۱۴) — برچسب صریح روی هر کنترل، گروه‌بندی فیلدهای مرتبط.
+           فقط پوسته است: هیچ id/value/handler تغییر نمی‌کند — JS با id می‌خواند. ===== */
+        fieldset.fset19a {
+            border: 1px solid #e2e8f0;
+            border-radius: 9px;
+            padding: 8px 12px 12px;
+            margin: 0 0 12px;
+            min-width: 0
+        }
+
+        fieldset.fset19a legend {
+            font-size: 11.5px;
+            color: #64748b;
+            font-weight: 600;
+            padding: 0 7px;
+            letter-spacing: .2px
+        }
+
+        .fgrid19a {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px 16px;
+            align-items: end
+        }
+
+        .fgrid19a .flbl {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 5px;
+            min-width: 0;
+            font-size: 12px;
+            color: #475569
+        }
+
+        .fgrid19a .flbl>input,
+        .fgrid19a .flbl>select {
+            width: 100%
+        }
+
+        .fgrid19a .span2 {
+            grid-column: 1 / -1
+        }
+
+        @media (max-width: 760px) {
+            .fgrid19a {
+                grid-template-columns: 1fr
+            }
+        }
+
+        body.theme-dark fieldset.fset19a {
+            border-color: #1d3a55;
+            background: rgba(255, 255, 255, .015)
+        }
+
+        body.theme-dark fieldset.fset19a legend {
+            color: #8aa2ba
+        }
+
+        body.theme-dark .fgrid19a .flbl {
+            color: #9fb3c8
+        }
+        /* ===== FIX-UI-19a (end) ===== */
 
         /* ===== FIX-THEME-6b: متن گزینه‌های دراپ‌داون در هر دو تم خوانا —
            ریشهٔ باگ: optionها رنگ #fff پنل فیلتر را به ارث می‌بردند و در لیست نیتیوِ
@@ -1485,25 +1549,38 @@
                             style="display:none">➕ ثبت تولید جدید</button><button class="act excel"
                             data-exp="production">خروجی اکسل 📊</button></span></h2>
                 <div class="filters hidden" id="formProduction">
+                    <div class="frow" style="margin-bottom:8px"><span class="flbl" id="fpBy" style="font-weight:bold">ثبت‌کننده: -</span></div>
+                    <fieldset class="fset19a">
+                        <legend>مشخصات پارت تولید</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">محصول:
+                                <select id="fpProduct" class="fsel">
+                                    <option value="RB-8">میلگرد A3 سایز ۸</option><option value="RB-10">میلگرد A3 سایز ۱۰</option><option value="RB-12">میلگرد A3 سایز ۱۲</option><option value="RB-14">میلگرد A3 سایز ۱۴</option><option value="RB-16">میلگرد A3 سایز ۱۶</option><option value="RB-18">میلگرد A3 سایز ۱۸</option><option value="RB-20">میلگرد A3 سایز ۲۰</option><option value="RB-22">میلگرد A3 سایز ۲۲</option><option value="RB-25">میلگرد A3 سایز ۲۵</option><option value="RB-28">میلگرد A3 سایز ۲۸</option><option value="RB-32">میلگرد A3 سایز ۳۲</option>
+                                </select>
+                            </label>
+                            <label class="flbl">شیفت:
+                                <select id="fpShift" class="fsel">
+                                    <option value="shift-morning-301">شیفت صبح</option>
+                                    <option value="shift-night-302">شیفت شب</option>
+                                </select>
+                            </label>
+                            <label class="flbl">تعداد شاخه سالم:
+                                <input type="number" id="fpQty" min="1" />
+                            </label>
+                            <label class="flbl">تعداد باندل (اختیاری):
+                                <input type="number" id="fpPallets" min="0" />
+                            </label>
+                            <!-- ===== FIX-INV-0-HARDENING: نسخهٔ تکراری fpHeat حذف شد ===== -->
+                            <label class="flbl span2">کد هیت ذوب:
+                                <input type="text" id="fpHeat" placeholder="مثال: HT-1405-01" />
+                            </label>
+                            <label class="flbl span2">توضیحات (اختیاری):
+                                <input type="text" id="fpDesc" />
+                            </label>
+                        </div>
+                    </fieldset>
                     <div class="frow">
-                        <span class="flbl" id="fpBy" style="font-weight:bold">ثبت‌کننده: -</span>
-                        <select id="fpProduct" class="fsel">
-                            <option value="RB-8">میلگرد A3 سایز ۸</option><option value="RB-10">میلگرد A3 سایز ۱۰</option><option value="RB-12">میلگرد A3 سایز ۱۲</option><option value="RB-14">میلگرد A3 سایز ۱۴</option><option value="RB-16">میلگرد A3 سایز ۱۶</option><option value="RB-18">میلگرد A3 سایز ۱۸</option><option value="RB-20">میلگرد A3 سایز ۲۰</option><option value="RB-22">میلگرد A3 سایز ۲۲</option><option value="RB-25">میلگرد A3 سایز ۲۵</option><option value="RB-28">میلگرد A3 سایز ۲۸</option><option value="RB-32">میلگرد A3 سایز ۳۲</option>
-                            
-                        </select>
-                        <select id="fpShift" class="fsel">
-                            <option value="shift-morning-301">شیفت صبح</option>
-                            <option value="shift-night-302">شیفت شب</option>
-                        </select>
-                        <input type="number" id="fpQty" min="1" placeholder="تعداد شاخه سالم" style="width:110px" />
-                        <input type="number" id="fpPallets" min="0" placeholder="تعداد باندل (اختیاری)"
-                            style="width:160px" />
-<!-- ===== FIX-INV-0-HARDENING: نسخهٔ تکراری fpHeat حذف شد ===== -->
-<input type="text" id="fpHeat" placeholder="کد هیت ذوب (مثال: HT-1405-01)" style="flex:1 1 180px" />
-</div>
-<div class="frow" style="margin-top:8px">
-<span class="flbl">ایستگاه نهایی: <b>بازرسی نهایی و بسته‌بندی باندل</b></span>
-                        <input type="text" id="fpDesc" placeholder="توضیحات (اختیاری)" style="flex:1 1 260px" />
+                        <span class="flbl">ایستگاه نهایی: <b>بازرسی نهایی و بسته‌بندی باندل</b></span>
                         <button class="act" id="fpSave" style="background:#15803d">ذخیره</button>
                         <button class="act fclear" id="fpCancel">انصراف</button>
                     </div>
@@ -1522,30 +1599,45 @@
                             ثبت ضایعات جدید</button><button class="act excel" data-exp="waste">خروجی اکسل
                             📊</button></span></h2>
                 <div class="filters hidden" id="formWaste">
+                    <fieldset class="fset19a">
+                        <legend>مشخصات ضایعات</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">ایستگاه کشف:
+                                <select id="fwStation" class="fsel"></select>
+                            </label>
+                            <label class="flbl">نوع ضایعات:
+                                <select id="fwType" class="fsel">
+                                    <option value="sheet">شمش</option>
+                                    <option value="body">میلگرد</option>
+                                    <option value="ends">کراپ دو سر</option>
+                                    <option value="full">باندل کامل</option>
+                                </select>
+                            </label>
+                            <label class="flbl">علت ضایعات:
+                                <select id="fwReason" class="fsel">
+                                    <option value="roll_change">تعویض غلتک / قفسه</option>
+                                    <option value="deformed-body">دفرمگی محصول</option>
+                                    <option value="scratch-lining">خراش سطح</option>
+                                    <option value="billet_jam">کوبیدگی شمش</option>
+                                    <option value="crop-ends">کراپ دو سر</option><option value="furnace_temp">اختلال دمای کوره</option>
+                                    <option value="other">سایر</option>
+                                </select>
+                            </label>
+                            <label class="flbl">تعداد:
+                                <input type="number" id="fwQty" min="1" />
+                            </label>
+                            <label class="flbl">شیفت:
+                                <select id="fwShift" class="fsel">
+                                    <option value="shift-morning-301">شیفت صبح</option>
+                                    <option value="shift-night-302">شیفت شب</option>
+                                </select>
+                            </label>
+                            <label class="flbl span2">توضیحات (اختیاری):
+                                <input type="text" id="fwDesc" />
+                            </label>
+                        </div>
+                    </fieldset>
                     <div class="frow">
-                        <select id="fwStation" class="fsel"></select>
-                        <select id="fwType" class="fsel">
-                            <option value="sheet">شمش</option>
-                            <option value="body">میلگرد</option>
-                            <option value="ends">کراپ دو سر</option>
-                            <option value="full">باندل کامل</option>
-                        </select>
-                        <select id="fwReason" class="fsel">
-                            <option value="roll_change">تعویض غلتک / قفسه</option>
-                            <option value="deformed-body">دفرمگی محصول</option>
-                            <option value="scratch-lining">خراش سطح</option>
-                            <option value="billet_jam">کوبیدگی شمش</option>
-                            <option value="crop-ends">کراپ دو سر</option><option value="furnace_temp">اختلال دمای کوره</option>
-                            <option value="other">سایر</option>
-                        </select>
-                        <input type="number" id="fwQty" min="1" placeholder="تعداد" style="width:90px" />
-                        <select id="fwShift" class="fsel">
-                            <option value="shift-morning-301">شیفت صبح</option>
-                            <option value="shift-night-302">شیفت شب</option>
-                        </select>
-                    </div>
-                    <div class="frow" style="margin-top:8px">
-                        <input type="text" id="fwDesc" placeholder="توضیحات (اختیاری)" style="flex:1 1 260px" />
                         <button class="act" id="fwSave" style="background:#15803d">ذخیره</button>
                         <button class="act fclear" id="fwCancel">انصراف</button>
                     </div>
@@ -1564,39 +1656,59 @@
                             توقف جدید</button><button class="act excel" data-exp="downtime">خروجی اکسل
                             📊</button></span></h2>
                 <div class="filters hidden" id="formDowntime">
+                    <fieldset class="fset19a">
+                        <legend>مشخصات توقف</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">ایستگاه:
+                                <select id="fdStation" class="fsel"></select>
+                            </label>
+                            <label class="flbl">علت توقف:
+                                <select id="fdReason" class="fsel">
+                                    <option value="roll_change">تعویض غلتک / قفسه</option>
+                                    <option value="billet_jam">گیرش شمش در فیدر</option>
+                                    <option value="furnace_temp">اختلال دمای کوره</option>
+                                    <option value="shear_adjust">تنظیم قیچی برش</option>
+                                    <option value="mech_elec">خرابی مکانیکی / برقی</option>
+                                    <option value="electrical">خرابی برقی</option>
+                                    <option value="hydraulic">خرابی هیدرولیک</option>
+                                    <option value="other">سایر</option>
+                                </select>
+                            </label>
+                            <label class="flbl">نوع توقف:
+                                <select id="fdType" class="fsel">
+                                    <option value="1">اضطراری</option>
+                                    <option value="0">برنامه‌ریزی</option>
+                                </select>
+                            </label>
+                            <label class="flbl">شیفت:
+                                <select id="fdShift" class="fsel">
+                                    <option value="shift-morning-301">شیفت صبح</option>
+                                    <option value="shift-night-302">شیفت شب</option>
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
+                    <fieldset class="fset19a">
+                        <legend>بازهٔ وقوع و توضیحات</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">تاریخ شروع:
+                                <input type="text" inputmode="numeric" data-jp="fds" id="fdStartDate" placeholder="۱۴۰۵/۰۵/۱۶" style="text-align:center" />
+                            </label>
+                            <label class="flbl">ساعت شروع:
+                                <input type="time" id="fdStartTime" class="fdate" />
+                            </label>
+                            <label class="flbl">تاریخ پایان:
+                                <input type="text" inputmode="numeric" data-jp="fde" id="fdEndDate" placeholder="۱۴۰۵/۰۵/۱۶" style="text-align:center" />
+                            </label>
+                            <label class="flbl">ساعت پایان:
+                                <input type="time" id="fdEndTime" class="fdate" />
+                            </label>
+                            <label class="flbl span2">توضیحات (اختیاری):
+                                <input type="text" id="fdDesc" placeholder="مثلاً: تعویض چرخ به‌دلیل ساییدگی" />
+                            </label>
+                        </div>
+                    </fieldset>
                     <div class="frow">
-                        <select id="fdStation" class="fsel"></select>
-                        <select id="fdReason" class="fsel">
-                            <option value="roll_change">تعویض غلتک / قفسه</option>
-                            <option value="billet_jam">گیرش شمش در فیدر</option>
-                            <option value="furnace_temp">اختلال دمای کوره</option>
-                            <option value="shear_adjust">تنظیم قیچی برش</option>
-                            <option value="mech_elec">خرابی مکانیکی / برقی</option>
-                            <option value="electrical">خرابی برقی</option>
-                            <option value="hydraulic">خرابی هیدرولیک</option>
-                            <option value="other">سایر</option>
-                        </select>
-                        <select id="fdType" class="fsel">
-                            <option value="1">اضطراری</option>
-                            <option value="0">برنامه‌ریزی</option>
-                        </select>
-                        <select id="fdShift" class="fsel">
-                            <option value="shift-morning-301">شیفت صبح</option>
-                            <option value="shift-night-302">شیفت شب</option>
-                        </select>
-                    </div>
-                    <div class="frow" style="margin-top:8px">
-                        <label class="flbl">تاریخ شروع: <input type="text" inputmode="numeric" data-jp="fds"
-                                id="fdStartDate" placeholder="۱۴۰۵/۰۵/۱۶"
-                                style="width:110px;text-align:center" /></label>
-                        <label class="flbl">ساعت شروع: <input type="time" id="fdStartTime" class="fdate" /></label>
-                        <label class="flbl">تاریخ پایان: <input type="text" inputmode="numeric" data-jp="fde"
-                                id="fdEndDate" placeholder="۱۴۰۵/۰۵/۱۶" style="width:110px;text-align:center" /></label>
-                        <label class="flbl">ساعت پایان: <input type="time" id="fdEndTime" class="fdate" /></label>
-                    </div>
-                    <div class="frow" style="margin-top:8px">
-                        <input type="text" id="fdDesc"
-                            placeholder="توضیحات (اختیاری — مثلاً: تعویض چرخ به‌دلیل ساییدگی)" style="flex:1 1 300px" />
                         <button class="act" id="fdSave" style="background:#15803d">ذخیره</button>
                         <button class="act fclear" id="fdCancel">انصراف</button>
                     </div>
@@ -1615,42 +1727,86 @@
                             ثبت آزمون جدید</button><button class="act excel" data-exp="quality">خروجی اکسل
                             📊</button></span></h2>
                 <div class="filters hidden" id="formQuality">
+                    <div class="frow" style="margin-bottom:8px"><span class="flbl" id="fqBy" style="font-weight:bold">ثبت‌کننده: -</span></div>
+                    <fieldset class="fset19a">
+                        <legend>شناسهٔ نمونه</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">کد هیت ذوب:
+                                <input type="text" id="fqHeat" placeholder="مثال: HT-1405-01" />
+                            </label>
+                            <label class="flbl">سایز میلگرد:
+                                <select id="fqSize" class="fsel">
+                                    <option value="8">سایز ۸</option><option value="10">سایز ۱۰</option><option value="12">سایز ۱۲</option><option value="14">سایز ۱۴</option><option value="16">سایز ۱۶</option><option value="18">سایز ۱۸</option><option value="20">سایز ۲۰</option><option value="22">سایز ۲۲</option><option value="25">سایز ۲۵</option><option value="28">سایز ۲۸</option><option value="32">سایز ۳۲</option>
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
+                    <fieldset class="fset19a">
+                        <legend>آزمون کشش — خوانش دستگاه</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">ReH — تنش تسلیم (MPa):
+                                <input type="number" id="fqPressure" min="1" />
+                            </label>
+                            <label class="flbl">Rm — مقاومت کششی (MPa):
+                                <input type="number" id="fqLining" min="1" />
+                            </label>
+                            <label class="flbl">A٪ — ازدیاد طول:
+                                <input type="number" id="fqDrop" min="0" step="0.1" />
+                            </label>
+                            <!-- ===== FEAT-QC-3 (begin): فیلدهای دستگاه تست کشش ===== -->
+                            <label class="flbl">قطر اسمی (mm):
+                                <input type="number" id="fqDia" min="4" step="0.1" />
+                            </label>
+                            <label class="flbl">سطح مقطع (mm²):
+                                <input type="number" id="fqArea" min="0" step="0.01" />
+                            </label>
+                            <label class="flbl">نسبت Rm/ReH:
+                                <input type="number" id="fqRatio" min="0" step="0.01" />
+                            </label>
+                            <label class="flbl">طول نمونه (mm):
+                                <input type="number" id="fqLen" min="1" />
+                            </label>
+                            <label class="flbl">وزن نمونه (g):
+                                <input type="number" id="fqWt" min="1" />
+                            </label>
+                            <label class="flbl">وزن بر متر (kg/m):
+                                <input type="number" id="fqKgM" min="0" step="0.0001" />
+                            </label>
+                            <label class="flbl">Yield point (kgf):
+                                <input type="number" id="fqYkgf" min="0" />
+                            </label>
+                            <label class="flbl">قطر آج طولی (mm):
+                                <input type="number" id="fqRibD" min="0" step="0.1" />
+                            </label>
+                            <label class="flbl">قطر میلگرد (نافی) (mm):
+                                <input type="number" id="fqNafi" min="0" step="0.01" />
+                            </label>
+                            <!-- ===== FIX-QC-3b (begin): نافی = قطر اندازه‌گیری‌شدهٔ بدنه؛ قطر اسمی از select سایز و سطح مقطع از قطر اسمی ===== -->
+                            <!-- ===== FEAT-QC-3 (end) ===== -->
+                        </div>
+                    </fieldset>
+                    <fieldset class="fset19a">
+                        <legend>سایر آزمون‌ها و توضیحات</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">تست خمش:
+                                <select id="fqLeak" class="fsel">
+                                    <option value="1">مطابق</option>
+                                    <option value="0">مغایر</option>
+                                </select>
+                            </label>
+                            <label class="flbl">بازرسی چشمی:
+                                <select id="fqVisual" class="fsel">
+                                    <option value="1">سالم</option>
+                                    <option value="0">معیوب</option>
+                                </select>
+                            </label>
+                            <label class="flbl span2">توضیحات (اختیاری):
+                                <input type="text" id="fqDesc" />
+                            </label>
+                        </div>
+                    </fieldset>
+                    <div id="fqEval" class="note" style="flex:1 1 100%;margin:2px 0 8px"></div>
                     <div class="frow">
-                        <span class="flbl" id="fqBy" style="font-weight:bold">ثبت‌کننده: -</span>
-                        <input type="text" id="fqHeat" placeholder="کد هیت ذوب (مثال: HT-1405-01)" />
-                        <select id="fqSize" class="fsel">
-                            <option value="8">سایز ۸</option><option value="10">سایز ۱۰</option><option value="12">سایز ۱۲</option><option value="14">سایز ۱۴</option><option value="16">سایز ۱۶</option><option value="18">سایز ۱۸</option><option value="20">سایز ۲۰</option><option value="22">سایز ۲۲</option><option value="25">سایز ۲۵</option><option value="28">سایز ۲۸</option><option value="32">سایز ۳۲</option>
-                            
-                        </select>
-                        <input type="number" id="fqPressure" min="1" placeholder="ReH — تنش تسلیم (MPa)"
-                            style="width:170px" />
-                        <input type="number" id="fqLining" min="1" placeholder="Rm — مقاومت کششی (MPa)"
-                            style="width:150px" />
-                        <input type="number" id="fqDrop" min="0" step="0.1" placeholder="A٪ — ازدیاد طول"
-                            style="width:120px" />
-                        <!-- ===== FEAT-QC-3 (begin): فیلدهای دستگاه تست کشش ===== -->
-                        <input type="number" id="fqDia" min="4" step="0.1" placeholder="قطر اسمی (mm)" style="width:120px" />
-                        <input type="number" id="fqArea" min="0" step="0.01" placeholder="سطح مقطع (mm²)" style="width:130px" />
-                        <input type="number" id="fqRatio" min="0" step="0.01" placeholder="نسبت Rm/ReH" style="width:120px" />
-                        <input type="number" id="fqLen" min="1" placeholder="طول نمونه (mm)" style="width:125px" />
-                        <input type="number" id="fqWt" min="1" placeholder="وزن نمونه (g)" style="width:120px" />
-                        <input type="number" id="fqKgM" min="0" step="0.0001" placeholder="وزن بر متر (kg/m)" style="width:135px" />
-                        <input type="number" id="fqYkgf" min="0" placeholder="Yield point (kgf)" style="width:130px" />
-                        <input type="number" id="fqRibD" min="0" step="0.1" placeholder="قطر آج طولی (mm)" style="width:130px" />
-                        <input type="number" id="fqNafi" min="0" step="0.01" placeholder="قطر میلگرد (نافی) (mm)" style="width:150px" /><!-- ===== FIX-QC-3b (begin): نافی = قطر اندازه‌گیری‌شدهٔ بدنه؛ قطر اسمی از select سایز و سطح مقطع از قطر اسمی ===== -->
-                        <!-- ===== FEAT-QC-3 (end) ===== -->
-                    </div>
-                    <div class="frow" style="margin-top:8px">
-                        <select id="fqLeak" class="fsel">
-                            <option value="1">تست خمش: مطابق</option>
-                            <option value="0">تست خمش: مغایر</option>
-                        </select>
-                        <select id="fqVisual" class="fsel">
-                            <option value="1">بازرسی چشمی: سالم</option>
-                            <option value="0">بازرسی چشمی: معیوب</option>
-                        </select>
-                        <input type="text" id="fqDesc" placeholder="توضیحات (اختیاری)" style="flex:1 1 220px" />
-                        <div id="fqEval" class="note" style="flex:1 1 100%;margin:2px 0 0"></div>
                         <button class="act" id="fqSave" style="background:#15803d">ذخیره</button>
                         <button class="act fclear" id="fqCancel">انصراف</button>
                     </div>
@@ -1946,100 +2102,95 @@
                         ثبت عملیات تعمیر و نگهداری
                     </div>
 
+                    <fieldset class="fset19a">
+                        <legend>نوع عملیات</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">ایستگاه:
+                                <select id="fmStation" class="fsel">
+                                </select>
+                            </label>
+                            <label class="flbl">نوع کار:
+                                <select id="fmType" class="fsel">
+                                    <option value="breakdown">
+                                        تعمیر خرابی اضطراری
+                                    </option>
+                                    <option value="repair">
+                                        تعمیر برنامه‌ریزی‌شده
+                                    </option>
+                                    <option value="pm">
+                                        PM پیشگیرانه
+                                    </option>
+                                </select>
+                            </label>
+                            <label class="flbl">اولویت:
+                                <select id="fmPriority" class="fsel">
+                                    <option value="low">
+                                        اولویت کم
+                                    </option>
+                                    <option value="medium" selected>
+                                        اولویت متوسط
+                                    </option>
+                                    <option value="high">
+                                        اولویت بالا
+                                    </option>
+                                    <option value="critical">
+                                        اولویت بحرانی
+                                    </option>
+                                </select>
+                            </label>
+                            <label class="flbl">ارجاع به برنامهٔ PM:
+                                <select id="fmPlan" class="fsel">
+                                    <option value="">
+                                        بدون ارجاع به برنامه PM
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="fset19a">
+                        <legend>اجرا</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">تاریخ کار:
+                                <input type="text" inputmode="numeric" data-jp="fmd" id="fmDate" placeholder="۱۴۰۵/۰۵/۱۶" style="text-align:center" />
+                            </label>
+                            <label class="flbl">مدت (دقیقه):
+                                <input type="number" id="fmDuration" min="0" />
+                            </label>
+                            <label class="flbl">تکنسین / انجام‌دهنده:
+                                <input type="text" id="fmTech" />
+                            </label>
+                            <label class="flbl">هزینه (ریال):
+                                <input type="number" id="fmCost" min="0" />
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="fset19a">
+                        <legend>تحلیل خرابی و توضیحات</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">قطعات مصرفی:
+                                <input type="text" id="fmParts" />
+                            </label>
+                            <label class="flbl">علت ریشه‌ای خرابی:
+                                <input type="text" id="fmRootCause" />
+                            </label>
+                            <label class="flbl">اقدام انجام‌شده:
+                                <input type="text" id="fmAction" />
+                            </label>
+                            <label class="flbl span2">توضیحات تکمیلی:
+                                <input type="text" id="fmDesc" />
+                            </label>
+                        </div>
+                    </fieldset>
+
                     <div class="frow">
-
-                        <select id="fmStation" class="fsel">
-                        </select>
-
-                        <select id="fmType" class="fsel">
-
-                            <option value="breakdown">
-                                تعمیر خرابی اضطراری
-                            </option>
-
-                            <option value="repair">
-                                تعمیر برنامه‌ریزی‌شده
-                            </option>
-
-                            <option value="pm">
-                                PM پیشگیرانه
-                            </option>
-
-                        </select>
-
-                        <select id="fmPriority" class="fsel">
-
-                            <option value="low">
-                                اولویت کم
-                            </option>
-
-                            <option value="medium" selected>
-                                اولویت متوسط
-                            </option>
-
-                            <option value="high">
-                                اولویت بالا
-                            </option>
-
-                            <option value="critical">
-                                اولویت بحرانی
-                            </option>
-
-                        </select>
-
-                        <select id="fmPlan" class="fsel">
-
-                            <option value="">
-                                بدون ارجاع به برنامه PM
-                            </option>
-
-                        </select>
-
-                    </div>
-
-
-                    <div class="frow" style="margin-top:8px">
-
-                        <label class="flbl">
-                            تاریخ کار:
-
-                            <input type="text" inputmode="numeric" data-jp="fmd" id="fmDate" placeholder="۱۴۰۵/۰۵/۱۶"
-                                style="width:110px;text-align:center" />
-
-                        </label>
-
-                        <input type="number" id="fmDuration" min="0" placeholder="مدت (دقیقه)" style="width:120px" />
-
-                        <input type="text" id="fmTech" placeholder="تکنسین / انجام‌دهنده" />
-
-                        <input type="number" id="fmCost" min="0" placeholder="هزینه (ریال)" style="width:150px" />
-
-                    </div>
-
-
-                    <div class="frow" style="margin-top:8px">
-
-                        <input type="text" id="fmParts" placeholder="قطعات مصرفی" style="flex:1 1 220px" />
-
-                        <input type="text" id="fmRootCause" placeholder="علت ریشه‌ای خرابی" style="flex:1 1 240px" />
-
-                        <input type="text" id="fmAction" placeholder="اقدام انجام‌شده" style="flex:1 1 240px" />
-
-                    </div>
-
-
-                    <div class="frow" style="margin-top:8px">
-
-                        <input type="text" id="fmDesc" placeholder="توضیحات تکمیلی" style="flex:1 1 300px" />
-
                         <button class="act" id="fmSave" style="background:#15803d">
                             ذخیره
                         </button>
-
                         <button class="act fclear" id="fmCancel">
                             انصراف
                         </button>
-
                     </div>
 
                     <div class="note" id="fmMsg" style="color:#dc2626">
@@ -2058,61 +2209,60 @@
                         تعریف برنامه نگهداری پیشگیرانه
                     </div>
 
+                    <fieldset class="fset19a">
+                        <legend>تعریف برنامه</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">ایستگاه:
+                                <select id="plStation" class="fsel">
+                                </select>
+                            </label>
+                            <label class="flbl">دوره (روز):
+                                <input type="number" id="plInterval" min="1" />
+                            </label>
+                            <label class="flbl">اولویت:
+                                <select id="plPriority" class="fsel">
+                                    <option value="low">
+                                        اولویت کم
+                                    </option>
+                                    <option value="medium" selected>
+                                        اولویت متوسط
+                                    </option>
+                                    <option value="high">
+                                        اولویت بالا
+                                    </option>
+                                    <option value="critical">
+                                        اولویت بحرانی
+                                    </option>
+                                </select>
+                            </label>
+                            <label class="flbl span2">عنوان کار PM:
+                                <input type="text" id="plTitle" placeholder="مثال: تعویض روغن هیدرولیک" />
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="fset19a">
+                        <legend>زمان‌بندی و مسئول</legend>
+                        <div class="fgrid19a">
+                            <label class="flbl">تاریخ آخرین انجام:
+                                <input type="text" inputmode="numeric" data-jp="pllast" id="plLast" placeholder="۱۴۰۵/۰۵/۰۱" style="text-align:center" />
+                            </label>
+                            <label class="flbl">مسئول انجام:
+                                <input type="text" id="plResp" />
+                            </label>
+                            <label class="flbl span2">توضیحات برنامه:
+                                <input type="text" id="plNotes" />
+                            </label>
+                        </div>
+                    </fieldset>
+
                     <div class="frow">
-
-                        <select id="plStation" class="fsel">
-                        </select>
-
-                        <input type="text" id="plTitle" placeholder="عنوان کار PM؛ مثال: تعویض روغن هیدرولیک"
-                            style="flex:1 1 280px" />
-
-                        <input type="number" id="plInterval" min="1" placeholder="دوره (روز)" style="width:110px" />
-
-                        <select id="plPriority" class="fsel">
-
-                            <option value="low">
-                                اولویت کم
-                            </option>
-
-                            <option value="medium" selected>
-                                اولویت متوسط
-                            </option>
-
-                            <option value="high">
-                                اولویت بالا
-                            </option>
-
-                            <option value="critical">
-                                اولویت بحرانی
-                            </option>
-
-                        </select>
-
-                    </div>
-
-
-                    <div class="frow" style="margin-top:8px">
-
-                        <label class="flbl">
-                            تاریخ آخرین انجام:
-
-                            <input type="text" inputmode="numeric" data-jp="pllast" id="plLast" placeholder="۱۴۰۵/۰۵/۰۱"
-                                style="width:110px;text-align:center" />
-
-                        </label>
-
-                        <input type="text" id="plResp" placeholder="مسئول انجام" />
-
-                        <input type="text" id="plNotes" placeholder="توضیحات برنامه" style="flex:1 1 300px" />
-
                         <button class="act" id="plSave" style="background:#15803d">
                             ذخیره برنامه
                         </button>
-
                         <button class="act fclear" id="plCancel">
                             انصراف
                         </button>
-
                     </div>
 
                     <div class="note" id="plMsg" style="color:#dc2626">
@@ -2351,7 +2501,8 @@
                     <div class="frow"><span class="note" id="plMeta"></span></div>
                     <div class="frow">
                         <button class="act" id="planSaveBtn">ذخیرهٔ برنامه</button>
-                        <button class="fclear" id="plCancel">انصراف</button>
+                        <!-- ===== FIX-UI-19a: id تکراری plCancel (تصادم با فرم PM) به plCancel9c تغییر یافت — قبلاً دکمهٔ انصراف برنامه‌ریزی مرده بود و انصراف PM هر دو هندلر را می‌سوزاند ===== -->
+                        <button class="fclear" id="plCancel9c">انصراف</button>
                         <span class="note" id="planMsg"></span>
                     </div>
                 </div>
@@ -6456,7 +6607,7 @@ showRes();
         if (bs) bs.addEventListener('click', async () => { await loadPlanning(); const p = document.getElementById('planSuggestPanel'); if (p && !p.classList.contains('hidden')) p.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
         const bn = document.getElementById('btnPlanNew');
         if (bn) bn.addEventListener('click', () => planOpenForm(null));
-        const bc = document.getElementById('plCancel');
+        const bc = document.getElementById('plCancel9c'); /* FIX-UI-19a: قبلاً getElementById('plCancel') دکمهٔ فرم PM را می‌گرفت (id تکراری) — دکمهٔ انصراف برنامه‌ریزی مرده بود */
         if (bc) bc.addEventListener('click', () => { document.getElementById('planFormPanel').classList.add('hidden'); planEditingId = null; planPrefillMeta = null; });
         const sv = document.getElementById('planSaveBtn');
         if (sv) sv.addEventListener('click', planSave);
