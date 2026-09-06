@@ -10,6 +10,7 @@
   "max_users": 0,
   "max_records": 0,
   "role_caps": {},
+  "demo_mode": false,
   "license_key": "",
   "expires_at": "",
   "custom_settings": {

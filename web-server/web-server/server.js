@@ -866,6 +866,22 @@ function appRequestHandler(req, res) {
             }
         }
     }
+
+    /* ===== FIX-UI-19d (begin): گیت سرورساید حالت دمو — ماژول‌های مالی/فروش/خرید کاملاً بسته (نه فقط مخفی در UI)
+       سناریو: دموی ۲-۳ هفته‌ای روی VM مشتری فولاد؛ مشتری مالی/فروش/خرید را در سپیدار اجرا می‌کند.
+       حتی فراخوانی مستقیم API هم ۴۰۳ می‌گیرد؛ ماژول‌های فنی (تولید/QC/انبار/PM/برنامه‌ریزی) صفر تغییر. */
+    if (pathname.indexOf('/api/') === 0) {
+        const t19d = loadTenant15a();
+        if (t19d && t19d.demo_mode) {
+            const DEMO_BLOCK_19D = ['/api/sales', '/api/finance', '/api/purchase', '/api/gl'];
+            const hit19d = DEMO_BLOCK_19D.find((p19d) => pathname === p19d || pathname.indexOf(p19d + '/') === 0);
+            if (hit19d) {
+                try { writeAudit15b({ ts: new Date().toISOString(), user: (req.user && req.user.username) || '-', role: (req.user && req.user.role) || '-', ip: clientIp15b(req), action: 'demo.blocked_19d', endpoint: pathname, status: 403, user_agent: String(req.headers['user-agent'] || '').slice(0, 200), payload_hash: '', ms: 0 }); } catch (e19d) { /* noop */ }
+                return sendJson(res, { error: 'حالت دمو فعال است — ماژول‌های مالی/فروش/خرید غیرفعال‌اند (مالی مشتری در سپیدار است).', code: 'DEMO_MODE' }, 403);
+            }
+        }
+    }
+    /* ===== FIX-UI-19d (end) ===== */
     /* ===== HARDEN-18Q (end) ===== */
     // ===== SEC-15b: ریت‌لیمیت عمومی — ۱۰۰/دقیقه per-IP با Retry-After =====
     const rl15b = rateLimit15b(req, pathname);
@@ -915,6 +931,7 @@ function appRequestHandler(req, res) {
         return sendJson(res, { ok: true, tenant: {
             tenant_id: c15a.tenant_id, name: c15a.name, logo: c15a.logo || '',
             brand_colors: c15a.brand_colors || {}, active_modules: c15a.active_modules.slice(),
+            demo_mode: !!c15a.demo_mode, /* FIX-UI-19d: حالت دمو — مخفیسازی کامل مالی/فروش/خرید در UI + گیت سرورساید */
             license: { expired: isLicenseExpired15a(c15a), expires_at: c15a.expires_at || '', invalid: !!(c15a && c15a.__lic_invalid_24) }, /* SEC-LIC-24 */
         } });
     }
