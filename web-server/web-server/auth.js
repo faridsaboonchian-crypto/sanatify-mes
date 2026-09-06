@@ -13,6 +13,84 @@ const path = require('path');
 const RUNTIME_ROOT_19E = (function () { try { return process.pkg ? path.dirname(process.execPath) : __dirname; } catch (e19e) { return __dirname; } })();
 /* ===== SEC-PROTECT-19e (end) ===== */
 const USERS_FILE = path.join(RUNTIME_ROOT_19E, 'web-users.json'); /* SEC-PROTECT-19e */
+/* ===== SEC-ANTI-19g (begin): پشتیبانی پیکربندی رمزنگاری‌شده (web-users.json.enc) =====
+   الگوریتم HWKEY عیناً با SEC-BIND-19f در server.js و tools/generate-hwkey.js یکی است؛
+   قالب .enc عیناً با tools/encrypt-config.js و server.js (CFG_MAGIC_19G) — هر تغییر هم‌زمان در هر سه.
+   در حالت source هیچ گارد اضافه‌ای فعال نمی‌شود؛ این فقط خواندن/نوشتن شفاف است. */
+function hwNorm19gA(v) { return String(v || '').trim().toUpperCase().replace(/[\s"']/g, ''); }
+function hwFactors19gA() {
+    let machineId = '';
+    try {
+        if (process.platform === 'win32') {
+            const { execSync } = require('child_process');
+            const o19g = { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true };
+            try {
+                const m19g = String(execSync('reg query HKLM\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid', o19g)).match(/REG_SZ\s+([^\r\n\s]+)/);
+                machineId = m19g ? m19g[1] : '';
+            } catch (e19g) { machineId = ''; }
+            if (!machineId) { try { machineId = String(execSync('powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystemProduct).UUID"', o19g)).trim(); } catch (e19g) { machineId = ''; } }
+            if (!machineId) { try { const lines19g = String(execSync('wmic csproduct get uuid', o19g)).split(/\r?\n/).filter((l) => l.trim() && l.indexOf('UUID') === -1); machineId = (lines19g[0] || '').trim(); } catch (e19g) { machineId = ''; } }
+        } else if (process.platform === 'linux') {
+            try { machineId = fs.readFileSync('/etc/machine-id', 'utf8').trim(); } catch (e19g) { machineId = ''; }
+            if (!machineId) { try { machineId = fs.readFileSync('/sys/class/dmi/id/product_uuid', 'utf8').trim(); } catch (e19g) { machineId = ''; } }
+        } else if (process.platform === 'darwin') {
+            try {
+                const { execSync } = require('child_process');
+                const m19g = String(execSync('ioreg -rd1 -c IOPlatformExpertDevice', { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] })).match(/"IOPlatformUUID"\s*=\s*"([^"]+)"/);
+                machineId = m19g ? m19g[1] : '';
+            } catch (e19g) { machineId = ''; }
+        }
+    } catch (e19g) { machineId = ''; }
+    return machineId || '';
+}
+const HWKEY_19G_A = (function () {
+    try {
+        let mid = hwFactors19gA();
+        if (!mid) {
+            const osc = require('os');
+            let mac = '';
+            try {
+                const ifs = osc.networkInterfaces();
+                for (const nm of Object.keys(ifs)) { const arr = ifs[nm] || []; for (const it of arr) { if (it && !it.internal && it.mac && it.mac !== '00:00:00:00:00:00') { mac = it.mac; break; } } if (mac) break; }
+            } catch (e) { /* بی‌ضرر */ }
+            mid = JSON.stringify({ h: osc.hostname(), p: process.platform, c: (osc.cpus()[0] && osc.cpus()[0].model) || '', n: osc.cpus().length, m: osc.totalmem(), mac: mac, salt: 'sanatify-mes-hw-v1' });
+        }
+        const core = mid.indexOf('{') === 0 ? mid : JSON.stringify({ mid: mid, salt: 'sanatify-mes-hw-v1' });
+        const hex = crypto.createHash('sha256').update(core).digest('hex').slice(0, 12).toUpperCase();
+        return hwNorm19gA('HW-' + hex.slice(0, 4) + '-' + hex.slice(4, 8) + '-' + hex.slice(8, 12));
+    } catch (e) { return 'HW-UNKNOWN'; }
+})();
+const CFG_MAGIC_19G_A = 'sanatify-cfg-19g';
+function cfgDerivedKey19gA(salt19g) {
+    const secret19g = String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405') + '|' + HWKEY_19G_A;
+    return crypto.scryptSync(secret19g, salt19g, 32, { N: 16384, r: 8, p: 1 });
+}
+function readMaybeEnc19g(filePath) {
+    const encPath19g = filePath + '.enc';
+    if (fs.existsSync(encPath19g)) {
+        try {
+            const box19g = JSON.parse(fs.readFileSync(encPath19g, 'utf8'));
+            if (box19g && box19g.enc === CFG_MAGIC_19G_A && box19g.alg === 'aes-256-gcm') {
+                const key19g = cfgDerivedKey19gA(Buffer.from(String(box19g.salt), 'base64'));
+                const d19g = crypto.createDecipheriv('aes-256-gcm', key19g, Buffer.from(String(box19g.iv), 'base64'));
+                d19g.setAuthTag(Buffer.from(String(box19g.tag), 'base64'));
+                return Buffer.concat([d19g.update(Buffer.from(String(box19g.data), 'base64')), d19g.final()]).toString('utf8');
+            }
+        } catch (e19g) {
+            console.error('[SEC-ANTI-19g] رمزگشایی ' + path.basename(encPath19g) + ' ناموفق (' + ((e19g && e19g.message) || e19g) + ') ⇒ plaintext (اگر باشد) — کلید/HWKEY عوض شده؟');
+        }
+    }
+    try { return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null; } catch (e19g) { return null; }
+}
+function dropEnc19g(filePath) {
+    try {
+        if (fs.existsSync(filePath + '.enc')) {
+            fs.unlinkSync(filePath + '.enc');
+            console.warn('[SEC-ANTI-19g] ' + path.basename(filePath) + ' به‌روزرسانی شد ⇒ ' + path.basename(filePath) + '.enc کهنه حذف شد — برای رمزکردن دوباره: node tools/encrypt-config.js --file=' + path.basename(filePath));
+        }
+    } catch (e19g) { /* بی‌ضرر */ }
+}
+/* ===== SEC-ANTI-19g (end) ===== */
 const SESSION_COOKIE = 'mes_session';
 const SESSION_MS = 8 * 60 * 60 * 1000; /* SEC-15b: timeout مطلق ۸ ساعت (قبلاً ۱۲ ساعته لغزان) */
 const SESSION_IDLE_MS = 30 * 60 * 1000; /* SEC-15b: idle timeout ۳۰ دقیقه از آخرین فعالیت */
@@ -41,7 +119,12 @@ function audit15b(entry) { try { if (auditWriter15b) auditWriter15b(entry); } ca
 
 function loadUsers() {
     try {
-        const arr = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        const rawTxt19g = readMaybeEnc19g(USERS_FILE); /* SEC-ANTI-19g: plaintext یا .enc */
+        if (rawTxt19g == null) {
+            console.warn('[Auth] web-users.json missing/invalid -> nobody can log in to the web panel.');
+            return [];
+        }
+        const arr = JSON.parse(rawTxt19g);
         return Array.isArray(arr) ? arr : [];
     } catch (e) {
         console.warn('[Auth] web-users.json missing/invalid -> nobody can log in to the web panel.');
@@ -86,6 +169,7 @@ function usersWrite15b(arr) { /* نوشتن اتمیک web-users.json — برا
         const fd18a = fs.openSync(tmp, 'w');
         try { fs.writeFileSync(fd18a, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
         fs.renameSync(tmp, USERS_FILE);
+        dropEnc19g(USERS_FILE); /* SEC-ANTI-19g: تغییر plaintext ⇒ .enc کهنه حذف */
         /* ===== HARDEN-18A (end) ===== */
         return true; } catch (e) { return false; }
 }
@@ -120,20 +204,22 @@ function passwordPolicyError18P(pw, username) {
 function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore *.bak-*) + نوشتن اتمیک — سازگار با migrate-hashes */
     try {
         try {
-            if (fs.existsSync(USERS_FILE)) {
+            if (fs.existsSync(USERS_FILE) || fs.existsSync(USERS_FILE + '.enc')) { /* SEC-ANTI-19g: حالت رمز هم بکاپ می‌گیرد */
                 const d = new Date();
                 const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + String(d.getSeconds()).padStart(2, '0');
                 /* ===== HARDEN-18P (begin): گارد بکاپ — بکاپ کاربران هرگز plaintext نمی‌شود؛
                    اگر فیلد plaintext (password) در فایل بود، بکاپ نسخهٔ پاک‌سازی‌شده (فقط هش) می‌شود ===== */
                 let backupArr = null;
+                const bakTxt19g = readMaybeEnc19g(USERS_FILE); /* SEC-ANTI-19g: plaintext یا .enc */
                 try {
-                    const raw18p = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+                    const raw18p = bakTxt19g == null ? null : JSON.parse(bakTxt19g);
                     if (Array.isArray(raw18p) && raw18p.some((u) => u && u.password != null)) {
                         backupArr = raw18p.map((u) => { const c = Object.assign({}, u); delete c.password; return c; });
                         console.warn('[HARDEN-18P] بکاپ کاربران: فیلد plaintext یافت شد — بکاپ فقط با نسخهٔ هش/پاک‌سازی‌شده نوشته شد (plaintext هرگز بکاپ نمی‌شود).');
                     }
                 } catch (e2) { /* خواندن ناموفق — بکاپ خام مثل قبل */ }
                 if (backupArr) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, JSON.stringify(backupArr, null, 2) + String.fromCharCode(10), 'utf8');
+                else if (bakTxt19g != null) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, bakTxt19g, 'utf8'); /* SEC-ANTI-19g: بکاپ از محتوای واقعی (plaintext/.enc) */
                 else fs.copyFileSync(USERS_FILE, USERS_FILE + '.bak-' + stamp);
                 /* ===== HARDEN-18P (end) ===== */
                 /* نگه‌داری حداکثر ۱۰ بکاپ اخیر */
@@ -148,6 +234,7 @@ function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore 
         try { fs.writeFileSync(fd18a, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
         /* ===== HARDEN-18A (end) ===== */
         fs.renameSync(tmp, USERS_FILE);
+        dropEnc19g(USERS_FILE); /* SEC-ANTI-19g: تغییر plaintext ⇒ .enc کهنه حذف */
         return true;
     } catch (e) { return false; }
 }

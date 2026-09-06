@@ -193,6 +193,17 @@ function protectHtml(html, outName) {
             const r = spawnSync(pkgBin, ['-c', path.join(OUT_DIR, 'package.json'), path.join(OUT_DIR, 'server.js'), '--target', t, '--output', path.join('dist', 'bin', 'sanatify-mes-' + t + (t.indexOf('win') !== -1 ? '.exe' : ''))], { cwd: SRC_DIR, encoding: 'utf8', stdio: 'inherit' });
             if (r.status !== 0) die('pkg برای ' + t + ' ناموفق بود (شبکه/پلتفرم؟) — خروجی مبهم‌شدهٔ dist/ سرِجای خود سالم است');
         }
+        /* SEC-ANTI-19g: مانیفست صحت باینری‌ها — کنار exe توزیع می‌شود و در بوت exe-mode راستی‌آزمایی می‌شود
+           (باینری بدون این فایل کنار خودش بالا نمی‌آید — ضد دستکاری) */
+        const binDir19g = path.join(OUT_DIR, 'bin');
+        if (fs.existsSync(binDir19g)) {
+            const bins19g = fs.readdirSync(binDir19g).filter((f) => { const s = path.join(binDir19g, f); return fs.statSync(s).isFile() && f !== 'SHA256SUMS.txt'; });
+            if (bins19g.length) {
+                const lines19g = bins19g.map((f) => crypto.createHash('sha256').update(fs.readFileSync(path.join(binDir19g, f))).digest('hex') + '  ' + f);
+                fs.writeFileSync(path.join(binDir19g, 'SHA256SUMS.txt'), lines19g.join(String.fromCharCode(10)) + String.fromCharCode(10));
+                log('مانیفست صحت باینری: bin/SHA256SUMS.txt (' + bins19g.length + ' فایل) — ⚠ حتماً کنار exe بماند (SEC-ANTI-19g: بوت بدون آن متوقف است)');
+            }
+        }
     }
 
     console.log('✅ ساخت کامل شد در ' + ((Date.now() - t0) / 1000).toFixed(1) + 's → ' + OUT_DIR);

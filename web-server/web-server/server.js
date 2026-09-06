@@ -141,9 +141,11 @@ function alarm18A(msg) { /* گزارش خرابی در audit + کنسول — ا
     } catch (e) { /* noop */ }
 }
 function readJson(file) { /* HARDEN-18A: خواندن با اعتبارسنجی checksum + بازیابی خودکار از زنجیرهٔ .bak */
-    let text = '';
-    try { text = fs.readFileSync(file, 'utf8'); }
-    catch (e) { if (e && e.code === 'ENOENT') return null; /* فایل موجود نیست — رفتار قدیمی حفظ شد */ text = ''; }
+    let text = readMaybeEnc19g(file); /* SEC-ANTI-19g: tenant/web-users رمزنگاری‌شده پشتیبانی می‌شود — بقیه فایل‌ها بدون .enc مثل قبل */
+    if (text == null) {
+        if (!fs.existsSync(file) && !fs.existsSync(file + '.enc')) return null; /* فایل موجود نیست — رفتار قدیمی حفظ شد */
+        text = '';
+    }
     const r = parseWithIntegrity18A(text);
     if (r.ok) return r.value;
     /* خرابی/دستکاری → نگه‌داری نسخهٔ خراب + بازیابی خودکار */
@@ -475,10 +477,13 @@ let tenantCache15a = null, tenantMtime15a = 0;
 // خواندن با کش mtime — تغییر CLI/پنل بدون ری‌استارت از درخواست بعدی اعمال می‌شود
 function loadTenant15a() {
     try {
-        const st = fs.existsSync(TENANT_FILE_15A) ? fs.statSync(TENANT_FILE_15A) : null;
+        /* SEC-ANTI-19g: tenant.json.enc اولویت دارد — mtime هرکدام که موجود است ملاک کش */
+        const st = fs.existsSync(TENANT_FILE_15A) ? fs.statSync(TENANT_FILE_15A) : (fs.existsSync(TENANT_FILE_15A + '.enc') ? fs.statSync(TENANT_FILE_15A + '.enc') : null);
         if (!st) { tenantCache15a = null; return DEFAULT_TENANT_15A; }
         if (tenantCache15a && st.mtimeMs === tenantMtime15a) return tenantCache15a;
-        const raw = JSON.parse(fs.readFileSync(TENANT_FILE_15A, 'utf8'));
+        const rawTxt15g = readMaybeEnc19g(TENANT_FILE_15A); /* SEC-ANTI-19g */
+        if (rawTxt15g == null) { tenantCache15a = null; return DEFAULT_TENANT_15A; }
+        const raw = JSON.parse(rawTxt15g);
         const cfg = Object.assign({}, DEFAULT_TENANT_15A, raw);
         if (!Array.isArray(cfg.active_modules)) cfg.active_modules = MODULES_15A.slice();
         else cfg.active_modules = cfg.active_modules.filter((m) => MODULES_15A.indexOf(m) !== -1);
@@ -585,7 +590,7 @@ function applyLicenseSigGuard24(cfg, srcMtime) {
 }
 function ownerExists24() { /* backward-compat: تا وقتی کاربر owner صریح وجود ندارد، admin همان مالک سیستم است */
     try {
-        const a24 = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8'));
+        const a24 = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); /* SEC-ANTI-19g */
         return Array.isArray(a24) && a24.some((u) => u && u.role === 'owner' && u.active !== false);
     } catch (e) { return false; }
 }
@@ -666,6 +671,110 @@ function computeHwkey19f() {
 let HWKEY_19F = 'HW-UNKNOWN';
 try { HWKEY_19F = computeHwkey19f(); } catch (e19f) { HWKEY_19F = 'HW-UNKNOWN'; }
 // ===== SEC-BIND-19f (end) =====
+// ===== SEC-ANTI-19g (begin): ضد اشکال‌زدایی + ضد دستکاری + پیکربندی رمزنگاری‌شده — فقط در حالت باینری =====
+/* اصل حیاتی: گاردهای حفاظتی فقط وقتی process.pkg هست فعال می‌شوند (باینری SEC-PROTECT-19e).
+   در حالت source (node server.js روی لپ‌تاپ فروشنده) هیچ‌کدام فعال نیست — استقرار فعلی بایت‌به‌بایت دست‌نخورده. */
+const EXE_MODE_19G = !!process.pkg;
+function sha256File19g(p19g) {
+    const c19g = crypto.createHash('sha256');
+    const fd19g = fs.openSync(p19g, 'r');
+    try {
+        const buf19g = Buffer.alloc(1024 * 1024);
+        let n19g = 0;
+        while ((n19g = fs.readSync(fd19g, buf19g, 0, buf19g.length, null)) > 0) c19g.update(buf19g.subarray(0, n19g));
+    } finally { try { fs.closeSync(fd19g); } catch (e19c) { /* noop */ } }
+    return c19g.digest('hex');
+}
+function fatal19g(msg19g, auditAction19g) {
+    console.error('========================================================');
+    console.error('  ✖ SEC-ANTI-19g — ' + msg19g);
+    console.error('========================================================');
+    if (auditAction19g) {
+        /* audit اگر ممکن — گیت در انتهای فایل است؛ همهٔ وابستگی‌ها مقداردهی شده‌اند ⇒ نوشتن همگام امن است
+           (نسخهٔ اول setTimeout ناهمگام داشت که با exit(0) همگامِ --print-hwkey رقابت می‌کرد — باگ واقعی T3) */
+        try {
+            writeAudit15b({ ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-', action: auditAction19g, endpoint: 'boot', status: 403, user_agent: 'SEC-ANTI-19g', payload_hash: '', ms: 0 });
+        } catch (e19c) { /* بی‌ضرر — audit هرگز جلوی خروج قطعی را نمی‌گیرد */ }
+    }
+    process.exit(1); /* همیشه همگام — هیچ مسیر موازی نتواند exit(0) بگذارد */
+}
+function antiDebug19g() {
+    if (!EXE_MODE_19G) return; /* حالت source — همیشه غیرفعال */
+    if (String(process.env.SANATIFY_ANTIDBG || '').trim().toLowerCase() === 'off') return; /* escape hatch فروشنده (README-DEPLOY) */
+    try {
+        const inspector19g = require('inspector');
+        if (typeof inspector19g.url === 'function' && inspector19g.url() !== undefined) fatal19g('اشکال‌زدایی (inspector) فعال است — اجرای باینری متوقف شد.', 'antidbg.inspector_active');
+    } catch (e19c) { /* بی‌ضرر */ }
+    try {
+        const dbgArgs19g = (process.execArgv || []).some((a19g) => /^(--inspect|--inspect-brk|--inspect-port|--debug|--debug-brk|--debug-port)/.test(String(a19g)));
+        if (dbgArgs19g) fatal19g('پرچم اشکال‌زدایی (--inspect) در آرگومان‌های runtime — اجرا متوقف شد.', 'antidbg.inspect_flag');
+    } catch (e19c) { /* بی‌ضرر */ }
+    /* فرآیند والد مشکوک — فقط سیاههٔ اشکال‌زدها (سفیدکردن والد شکننده است: NSSM/TaskScheduler/... مجازند) */
+    try {
+        let pname19g = '';
+        if (process.platform === 'win32') {
+            const { execSync } = require('child_process');
+            const out19g = String(execSync('powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \'ProcessId=' + Number(process.ppid || 0) + '\').Name"', { encoding: 'utf8', timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }));
+            const lines19g = out19g.split(/\r?\n/).filter((l) => l.trim() && l.toLowerCase().indexOf('name') === -1);
+            pname19g = (lines19g[0] || '').trim();
+        } else {
+            const ppid19g = (fs.readFileSync('/proc/self/status', 'utf8').match(/^PPid:\s+(\d+)/m) || [])[1];
+            if (ppid19g && fs.existsSync('/proc/' + ppid19g + '/comm')) pname19g = fs.readFileSync('/proc/' + ppid19g + '/comm', 'utf8').trim();
+        }
+        if (pname19g && /(x64dbg|ollydbg|windbg|ghidra|cheat|procmon|processhacker|fiddler|httpdebug|debugger|\bgdb\b|lldb|\bida)/i.test(pname19g)) fatal19g('فرآیند والد مشکوک به اشکال‌زدایی: ' + pname19g, 'antidbg.suspect_parent');
+    } catch (e19c) { /* نبود PowerShell//proc گارد را نمی‌شکند */ }
+}
+function antiTamper19g() {
+    if (!EXE_MODE_19G) return; /* حالت source — همیشه غیرفعال */
+    let exePath19g = '';
+    try { exePath19g = process.execPath; } catch (e19c) { exePath19g = ''; }
+    const manifest19g = path.join(path.dirname(exePath19g || '.'), 'SHA256SUMS.txt');
+    if (!fs.existsSync(manifest19g)) fatal19g('مانیفست صحت (SHA256SUMS.txt) کنار باینری یافت نشد — فایل را کنار exe برگردانید.', 'antitamper.manifest_missing');
+    let myHash19g = '';
+    try { myHash19g = sha256File19g(exePath19g); } catch (e19c) { fatal19g('محاسبهٔ هش باینری ناموفق: ' + ((e19c && e19c.message) || e19c), 'antitamper.hash_error'); }
+    let matched19g = false;
+    try {
+        const lines19g = fs.readFileSync(manifest19g, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        for (let i = 0; i < lines19g.length && !matched19g; i++) {
+            const m19g = lines19g[i].match(/^([0-9a-fA-F]{64})\s+\*?(.+)$/);
+            if (m19g && m19g[1].toLowerCase() === myHash19g) matched19g = true;
+        }
+    } catch (e19c) { fatal19g('خواندن مانیفست صحت ناموفق: ' + ((e19c && e19c.message) || e19c), 'antitamper.manifest_read_error'); }
+    if (!matched19g) fatal19g('باینری دستکاری شده است (هش با مانیفست نمی‌خواند).', 'antitamper.hash_mismatch');
+}
+/* ---- پیکربندی رمزنگاری‌شده (tenant.json.enc / web-users.json.enc) — AES-256-GCM، کلید = scrypt(SANATIFY_LIC_KEY|HWKEY) ----
+   قالب فایل .enc عیناً با tools/encrypt-config.js و auth.js یکی است؛ plaintext همچنان پشتیبانی می‌شود (سازگاری کامل) */
+const CFG_MAGIC_19G = 'sanatify-cfg-19g';
+function cfgDerivedKey19g(salt19g) {
+    const secret19g = String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405') + '|' + HWKEY_19F;
+    return crypto.scryptSync(secret19g, salt19g, 32, { N: 16384, r: 8, p: 1 });
+}
+function readMaybeEnc19g(filePath) {
+    const encPath19g = filePath + '.enc';
+    if (fs.existsSync(encPath19g)) {
+        try {
+            const box19g = JSON.parse(fs.readFileSync(encPath19g, 'utf8'));
+            if (box19g && box19g.enc === CFG_MAGIC_19G && box19g.alg === 'aes-256-gcm') {
+                const key19g = cfgDerivedKey19g(Buffer.from(String(box19g.salt), 'base64'));
+                const d19g = crypto.createDecipheriv('aes-256-gcm', key19g, Buffer.from(String(box19g.iv), 'base64'));
+                d19g.setAuthTag(Buffer.from(String(box19g.tag), 'base64'));
+                return Buffer.concat([d19g.update(Buffer.from(String(box19g.data), 'base64')), d19g.final()]).toString('utf8');
+            }
+        } catch (e19c) {
+            console.error('[SEC-ANTI-19g] رمزگشایی ' + path.basename(encPath19g) + ' ناموفق (' + ((e19c && e19c.message) || e19c) + ') ⇒ plaintext (اگر باشد) استفاده می‌شود — کلید/HWKEY عوض شده؟ دوباره: node tools/encrypt-config.js');
+        }
+    }
+    try { return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null; } catch (e19c) { return null; }
+}
+function dropEnc19g(filePath) { /* نوشتن plaintext ⇒ .enc کهنه معتبر نیست — حذف با هشدار */
+    try {
+        if (fs.existsSync(filePath + '.enc')) {
+            fs.unlinkSync(filePath + '.enc');
+            console.warn('[SEC-ANTI-19g] ' + path.basename(filePath) + ' به‌روزرسانی شد ⇒ ' + path.basename(filePath) + '.enc کهنه حذف شد — برای رمزکردن دوباره: node tools/encrypt-config.js --file=' + path.basename(filePath));
+        }
+    } catch (e19c) { /* بی‌ضرر */ }
+}
+// ===== SEC-ANTI-19g (end) =====
 function isLicenseExpired15a(cfg) {
     const exp = String((cfg && cfg.expires_at) || '').trim();
     if (!exp) return false;
@@ -679,7 +788,7 @@ function checkModuleAccess15a(moduleId) {
     return cfg.active_modules.indexOf(moduleId) !== -1;
 }
 function countUsers15a() {
-    try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; }
+    try { const a = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; } /* SEC-ANTI-19g */
 }
 function countRecords15a(live) {
     let n = 0;
@@ -887,6 +996,7 @@ function writeTenantFile15c(cfg) {
     try { fs.writeFileSync(fd18a, out, 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
     fs.renameSync(tmp, TENANT_FILE_15A);
     /* ===== HARDEN-18A (end) ===== */
+    dropEnc19g(TENANT_FILE_15A); /* SEC-ANTI-19g: تغییر plaintext ⇒ .enc کهنه حذف */
 }
 function tenantPublicShape15c(cfg) {
     return {
@@ -902,7 +1012,7 @@ function tenantPublicShape15c(cfg) {
 const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase', 'owner']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش + FEAT-PURCHASE-22a: نقش خرید + SEC-LIC-24: نقش مالک (فروشنده) */
 const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید', owner: 'مالک سیستم (فروشنده)' }; /* FEAT-SALES-21a: +نقش فروش + FEAT-PURCHASE-22a: +نقش خرید + SEC-LIC-24: +نقش مالک */
 function readUsers17a() {
-    try { const a = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-users.json'), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+    try { const a = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } /* SEC-ANTI-19g */
 }
 // ===== FEAT-ADMIN-17a (end) =====
 // ===== SAAS-15c (end) =====
@@ -7594,6 +7704,14 @@ function onMainListening11d() {
     console.log('  endpoint دریافت از اپ : POST /api/ingest (بدون لاگین)');
     console.log('========================================================');
 }
+// ===== SEC-ANTI-19g: گیت‌های بوت باینری — فقط در exe-mode؛ source-mode صفر تغییر رفتار =====
+antiTamper19g();
+antiDebug19g();
+if (process.argv.indexOf('--print-hwkey') !== -1) {
+    /* برای نصب‌کننده‌ها/فروشنده: HWKEY ماشین بدون گوش‌دادن به پورت — روی ماشین قفل‌شده هم کار می‌کند */
+    console.log(HWKEY_19F);
+    process.exit(0);
+}
 // ===== SEC-BIND-19f: گیت بوت قفل سخت‌افزاری — پیش از هر listen؛ روی ماشین قفل‌شدهٔ نامعتبر سرور هرگز گوش نمی‌دهد =====
 (function hwBindBoot19f() {
     console.log('  HWKEY ماشین : ' + HWKEY_19F + '  (برای صدور/تمدید لایسنس نزد فروشنده بفرستید)');
@@ -7934,7 +8052,7 @@ setTimeout(function pwScan18P() {
     try {
         const file18p = path.join(ROOT, 'web-users.json');
         let users18p = [];
-        try { users18p = JSON.parse(fs.readFileSync(file18p, 'utf8')); } catch (e) { return; }
+        try { users18p = JSON.parse(readMaybeEnc19g(file18p) || '[]'); } catch (e) { return; } /* SEC-ANTI-19g */
         if (!Array.isArray(users18p) || !users18p.length) return;
         let changed18p = false;
         const weakCands18p = ['1234', '5678', '123456', '12345678', '123456789', 'password', 'admin', 'admin123', '111111', '000000', '1234567890'];
