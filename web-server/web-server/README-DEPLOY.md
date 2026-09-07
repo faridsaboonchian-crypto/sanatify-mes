@@ -42,10 +42,14 @@ sudo bash tools/install.sh          # یا: bash tools/install.sh --prefix=/opt/
 node tools/license.js --hwkey=HW-3F2A-91BC-04DE \
      --only=summary,production,inventory,quality,maintenance \
      --expires=2026-10-01 \
-     --sign --sign-ed
+     --sign
 ```
 
 > `--only` = ماژول‌های دمو (مالی/فروش/خرید ندهید — مشتری سپیدار دارد). `--expires` = پایان دمو.
+> **FIX-LIC-27**: `--sign` امضای کامل می‌زند (HMAC + Ed25519 با هم) و اگر فایل `license.key` کنار server.js نباشد،
+> آن را با کلید env می‌سازد (یک‌بار؛ ACL ویندوز: فقط Administrators/System). بدون `SANATIFY_LIC_ED_PRIV`
+> خطای صریح می‌دهد — امضای نیمه‌کارهٔ بی‌صدا (فقط HMAC) دیگر ساخته نمی‌شود.
+> **این فایل license.key را هم کنار exe در VM مشتری کپی کنید** — بوت سرد بدون هیچ env معتبر می‌ماند (بخش ۹).
 > اختیاری/امنیت بیشتر — رمزنگاری پیکربندی (AES-256-GCM، کلید از HWKEY مشتری):
 > `node tools/encrypt-config.js --file=tenant.json --hwkey=HW-3F2A-91BC-04DE`
 > (نکته: کلید از `SANATIFY_LIC_KEY + HWKEY` مشتق می‌شود — همان env هنگام اجرای سرور باید موجود باشد؛ پیش‌فرض هر دو = کلید داخلی کد.)
@@ -71,7 +75,7 @@ sudo systemctl restart sanatify-mes                        # لینوکس (یا:
 ## ۷) دادهٔ دمو
 
 ```bash
-node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ باندل + ۱۰ توقف + ۵ PM (روی ماشین فروشنده، سپس live.json را کپی کنید)
+node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ بندیل + ۱۰ توقف + ۵ PM (روی ماشین فروشنده، سپس live.json را کپی کنید)
 ```
 
 ## ۸) چک‌لیست تست دمو
@@ -85,6 +89,49 @@ node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ باندل + ۱۰
 | ۵ | API مالی/فروش/خرید با URL دستی | `403 DEMO_MODE` |
 | ۶ | اجرای باینری روی VM دیگر | بوت نمی‌شود (قفل HWKEY) |
 | ۷ | تغییر یک بایت در tenant.json | بوت نمی‌شود (امضا نامعتبر) |
+| ۸ | بوت سرد: پوستهٔ تازهٔ بدون env + license.key کنار exe | «وضعیت لایسنس : معتبر ✓» در لاگ (بخش ۹) |
+
+---
+
+## ۹) چک‌لیست بوت سرد — ضد بنر «لایسنس نامعتبر» بعد از ری‌استارت
+
+این خطا دو بار در استقرار واقعی تکرار شد: کلید فقط در env پوستهٔ دستی (ترمینالی که امضا/تست را زدید) بود و
+بوت خودکار — Startup → wscript → bat یا سرویس — env را ندارد؛ سرور با کلید پیش‌فرض verify می‌کرد ⇒ بنر «لایسنس نامعتبر».
+از فاز ۲۱ (FIX-LIC-27) ترتیب منبع کلید HMAC سرور این است:
+
+```
+env SANATIFY_LIC_KEY  →  فایل license.key کنار server.js/exe  →  پیش‌فرض (همیشه نامعتبر)
+```
+
+و امضای **Ed25519 مسیر اصلی** است: کلید عمومی سرور embed شده و بوت سرد بدون هیچ env هم sig2 را تأیید می‌کند.
+
+### ✅ راه درست (توصیه‌شده — صفر env)
+
+1. روی ماشین فروشنده یک‌بار: `SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign`
+   → امضای کامل + ساخت `license.key` کنار server.js.
+2. هر دو فایل `tenant.json` **و** `license.key` را کنار exe کپی کنید (گام ۵ + همین بخش).
+3. تست بوت سرد واقعی: یک پوستهٔ کاملاً تازه (بدون env) باز کنید و سرویس/سرور را ری‌استارت کنید؛
+   در لاگ باید «وضعیت لایسنس : معتبر ✓ [Ed25519 — کلید عمومی embedded سرور]» ببینید (خط خودآزمایی بوت، FIX-LIC-27).
+
+### راه جایگزین — env در سطح سرویس/bat (نه پوستهٔ دستی)
+
+| محیط | راه ست‌کردن env برای بوت خودکار |
+|------|-------------------------------|
+| bat در Startup (wscript) | خط اول خودِ bat: `set "SANATIFY_LIC_KEY=…"` — env پوستهٔ دستی به bat نمی‌رسد |
+| سرویس sc.exe ویندوز | `reg add "HKLM\SYSTEM\CurrentControlSet\Services\SanatifyMES\Environment" /v SANATIFY_LIC_KEY /t REG_SZ /d "…" /f` سپس `sc stop && sc start` |
+| systemd لینوکس | در unit: `Environment=SANATIFY_LIC_KEY=…` یا `EnvironmentFile=/opt/sanatify/license.env` |
+
+⚠ اگر `tenant.json.enc` (رمزنگاری‌شده) مستقر می‌کنید، رمزگشایی آن به `SANATIFY_LIC_KEY` در envِ همان پروسه نیاز دارد —
+یا env سرویس را حتماً ست کنید یا plaintext + امضا + license.key را ترجیح دهید.
+
+### تشخیص
+
+```bash
+node tools/license-doctor.js --dir="C:\Program Files\SanatifyMES"
+```
+
+همان زنجیرهٔ تأیید سرور را گام‌به‌گام اجرا می‌کند: tenant → hwkey → انقضا → Ed25519 (مسیر اصلی) → HMAC (با کدام منبع کلید؟)
+و «علت» + «دستور اصلاح» چاپ می‌کند. کدهای خروج متمایز: ۰ سالم | ۱۰ tenant | ۱۱ hwkey | ۱۲ انقضا | ۱۳ Ed | ۱۴ HMAC | ۱۵ بدون منبع کلید (تلهٔ بوت سرد) | ۱۶ بدون امضای فروشنده.
 
 ---
 
@@ -96,6 +143,7 @@ node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ باندل + ۱۰
 | پیام «این نسخه فقط روی ماشینِ دارای لایسنس اجرا می‌شود» | HWKEY لایسنس ≠ این ماشین | HWKEY واقعی را با `--print-hwkey` بخوانید و دوباره امضا کنید |
 | پیام «مانیفست صحت (SHA256SUMS.txt) کنار باینری نیست» / «باینری دستکاری شده» | فایل manifest حذف/باینری تغییر کرده | بستهٔ اصلی را دوباره کپی کنید |
 | وب باز نمی‌شود ولی سرور بالا است | فایروال پورت 3001 | `netsh advfirewall firewall add rule name="Sanatify MES" dir=in action=allow protocol=TCP localport=3001` (یا `ufw allow 3001/tcp`) |
+| بنر «لایسنس نامعتبر» بعد از ری‌استارت (بوت سرد) | کلید فقط در env پوستهٔ دستی بود؛ بوت خودکار env ندارد | بخش ۹ — `license.key` کنار exe + تست با پوستهٔ تازه؛ تشخیص: `node tools/license-doctor.js` |
 | مرورگر نسخهٔ قدیمی/خالی | کش PWA (Service Worker) | Ctrl+Shift+R یا از تنظیمات مرورگر «Clear site data» |
 
 ---
@@ -105,4 +153,6 @@ node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ باندل + ۱۰
 - **حالت source** (`node server.js` روی لپ‌تاپ فروشنده) هرگز این گاردها را ندارد — فقط باینری (`process.pkg`).
 - **Anti-Debug** (فقط exe): inspector/پرچم‌ها/والد مشکوک ⇒ خروج. برای دیباگ فروشنده روی VM: env `SANATIFY_ANTIDBG=off`.
 - **رمزنگاری پیکربندی** اختیاری است؛ plaintext همیشه پشتیبانی می‌شود. اگر سرور فایل را به‌روز کند، `.enc` حذف می‌شود (هشدار در لاگ) — دوباره `encrypt-config.js` بزنید.
-- کلیدهای Ed25519/HMAC فقط نزد فروشنده (env) — هرگز روی VM مشتری.
+- کلیدهای HMAC/Ed25519 فقط نزد فروشنده (env یا `license.key`) — هرگز روی VM مشتری `SANATIFY_LIC_ED_PRIV`.
+- **FIX-LIC-27**: کلید عمومی Ed25519 در سرور embed شده (راز نیست؛ env `SANATIFY_LIC_ED_PUB` فقط برای چرخش کلید).
+  کلید خصوصی Ed را در جایی امن نگه دارید — اگر از دست برود، صدور لایسنس جدید مستلزم embedِ کلید عمومی تازه در سرور است.
