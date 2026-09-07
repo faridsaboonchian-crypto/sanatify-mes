@@ -10,7 +10,8 @@
 //    node tools/license.js --only=inventory,finance        (تنها این ماژول‌ها فعال بمانند)
 //    node tools/license.js --expires=2027-03-20            (تاریخ میلادی ISO؛ خالی = حذف انقضا)
 //    node tools/license.js --name="فولاد ..." --max-users=25 --max-records=200000
-//    node tools/license.js --sign                           (امضای HMAC فایل — کلید از env: SANATIFY_LIC_KEY)
+//    node tools/license.js --sign                           (FIX-LIC-27: امضای کامل — HMAC + Ed25519 با هم؛ بدون SANATIFY_LIC_ED_PRIV خطای صریح)
+//                                                           (کلید HMAC از env یا license.key؛ اگر license.key کنار server.js نبود، با کلید env ساخته می‌شود — یک‌بار — تا بوت سرد بدون env هم معتبر بماند)
 //    node tools/license.js --gen-ed-keys [--out=lic-ed-keys.json]  (تولید جفت‌کلید Ed25519 — خصوصی فقط نزد فروشنده)
 //    node tools/license.js --sign-ed                        (امضای Ed25519 → license_sig2 — کلید از env: SANATIFY_LIC_ED_PRIV پایه64-PKCS8)
 //    node tools/license.js --verify                         (فقط بررسی امضا — چیزی نمی‌نویسد)
@@ -35,8 +36,47 @@ const MODULE_FA = {
 
 function fail(msg) { console.error('✗ خطا: ' + msg); process.exit(1); }
 
-// ===== SEC-LIC-24 (begin): امضای HMAC-SHA256 لایسنس — کلید مخفی فقط از env: SANATIFY_LIC_KEY =====
+// ===== SEC-LIC-24 (begin): امضای HMAC-SHA256 لایسنس — منبع کلید: env → license.key کنار server.js (FIX-LIC-27) =====
 // canonical باید عیناً با licCanonical24 در server.js یکی باشد (۵ فیلد بخش لایسنس — SEC-BIND-19f: +hwkey)
+const LIC_KEY_FILE_27 = path.join(ROOT, 'license.key');
+function licResolveKey27() {
+    const env27 = String(process.env.SANATIFY_LIC_KEY || '').trim();
+    if (env27) return { key: env27, source: 'env:SANATIFY_LIC_KEY' };
+    try {
+        const raw27 = fs.readFileSync(LIC_KEY_FILE_27, 'utf8').trim();
+        if (raw27) return { key: raw27, source: 'license.key' };
+    } catch (e27) { /* فایل نیست */ }
+    return null;
+}
+function licKey24() {
+    const r27 = licResolveKey27();
+    if (!r27) fail('هیچ منبع کلید HMAC موجود نیست — نه env: SANATIFY_LIC_KEY و نه فایل license.key کنار server.js.\n  نمونه:  SANATIFY_LIC_KEY="کلید-مخفی-شما" node tools/license.js --sign\n  (FIX-LIC-27: پرچم --sign خودش license.key را کنار server.js می‌سازد تا بوت سرد بدون env هم معتبر بماند)');
+    return r27;
+}
+function licSign24(cfg) { return require('crypto').createHmac('sha256', licKey24().key).update(licCanonical24(cfg)).digest('hex'); }
+function licVerify24(cfg) {
+    const sig = String((cfg && cfg.license_sig) || '').toLowerCase();
+    const r27 = licResolveKey27();
+    if (!r27 || !/^[0-9a-f]{64}$/.test(sig)) return false;
+    const a = Buffer.from(sig), b = Buffer.from(require('crypto').createHmac('sha256', r27.key).update(licCanonical24(cfg)).digest('hex'));
+    return a.length === b.length && require('crypto').timingSafeEqual(a, b);
+}
+/* FIX-LIC-27: ساخت license.key از کلید env — فقط یک‌بار (موجود = دست نمی‌زنیم)؛ ACL ویندوز: فقط Administrators/System */
+function ensureKeyFile27() {
+    if (fs.existsSync(LIC_KEY_FILE_27)) return false;
+    const env27 = String(process.env.SANATIFY_LIC_KEY || '').trim();
+    if (!env27) return false; /* منبع کلید خود فایل بود — چیزی برای ساختن نیست */
+    try {
+        fs.writeFileSync(LIC_KEY_FILE_27, env27 + String.fromCharCode(10), { mode: 0o600 });
+        if (process.platform !== 'win32') { try { fs.chmodSync(LIC_KEY_FILE_27, 0o600); } catch (e27) { /* posix */ } }
+        else {
+            try { require('child_process').execSync('icacls "' + LIC_KEY_FILE_27 + '" /inheritance:r /grant:r "Administrators:F" /grant:r "SYSTEM:F"', { stdio: ['ignore', 'ignore', 'ignore'], timeout: 10000, windowsHide: true }); }
+            catch (e27) { console.warn('  ⚠ تنظیم ACL ویندوز ناموفق بود (به‌عنوان Administrator اجرا کنید) — فایل ساخته شد ولی دسترسی آن محدود نشد.'); }
+        }
+        console.log('  FIX-LIC-27: ✓ license.key کنار server.js ساخته شد' + (process.platform === 'win32' ? ' (ACL: Administrators/System)' : ' (دسترسی ۰۶۰۰)') + ' — بوت سرد بدون env هم معتبر می‌ماند؛ هنگام استقرار کنار exe کپی کنید.');
+        return true;
+    } catch (e27) { console.warn('  ⚠ ساخت license.key ناموفق بود: ' + ((e27 && e27.message) || e27) + ' — امضا انجام شد ولی بوت سرد به env متکی است.'); return false; }
+}
 function licCanonical24(cfg) {
     return JSON.stringify({
         active_modules: (Array.isArray(cfg.active_modules) ? cfg.active_modules.slice() : []).sort(),
@@ -49,18 +89,6 @@ function licCanonical24(cfg) {
 /* SEC-BIND-19f: نرمال‌سازی HWKEY — عیناً با hwNorm19f در server.js یکی است */
 function normHw19f(v) { return String(v || '').trim().toUpperCase().replace(/[\s"']/g, ''); }
 function hwFormatOk19f(v) { return !v || /^HW-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/.test(v) || v === 'HW-UNKNOWN'; }
-function licKey24() {
-    const k = process.env.SANATIFY_LIC_KEY;
-    if (!k) fail('متغیر محیطی SANATIFY_LIC_KEY تنظیم نیست — کلید مخفی هرگز در ریپو/کد ذخیره نمی‌شود.\n  نمونه:  SANATIFY_LIC_KEY="کلید-مخفی-شما" node tools/license.js --sign');
-    return String(k);
-}
-function licSign24(cfg) { return require('crypto').createHmac('sha256', licKey24()).update(licCanonical24(cfg)).digest('hex'); }
-function licVerify24(cfg) {
-    const sig = String((cfg && cfg.license_sig) || '').toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(sig)) return false;
-    const a = Buffer.from(sig), b = Buffer.from(licSign24(cfg));
-    return a.length === b.length && require('crypto').timingSafeEqual(a, b);
-}
 // ===== SEC-LIC-24 (end) =====
 
 // ---------- آرگومان‌ها ----------
@@ -96,18 +124,19 @@ const cfg = loadConfig();
 if (!Array.isArray(cfg.active_modules)) cfg.active_modules = MODULES.slice();
 
 /* SEC-LIC-24: --verify — بررسی امضای فایل موجود بدون هیچ نوشتنی */
-/* HARDEN-18J (begin): جفت‌کلید Ed25519 + امضا/تأیید — کلید خصوصی هرگز در ریپو/سرور نیست */
+/* HARDEN-18J (begin): جفت‌کلید Ed25519 + امضا/تأیید — کلید خصوصی هرگز در ریپو/سرور نیست
+   FIX-LIC-27: کلید عمومی سرور embed شده — env فقط برای چرخش کلید بر آن مقدم است (عیناً با LIC_ED_PUB_EMBEDDED_27 در server.js یکی است) */
+const LIC_ED_PUB_EMBEDDED_27 = 'MCowBQYDK2VwAyEAGAgTWhsg6AGqDDMf25ZHQfQZ8WiaiVTHZP5jdDzxKpY=';
 function edPriv18J() {
     const v = String(process.env.SANATIFY_LIC_ED_PRIV || '').trim();
     if (!v) fail('متغیر محیطی SANATIFY_LIC_ED_PRIV تنظیم نیست (PKCS8 پایه64 — خروجی --gen-ed-keys).\n  نمونه:  SANATIFY_LIC_ED_PRIV="..." node tools/license.js --sign-ed');
     try { return require('crypto').createPrivateKey({ key: Buffer.from(v, 'base64'), format: 'der', type: 'pkcs8' }); }
     catch (e) { fail('کلید خصوصی Ed25519 نامعتبر است: ' + e.message); }
 }
-function edPubFromFile18J() {
-    const v = String(process.env.SANATIFY_LIC_ED_PUB || '').trim();
-    if (!v) return null;
-    try { return require('crypto').createPublicKey({ key: Buffer.from(v, 'base64'), format: 'der', type: 'spki' }); }
-    catch (e) { fail('کلید عمومی Ed25519 (SANATIFY_LIC_ED_PUB) نامعتبر است: ' + e.message); }
+function edPubResolver27() {
+    const envPub = String(process.env.SANATIFY_LIC_ED_PUB || '').trim();
+    try { return { pub: require('crypto').createPublicKey({ key: Buffer.from(envPub || LIC_ED_PUB_EMBEDDED_27, 'base64'), format: 'der', type: 'spki' }), src: envPub ? 'env:SANATIFY_LIC_ED_PUB' : 'embedded سرور' }; }
+    catch (e) { return null; }
 }
 if (args['gen-ed-keys']) {
     const { generateKeyPairSync } = require('crypto');
@@ -125,18 +154,36 @@ if (args['gen-ed-keys']) {
 }
 /* HARDEN-18J (end) */
 if (args.verify) {
-    const okV = licVerify24(cfg);
-    const pub18j = edPubFromFile18J();
+    /* FIX-LIC-27: گزارش هم‌تراز با سرور — مسیر اصلی Ed25519 اول، بعد HMAC با نام منبع کلید */
     const sig2 = String((cfg && cfg.license_sig2) || '').trim();
-    let edLine = '  Ed25519: license_sig2 ' + (sig2 ? 'موجود' : 'غایب') + (sig2 && !pub18j ? ' — کلید عمومی (SANATIFY_LIC_ED_PUB) تنظیم نیست؛ تأیید ممکن نیست' : '');
-    if (sig2 && pub18j) {
-        const ok2 = require('crypto').verify(null, Buffer.from(licCanonical24(cfg)), pub18j, Buffer.from(sig2, 'base64'));
-        edLine += ' — تأیید: ' + (ok2 ? '✓ معتبر' : '✗ نامعتبر');
+    const pubR = edPubResolver27();
+    let edOk = null;
+    if (sig2 && pubR) edOk = require('crypto').verify(null, Buffer.from(licCanonical24(cfg)), pubR.pub, Buffer.from(sig2, 'base64'));
+    const edLine = '  Ed25519: ' + (sig2 ? (edOk === true ? '✓ معتبر' : '✗ نامعتبر') : 'غایب') + (pubR ? ' — کلید عمومی: ' + pubR.src : ' — کلید عمومی در دسترس نیست (env نامعتبر؟)');
+    const r27 = licResolveKey27();
+    let hmacOk = null;
+    if (r27) {
+        try {
+            const sig = String((cfg && cfg.license_sig) || '').toLowerCase();
+            if (!/^[0-9a-f]{64}$/.test(sig)) hmacOk = false;
+            else { const a = Buffer.from(sig), b = Buffer.from(require('crypto').createHmac('sha256', r27.key).update(licCanonical24(cfg)).digest('hex')); hmacOk = a.length === b.length && require('crypto').timingSafeEqual(a, b); }
+        } catch (e) { hmacOk = false; }
     }
-    if (okV) { console.log('✓ امضای HMAC لایسنس معتبر است (license_sig تطبیق دارد).'); console.log(edLine); process.exit(0); }
-    console.error('✗ امضای لایسنس نامعتبر/غایب است — سرور هنگام خواندن به لایسنس پایه (summary+production+inventory) برمی‌گردد.');
-    console.error(edLine);
-    console.error('  برای امضا:  SANATIFY_LIC_KEY="..." node tools/license.js --sign   |   Ed25519: SANATIFY_LIC_ED_PRIV="..." node tools/license.js --sign-ed');
+    const hmacLine = r27 ? ('  HMAC: ' + (hmacOk ? '✓ معتبر' : '✗ نامعتبر/غایب') + ' — منبع کلید: ' + r27.source) : '  HMAC: منبع کلید موجود نیست (نه env و نه license.key) — سرور با کلید پیش‌فرض verify می‌کند ⇒ نامعتبر';
+    if (edOk === true) {
+        console.log('✓ لایسنس معتبر است — مسیر اصلی Ed25519 (license_sig2) تأیید شد؛ HMAC لازم نیست.');
+        console.log(edLine); console.log(hmacLine);
+        process.exit(0);
+    }
+    if (hmacOk === true) {
+        console.log('✓ لایسنس معتبر است — امضای HMAC تأیید شد (license_sig2 معتبری موجود نیست).');
+        console.log(edLine); console.log(hmacLine);
+        process.exit(0);
+    }
+    console.error('✗ لایسنس نامعتبر/غایب است — سرور هنگام خواندن به لایسنس پایه (summary+production+inventory) برمی‌گردد.');
+    console.error(edLine); console.error(hmacLine);
+    console.error('  تشخیص کامل با علت/دستور اصلاح:  node tools/license-doctor.js');
+    console.error('  برای امضا:  SANATIFY_LIC_KEY="..." SANATIFY_LIC_ED_PRIV="..." node tools/license.js --sign');
     process.exit(1);
 }
 
@@ -180,13 +227,21 @@ if (args.expires !== undefined) {
     else cfg.expires_at = '';
 }
 
-/* ===== SEC-LIC-24 (begin): --sign — امضا با کلید env (نرمال‌سازی عین سرور: فیلتر ماژول + خالی ⇒ همه) ===== */
+/* ===== SEC-LIC-24 (begin): --sign — FIX-LIC-27: امضای کامل (HMAC + Ed25519 با هم) =====
+   • Ed25519 مسیر اصلی است — --sign بدون SANATIFY_LIC_ED_PRIV خطای صریح می‌دهد؛ «امضای نیمه‌کارهٔ بی‌صدا» (فقط HMAC) دیگر ساخته نمی‌شود
+   • کلید HMAC: env → license.key؛ اگر فایل نبود با کلید env ساخته می‌شود (یک‌بار) تا بوت سرد بدون env هم معتبر بماند */
 if (args.sign) {
+    if (!String(process.env.SANATIFY_LIC_ED_PRIV || '').trim()) {
+        fail('FIX-LIC-27: --sign بدون SANATIFY_LIC_ED_PRIV انجام نمی‌شود — Ed25519 مسیر اصلی است و امضای نیمه‌کارهٔ بی‌صدا ممنوع است.\n  جفت‌کلید ندارید؟  node tools/license.js --gen-ed-keys --out=lic-ed-keys.json\n  سپس:  SANATIFY_LIC_KEY="..." SANATIFY_LIC_ED_PRIV="..." node tools/license.js --sign\n  (license.key کنار server.js خودکار ساخته می‌شود؛ فایل خصوصی Ed هرگز به مشتری داده نمی‌شود)');
+    }
+    licKey24(); /* زودتر fail — پیش از هر نوشتنی */
     cfg.active_modules = (Array.isArray(cfg.active_modules) ? cfg.active_modules : []).filter((m) => MODULES.indexOf(m) !== -1);
     if (!cfg.active_modules.length) cfg.active_modules = MODULES.slice();
     cfg.license_sig = licSign24(cfg);
+    cfg.license_sig2 = require('crypto').sign(null, Buffer.from(licCanonical24(cfg)), edPriv18J()).toString('base64');
+    ensureKeyFile27();
 }
-if (args['sign-ed']) { /* HARDEN-18J: امضای Ed25519 روی همان canonical — کنار HMAC می‌ماند (مهاجرت تدریجی) */
+if (args['sign-ed']) { /* HARDEN-18J: فقط امضای Ed25519 — وقتی امضای HMAC فعلی می‌خواهد دست‌نخورده بماند */
     cfg.active_modules = (Array.isArray(cfg.active_modules) ? cfg.active_modules : []).filter((m) => MODULES.indexOf(m) !== -1);
     if (!cfg.active_modules.length) cfg.active_modules = MODULES.slice();
     cfg.license_sig2 = require('crypto').sign(null, Buffer.from(licCanonical24(cfg)), edPriv18J()).toString('base64');
@@ -207,6 +262,6 @@ if (off.length) console.log('  غیرفعال: ' + off.join(', ') + '\n  (تب�
 if (cfg.expires_at && Date.parse(cfg.expires_at) < Date.now()) console.warn('  ⚠ لایسنس منقضی است — همهٔ APIها 403 می‌دهند تا انقضا حذف/تمدید شود.');
 /* SEC-LIC-24: وضعیت امضا در گزارش */
 if (args['sign-ed']) console.log('  امضا: ✓ license_sig2 ثبت شد (Ed25519 — کلید خصوصی سمت فروشنده).');
-if (args.sign) console.log('  امضا: ✓ license_sig ثبت شد (HMAC-SHA256).');
-else if (!cfg.license_sig) console.warn('  ⚠ امضا ندارد (license_sig غایب) — سرور به لایسنس پایه برمی‌گردد. امضا: SANATIFY_LIC_KEY="..." node tools/license.js --sign');
-else if (process.env.SANATIFY_LIC_KEY && !licVerify24(cfg)) console.warn('  ⚠ امضای موجود با کلید فعلی تأیید نمی‌شود (کهنه/کلید دیگر) — دوباره --sign بزنید.');
+if (args.sign) console.log('  امضا: ✓ license_sig (HMAC-SHA256) + license_sig2 (Ed25519 — مسیر اصلی) ثبت شد.');
+else if (!cfg.license_sig) console.warn('  ⚠ امضا ندارد (license_sig غایب) — سرور به لایسنس پایه برمی‌گردد. امضا: SANATIFY_LIC_KEY="..." SANATIFY_LIC_ED_PRIV="..." node tools/license.js --sign');
+else if (licResolveKey27() && !licVerify24(cfg)) console.warn('  ⚠ امضای موجود با منبع کلید فعلی تأیید نمی‌شود (کهنه/کلید دیگر) — دوباره --sign بزنید.');

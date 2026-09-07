@@ -505,10 +505,30 @@ function loadTenant15a() {
     }
 }
 // ===== SEC-LIC-24 (begin): امضای دیجیتال لایسنس (HMAC-SHA256) + لایسنس پایه + نقش مالک =====
-// کلید تأیید سرور: env SANATIFY_LIC_KEY (استقرار واقعی) وگرنه کلید پیش‌فرضِ ارسال‌شده.
-// کلید مخفیِ امضا فقط سمت فروشنده در tools/license.js (env: SANATIFY_LIC_KEY) است — هرگز در ریپو/tenant.json نیست.
+/* FIX-LIC-27: ترتیب منبع کلید HMAC در سرور —
+   ۱) env SANATIFY_LIC_KEY   ۲) فایل ماشین‌محلی license.key کنار server.js/exe (ACL: فقط Administrators/System —
+   tools/license.js هنگام --sign اگر نبود، با کلید env می‌سازد)   ۳) پیش‌فرض (که همیشه نامعتبر است — ابزار امضا
+   هرگز با آن امضا نمی‌کند). قبلاً کلید فقط هنگام بارگذاری ماژول از env خوانده می‌شد؛ بوت سردِ خودکار
+   (Startup→wscript→bat / سرویس) بدون env با کلید پیش‌فرض verify می‌کرد ⇒ بنر «لایسنس نامعتبر» —
+   دو بار در استقرار واقعی تکرار شد؛ حالا ساختاری حل شده است، نه دستی. */
+const LIC_KEY_FILE_27 = path.join(ROOT, 'license.key');
+const LIC_DEFAULT_KEY_27 = 'Sanatify-Lic-Verify::v1::1405'; /* فقط سقوط نهایی — امضای واقعی فروشنده با این ساخته نمی‌شود */
+let licKeyCache27 = null; /* کش بر اساس mtime — ساخت/تغییر فایل بدون ری‌استارت اعمال می‌شود */
+function licResolveKey27() {
+    const env27 = String(process.env.SANATIFY_LIC_KEY || '').trim();
+    if (env27) return { key: env27, source: 'env:SANATIFY_LIC_KEY' };
+    try {
+        const st27 = fs.statSync(LIC_KEY_FILE_27);
+        if (st27.isFile() && st27.size > 0) {
+            if (licKeyCache27 && licKeyCache27.mtime === st27.mtimeMs) return licKeyCache27;
+            const raw27 = fs.readFileSync(LIC_KEY_FILE_27, 'utf8').trim();
+            if (raw27) { licKeyCache27 = { key: raw27, source: 'license.key', mtime: st27.mtimeMs }; return licKeyCache27; }
+        }
+    } catch (e27) { /* فایل موجود نیست — عادی */ }
+    return { key: LIC_DEFAULT_KEY_27, source: 'پیش‌فرض — نه env و نه license.key (امضای واقعی با این تأیید نمی‌شود)' };
+}
+// کلید مخفیِ امضا فقط سمت فروشنده است (env یا license.key) — هرگز در ریپو/tenant.json نیست.
 // الگوریتم: HMAC-SHA256 روی نسخهٔ متعارف (canonical) بخش لایسنس tenant.json → فیلد license_sig
-const LIC_VERIFY_KEY_24 = String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405');
 const LIC_BASE_MODULES_24 = ['summary', 'production', 'inventory']; /* لایسنس پایه — fallback ضد دستکاری */
 function licCanonical24(cfg) {
     return JSON.stringify({
@@ -521,26 +541,33 @@ function licCanonical24(cfg) {
     });
 }
 function licSign24(cfg, key) {
-    return crypto.createHmac('sha256', String(key || LIC_VERIFY_KEY_24)).update(licCanonical24(cfg)).digest('hex');
+    return crypto.createHmac('sha256', String(key || licResolveKey27().key)).update(licCanonical24(cfg)).digest('hex');
 }
-function licVerify24(cfg) {
+/* FIX-LIC-27: تأیید با علت — علت دقیق برای خودآزمایی بوت و tools/license-doctor.js */
+function licVerifyCause27(cfg) {
     try {
         const sig24 = String((cfg && cfg.license_sig) || '').toLowerCase();
-        if (!/^[0-9a-f]{64}$/.test(sig24)) return false;
-        const a24 = Buffer.from(sig24), b24 = Buffer.from(licSign24(cfg, LIC_VERIFY_KEY_24));
-        return a24.length === b24.length && crypto.timingSafeEqual(a24, b24);
-    } catch (e) { return false; }
+        if (!sig24) return { ok: false, cause: 'license_sig غایب است (tenant.json اصلاً امضا نشده)' };
+        if (!/^[0-9a-f]{64}$/.test(sig24)) return { ok: false, cause: 'فرمت license_sig نامعتبر است' };
+        const r27 = licResolveKey27();
+        const a24 = Buffer.from(sig24), b24 = Buffer.from(licSign24(cfg, r27.key));
+        if (a24.length === b24.length && crypto.timingSafeEqual(a24, b24)) return { ok: true, cause: '', source: r27.source };
+        return { ok: false, cause: 'امضای HMAC با منبع کلید «' + r27.source + '» تطبیق ندارد (کلید دیگر یا امضای کهنه)', source: r27.source };
+    } catch (e) { return { ok: false, cause: 'خطا در تأیید امضای HMAC: ' + ((e && e.message) || e) }; }
 }
+function licVerify24(cfg) { return licVerifyCause27(cfg).ok; }
 let licGuardLogged24 = ''; /* هر نسخهٔ فایل فقط یک‌بار audit — ضد طغیان لاگ */
-/* ===== HARDEN-18J (begin): ارتقای امضای لایسنس به Ed25519 — کلید خصوصی فقط سمت فروشنده (env در CLI)؛ کلید عمومی در سرور (env) =====
-   قواعد مهاجرت:
+/* ===== HARDEN-18J (begin): ارتقای امضای لایسنس به Ed25519 — کلید خصوصی فقط سمت فروشنده (env در CLI) =====
+   قواعد (FIX-LIC-27 — Ed25519 مسیر اصلی):
+   • license_sig2 معتبر با کلید عمومی سرور ⇒ کافی است — HMAC اصلاً بررسی نمی‌شود
+   • کلید عمومی حالا در سرور embed شده (LIC_ED_PUB_EMBEDDED_27) — بوت سرد بدون env هم sig2 را تأیید می‌کند؛
+     env SANATIFY_LIC_ED_PUB فقط برای چرخش کلید بر embed مقدم است (کلید عمومی راز نیست؛ خصوصی فقط نزد فروشنده)
    • license_sig2 غایب ⇒ مسیر HMAC قبلی (سازگاری کامل — فایل‌های فعلی بایت‌به‌بایت معتبر می‌مانند)
-   • license_sig2 موجود + SANATIFY_LIC_ED_PUB تنظیم ⇒ امضای Ed25519 الزامی؛ نامعتبر ⇒ لایسنس پایه (ضد دستکاری)
-   • license_sig2 موجود + کلید عمومی تنظیم نیست ⇒ صرف‌نظر از sig2 + هشدار یک‌باره (فروشنده هنوز کلید عمومی را مستقر نکرده) */
+   • license_sig2 موجود ولی نامعتبر ⇒ لایسنس پایه (ضد دستکاری) */
+const LIC_ED_PUB_EMBEDDED_27 = 'MCowBQYDK2VwAyEAGAgTWhsg6AGqDDMf25ZHQfQZ8WiaiVTHZP5jdDzxKpY='; /* عیناً با tools/license.js و tools/license-doctor.js یکی است */
 let licEdWarned18J = false;
 function loadLicEdPub18J() {
-    const b64 = String(process.env.SANATIFY_LIC_ED_PUB || '').trim();
-    if (!b64) return null;
+    const b64 = String(process.env.SANATIFY_LIC_ED_PUB || '').trim() || LIC_ED_PUB_EMBEDDED_27;
     try { return crypto.createPublicKey({ key: Buffer.from(b64, 'base64'), format: 'der', type: 'spki' }); }
     catch (e) { return null; }
 }
@@ -556,10 +583,11 @@ function applyLicenseSigGuard24(cfg, srcMtime) {
     if (!cfg) return cfg;
     const hasSig2_18j = String((cfg && cfg.license_sig2) || '').trim() !== '';
     const ed18j = licVerifyEd18J(cfg);
-    if (ed18j === true) { cfg.__lic_invalid_24 = false; cfg.__lic_method_18j = 'ed25519'; return cfg; }
+    if (ed18j === true) { cfg.__lic_invalid_24 = false; cfg.__lic_method_18j = 'ed25519'; cfg.__lic_reason_27 = ''; return cfg; }
     if (ed18j === false) {
         /* امضای Ed25519 موجود ولی نامعتبر — دستکاری/کلید اشتباه ⇒ لایسنس پایه */
         cfg.__lic_invalid_24 = true;
+        cfg.__lic_reason_27 = 'امضای Ed25519 (license_sig2) نامعتبر است — دستکاری یا کلید خصوصی متفاوت';
         cfg.active_modules = LIC_BASE_MODULES_24.slice();
         cfg.max_users = 0; cfg.max_records = 0; cfg.expires_at = '';
         const fp18j = 'ed18j:' + (srcMtime != null ? String(Math.round(srcMtime)) : 'boot');
@@ -573,17 +601,19 @@ function applyLicenseSigGuard24(cfg, srcMtime) {
     }
     if (hasSig2_18j && !licEdWarned18J) {
         licEdWarned18J = true;
-        console.warn('[HARDEN-18J] license_sig2 موجود است ولی SANATIFY_LIC_ED_PUB تنظیم نشده — فعلاً امضای HMAC ملاک است.');
+        console.warn('[HARDEN-18J] license_sig2 موجود است ولی کلید عمومی Ed25519 بارگذاری نشد (env SANATIFY_LIC_ED_PUB نامعتبر؟) — فعلاً امضای HMAC ملاک است.');
     }
-    if (licVerify24(cfg)) { cfg.__lic_invalid_24 = false; cfg.__lic_method_18j = 'hmac'; return cfg; }
+    const v27 = licVerifyCause27(cfg);
+    if (v27.ok) { cfg.__lic_invalid_24 = false; cfg.__lic_method_18j = 'hmac'; cfg.__lic_reason_27 = ''; cfg.__lic_keysource_27 = v27.source; return cfg; }
     /* امضا غایب/نامعتبر/دستکاری‌شده → لایسنس پایه + بنر قرمز در UI + audit */
     cfg.__lic_invalid_24 = true;
+    cfg.__lic_reason_27 = v27.cause;
     cfg.active_modules = LIC_BASE_MODULES_24.slice();
     cfg.max_users = 0; cfg.max_records = 0; cfg.expires_at = '';
     const fp24 = srcMtime != null ? String(Math.round(srcMtime)) : 'boot';
     if (licGuardLogged24 !== fp24) {
         licGuardLogged24 = fp24;
-        console.warn('[SEC-LIC-24] امضای لایسنس tenant.json غایب/نامعتبر است → لایسنس پایه (summary+production+inventory) اعمال شد — با tools/license.js --sign امضا کنید.');
+        console.warn('[SEC-LIC-24] امضای لایسنس tenant.json غایب/نامعتبر است → لایسنس پایه (summary+production+inventory) اعمال شد — علت: ' + (cfg.__lic_reason_27 || '?') + '\n  اصلاح: SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign  (FIX-LIC-27: license.key کنار server.js ساخته می‌شود تا بوت سرد بدون env هم معتبر بماند) — تشخیص: node tools/license-doctor.js');
         const entry24 = {
             ts: new Date().toISOString(), user: 'system', role: 'system', ip: '-',
             action: 'license.signature_invalid', endpoint: 'tenant.json', status: 200,
@@ -7737,6 +7767,24 @@ if (process.argv.indexOf('--print-hwkey') !== -1) {
     console.log('  HWKEY ماشین : ' + HWKEY_19F + '  (برای صدور/تمدید لایسنس نزد فروشنده بفرستید)');
     let cfg19f = null;
     try { cfg19f = loadTenant15a(); } catch (e19f) { cfg19f = null; }
+    /* FIX-LIC-27: خودآزمایی بوت (تکمیل ۱۸O) — یک خط وضعیت لایسنس با علت کوتاه؛ در کنسول/لاگ سرویس می‌ماند
+       تا بنر «لایسنس نامعتبر» بعد از بوت سرد بدون بازکردن وب هم توضیح داشته باشد */
+    (function licSelfTest27() {
+        const hasTenant27 = fs.existsSync(TENANT_FILE_15A) || fs.existsSync(TENANT_FILE_15A + '.enc');
+        if (!hasTenant27) { console.log('  وضعیت لایسنس : tenant.json موجود نیست — حالت پیش‌فرض (بدون امضا)'); return; }
+        if (cfg19f && cfg19f.__lic_invalid_24) {
+            console.log('  وضعیت لایسنس : نامعتبر ✗ — علت: ' + (cfg19f.__lic_reason_27 || 'نامشخص') + '  ⇒ لایسنس پایه (summary+production+inventory) — تشخیص کامل: node tools/license-doctor.js');
+            return;
+        }
+        if (cfg19f && cfg19f.__lic_method_18j) {
+            let exp27 = '';
+            try { if (cfg19f.expires_at && Date.parse(cfg19f.expires_at) < Date.now()) exp27 = '  ⚠ منقضی شده'; } catch (e27) { /* noop */ }
+            const how27 = cfg19f.__lic_method_18j === 'ed25519' ? 'Ed25519 — کلید عمومی embedded سرور' : ('HMAC — منبع کلید: ' + (cfg19f.__lic_keysource_27 || '?'));
+            console.log('  وضعیت لایسنس : معتبر ✓  [' + how27 + ']' + exp27);
+        } else {
+            console.log('  وضعیت لایسنس : نامعتبر ✗ — علت: ' + (cfg19f.__lic_reason_27 || 'نامشخص') + '  ⇒ لایسنس پایه (summary+production+inventory) — تشخیص کامل: node tools/license-doctor.js');
+        }
+    })();
     /* SEC-ANTI-19h (تنگ‌ترکردن قفل در exe-mode): باینری فقط برای استقرار لایسنس‌دار ساخته می‌شود —
        حذف/خراب‌کردن tenant.json نباید به «حالت پیش‌فرض همهٔ ماژول‌ها» (فلسفهٔ SAAS-15a برای source) برسد؛
        در حالت source رفتار سابق دست‌نخورده است (قرمز: استقرار منبع فعلی بایت‌به‌بایت). */
