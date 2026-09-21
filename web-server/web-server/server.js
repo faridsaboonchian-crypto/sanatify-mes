@@ -25,7 +25,7 @@ const ROOT = RUNTIME_ROOT_19E; /* SEC-PROTECT-19e */
 const PUBLIC_DIR = path.join(__dirname, 'public'); /* SEC-PROTECT-19e: پوستهٔ استاتیک (index/sw/vendor) — در pkg از snapshot می‌خواند؛ در اجرای عادی همان قبل */
 const PUBLIC_DATA_DIR_19E = path.join(RUNTIME_ROOT_19E, 'public'); /* SEC-PROTECT-19e: فایل‌های دادهٔ public (لوگوی آپلودی تنانت) کنار exe — در اجرای عادی همان PUBLIC_DIR */
 try { fs.mkdirSync(PUBLIC_DATA_DIR_19E, { recursive: true }); } catch (e19e) { /* noop */ } /* SEC-PROTECT-19e */
-const DATA_FILE = path.join(ROOT, 'data.json');  // نمونهٔ اولیه (fallback نهایی)
+const DATA_FILE = path.join(ROOT, 'data.json');  // ساختار خالی پیش‌فرض (fallback نهایی — PURGE-36: صفر دادهٔ نمایشی)
 const LIVE_FILE = path.join(ROOT, 'live.json');  // آینهٔ زنده دادهٔ واقعی
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://djtrqqknanzrojrcgsca.supabase.co';
