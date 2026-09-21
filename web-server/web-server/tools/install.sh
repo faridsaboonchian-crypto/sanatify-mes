@@ -113,7 +113,9 @@ else
     $PFX_RUN tee "$PREFIX/start.sh" > /dev/null <<START
 #!/usr/bin/env bash
 cd "${PREFIX}"
-nohup ./sanatify-mes > "${PREFIX}/server.log" 2>&1 &
+# GO-LIVE-32c: تزریق PORT — سرور فقط متغیر محیطی PORT را می‌خواند (server.js:18 — پرچم CLI ندارد)؛
+# بدون این تزریق، مسیر nohup پورتِ انتخاب‌شده در --port را گم می‌کرد و روی 3001 پیش‌فرض می‌افتاد (یافتهٔ REHEARSAL-29).
+env PORT="${PORT}" nohup ./sanatify-mes > "${PREFIX}/server.log" 2>&1 &
 echo \$! > "${PREFIX}/server.pid"
 echo "Sanatify MES شروع شد (PID \$(cat ${PREFIX}/server.pid)) — لاگ: ${PREFIX}/server.log"
 START
