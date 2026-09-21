@@ -7773,6 +7773,32 @@ if (process.argv.indexOf('--print-hwkey') !== -1) {
     console.log(HWKEY_19F);
     process.exit(0);
 }
+/* ===== GO-LIVE-32b (begin): --create-admin= — بوت‌استرپ اولین ادمین روی VM تازه (الگوی --print-hwkey) =====
+   بن‌بست واقعی نصب تمیز: web-users.json وجود ندارد ⇒ هیچ‌کس نمی‌تواند وارد شود تا از پنل کاربر بسازد.
+   مصرف:  ./sanatify-mes --create-admin=نام‌کاربری:رمز-اولیه     (یا --create-admin=نام‌کاربری با env SANATIFY_BOOTSTRAP_PW)
+   قواعد: فقط وقتی هیچ ادمین فعالی موجود نیست (گارد ادمین دوم — ضد سوءاستفاده روی نصب‌های زنده)؛
+   سیاست رمز 18P؛ must_change_pw=true ⇒ اولین ورود اجبار به تغییر رمز (HARDEN-18P)؛ فایل ۰۶۰۰. */
+(function createAdmin32() {
+    const arg32 = (process.argv.find((a) => a.indexOf('--create-admin=') === 0) || '').slice('--create-admin='.length);
+    if (!arg32) return;
+    const idx32 = arg32.indexOf(':');
+    const username32 = (idx32 === -1 ? arg32 : arg32.slice(0, idx32)).trim();
+    const password32 = idx32 === -1 ? String(process.env.SANATIFY_BOOTSTRAP_PW || '') : arg32.slice(idx32 + 1);
+    if (!/^[a-zA-Z0-9._-]{3,100}$/.test(username32)) { console.error('✗ نام کاربری نامعتبر است (۳ تا ۱۰۰ کاراکتر — حروف/عدد/نقطه/زیرخط/خط تیره).'); process.exit(1); }
+    if (idx32 === -1 && !password32) { console.error('✗ رمز اولیه داده نشد — یا از قالب --create-admin=نام‌کاربری:رمز استفاده کنید یا env SANATIFY_BOOTSTRAP_PW را بگذارید (پیشنهاد: رمز فقط در همان دستور inline — هرگز export/تاریخچه).'); process.exit(1); }
+    const pol32 = auth.passwordPolicyError18P(password32, username32);
+    if (pol32) { console.error('✗ رمز اولیه نامعتبر است: ' + pol32); process.exit(1); }
+    const users32 = readUsers17a();
+    if (users32.some((u) => String(u.username || '').toLowerCase() === username32.toLowerCase())) { console.error('✗ کاربر «' + username32 + '» از قبل موجود است — ساخت کاربرهای بعدی از پنل سازمان (تب org) انجام می‌شود.'); process.exit(1); }
+    if (users32.some((u) => u.role === 'admin' && u.active !== false)) { console.error('✗ گارد ادمین دوم: حداقل یک ادمین فعال موجود است — بوت‌استرپ فقط برای نصب تمیز است. (رمز ادمین گم شده؟ فقط وب‌کاربران را بازسازی کنید.)'); process.exit(1); }
+    users32.push({ username: username32, role: 'admin', name: 'مدیر سامانه', password_hash: auth.hashPassword(password32), must_change_pw: true, created_at: new Date().toISOString(), created_by: 'go-live-bootstrap-32' });
+    if (!auth.writeUsers17a(users32)) { console.error('✗ نوشتن web-users.json ناموفق بود.'); process.exit(1); }
+    try { fs.chmodSync(path.join(ROOT, 'web-users.json'), 0o600); } catch (e32) { /* ویندوز: غیرمرگبار — سرویس با اکانت SYSTEM دسترسی دارد */ }
+    console.log('✓ ادمین بوت‌استرپ ساخته شد: ' + username32 + '  (نقش: admin — اولین ورود اجبار به تغییر رمز دارد)');
+    console.log('  گام بعد: سرویس را استارت کنید، با همین کاربر وارد شوید و از پنل سازمان (تب org) بقیهٔ کاربران/نقش‌ها را بسازید.');
+    process.exit(0);
+})();
+/* ===== GO-LIVE-32b (end) ===== */
 // ===== SEC-BIND-19f: گیت بوت قفل سخت‌افزاری — پیش از هر listen؛ روی ماشین قفل‌شدهٔ نامعتبر سرور هرگز گوش نمی‌دهد =====
 (function hwBindBoot19f() {
     console.log('  HWKEY ماشین : ' + HWKEY_19F + '  (برای صدور/تمدید لایسنس نزد فروشنده بفرستید)');

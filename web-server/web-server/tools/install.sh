@@ -3,29 +3,48 @@
 # DEPLOY-19h — نصب‌کنندهٔ لینوکس Sanatify MES (دموی تجاری روی VM مشتری)
 #
 # مصرف:
-#   sudo bash tools/install.sh [مسیر-باینری] [--prefix=/opt/sanatify] [--port=3001]
+#   sudo bash tools/install.sh [مسیر-باینری] [--prefix=/opt/sanatify] [--port=3001] [--force-data]
 #   bash tools/install.sh ./sanatify-mes-node18-linux-x64 --prefix=$HOME/sanatify-opt
 #
 # کارها:
-#   ۱) کپی باینری + SHA256SUMS.txt (الزام SEC-ANTI-19g: بدون آن بوت متوقف است) + tenant.json.template
-#   ۲) سرویس systemd (اگر موجود) وگرنه nohup + اسکریپت start/stop
-#   ۳) فایروال (ufw/iptables — اگر موجود؛ نبودش خطا نیست)
-#   ۴) چاپ HWKEY ماشین + راهنمای امضای لایسنس (SEC-BIND-19f)
+#   ۱) گارد دادهٔ قدیمی (GO-LIVE-32b): اگر live.json/audit.json/web-users.json (+ .enc) در مقصد باشند ⇒ رفض نصب (مگر --force-data)
+#   ۲) کپی باینری + SHA256SUMS.txt (الزام SEC-ANTI-19g: بدون آن بوت متوقف است) + tenant.json.template
+#   ۳) سرویس systemd (اگر موجود) وگرنه nohup + اسکریپت start/stop
+#   ۴) فایروال (ufw/iptables — اگر موجود؛ نبودش خطا نیست)
+#   ۵) چاپ HWKEY ماشین + راهنمای امضای لایسنس (SEC-BIND-19f)
 # =====================================================================
 set -u
 PREFIX="/opt/sanatify"
 SERVICE="sanatify-mes"
 PORT="${PORT:-3001}"
 BINARY_ARG=""
+FORCE_DATA="no"
 
 for arg in "$@"; do
     case "$arg" in
         --prefix=*) PREFIX="${arg#--prefix=}" ;;
         --port=*) PORT="${arg#--port=}" ;;
-        --help|-h) sed -n '2,14p' "$0"; exit 0 ;;
+        --force-data) FORCE_DATA="yes" ;;
+        --help|-h) sed -n '2,17p' "$0"; exit 0 ;;
         *) if [ -z "$BINARY_ARG" ]; then BINARY_ARG="$arg"; else echo "✗ آرگومان اضافی: $arg"; exit 1; fi ;;
     esac
 done
+
+# ---------- GO-LIVE-32b: گارد دادهٔ قدیمی — نصب تمیز یعنی صفر انتقال داده ----------
+# سناریو: روی VM مشتری نصب قدیمی/دموی قبلی موجود است؛ کپی تصادفی live.json/audit.json/web-users.json
+# یعنی انتقال دادهٔ دیروز به سیستم امشب — دقیقاً همان چیزی که راه‌اندازی تمیز نباید داشته باشد.
+OLD_DATA=""
+for f in live.json audit.json web-users.json live.json.enc audit.json.enc web-users.json.enc; do
+    [ -e "$PREFIX/$f" ] && OLD_DATA="$OLD_DATA $f"
+done
+if [ -n "$OLD_DATA" ] && [ "$FORCE_DATA" != "yes" ]; then
+    echo "✗ دادهٔ قدیمی یافت شد؛ برای جلوگیری از انتقال داده، نصب متوقف شد."
+    echo "  مسیر مقصد : $PREFIX"
+    echo "  فایل‌ها   :$OLD_DATA"
+    echo "  اگر واقعاً ارتقای همان نصب هستید و انتقال داده عمدی است: نصب را با پرچم --force-data تکرار کنید."
+    exit 1
+fi
+[ -n "$OLD_DATA" ] && echo "⚠ --force-data: نصب روی دادهٔ موجود:$OLD_DATA (انتقال دادهٔ عمدی — مسئولیت با شماست)"
 
 echo "━━━ DEPLOY-19h — نصب Sanatify MES ━━━"
 

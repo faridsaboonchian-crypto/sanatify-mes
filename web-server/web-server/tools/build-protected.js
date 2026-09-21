@@ -220,12 +220,15 @@ function protectHtml(html, outName) {
         log('بستهٔ استقرار: ' + deployDir19i);
         /* باینری‌ها + مانیفست صحت (باید کنار exe بماند — SEC-ANTI-19g) */
         for (const f19i of fs.readdirSync(binSrc19i)) fs.copyFileSync(path.join(binSrc19i, f19i), path.join(deployDir19i, 'bin', f19i));
-        /* نصب/حذف هر دو OS + قالب تنانت + راهنمای فارسی */
-        for (const f19i of ['install.sh', 'uninstall.sh', 'install.ps1', 'uninstall.ps1']) fs.copyFileSync(path.join(TOOLS_DIR, f19i), path.join(deployDir19i, f19i));
+        /* نصب/حذف هر دو OS + قالب تنانت + راهنمای فارسی + ابزارهای راه‌اندازی (GO-LIVE-32b) */
+        for (const f19i of ['install.sh', 'uninstall.sh', 'install.ps1', 'uninstall.ps1', 'go-live-check.sh', 'go-live-check.ps1', 'license-doctor.js']) fs.copyFileSync(path.join(TOOLS_DIR, f19i), path.join(deployDir19i, f19i));
         fs.copyFileSync(path.join(SRC_DIR, 'tenant.json.template'), path.join(deployDir19i, 'tenant.json.template'));
         const readme19i = path.join(SRC_DIR, 'README-DEPLOY.md');
         if (fs.existsSync(readme19i)) fs.copyFileSync(readme19i, path.join(deployDir19i, 'README-DEPLOY.md'));
         else log('⚠ README-DEPLOY.md یافت نشد — بسته بدون راهنما ساخته شد');
+        const runbook32 = path.join(SRC_DIR, 'RUNBOOK-GoLive-فا.md');
+        if (fs.existsSync(runbook32)) fs.copyFileSync(runbook32, path.join(deployDir19i, 'RUNBOOK-GoLive-فا.md'));
+        else log('⚠ RUNBOOK-GoLive-فا.md یافت نشد — بسته بدون ران‌بوک راه‌اندازی ساخته شد');
         /* مانیفست کل بسته (چک‌سام انتشار) — مانیفست ضد دستکاری باینری جدا در bin/ می‌ماند */
         const sumLines19i = [];
         for (const f19i of fs.readdirSync(deployDir19i)) {

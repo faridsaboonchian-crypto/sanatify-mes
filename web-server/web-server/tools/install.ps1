@@ -3,15 +3,16 @@
 # اجرا با PowerShell «Run as administrator»
 #
 # مصرف:
-#   powershell -ExecutionPolicy Bypass -File tools\install.ps1 [-SourceDir "...\dist\bin"] [-Port 3001]
+#   powershell -ExecutionPolicy Bypass -File tools\install.ps1 [-SourceDir "...\dist\bin"] [-Port 3001] [-ForceData]
 #
-# کارها: کپی باینری+مانیفست به Program Files → سرویس sc.exe → فایروال 3001 →
+# کارها: گارد دادهٔ قدیمی (GO-LIVE-32b) → کپی باینری+مانیفست به Program Files → سرویس sc.exe → فایروال 3001 →
 #        میانبر Start Menu → چاپ HWKEY + راهنمای امضای لایسنس (SEC-BIND-19f)
 # =====================================================================
 param(
     [string]$SourceDir = "",
     [int]$Port = 3001,
-    [string]$InstallDir = "$env:ProgramFiles\SanatifyMES"
+    [string]$InstallDir = "$env:ProgramFiles\SanatifyMES",
+    [switch]$ForceData
 )
 $ErrorActionPreference = "Stop"
 $ServiceName = "SanatifyMES"
@@ -21,6 +22,19 @@ Write-Host "━━━ DEPLOY-19h — نصب Sanatify MES ━━━"
 # ---------- گارد ادمین ----------
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) { Write-Host "✗ با «Run as administrator» اجرا کنید." -ForegroundColor Red; exit 1 }
+
+# ---------- GO-LIVE-32b: گارد دادهٔ قدیمی — نصب تمیز یعنی صفر انتقال داده ----------
+# سناریو: VM مشتری قبلاً دمو/نصب قدیمی داشته؛ کپی تصادفی live.json/audit.json/web-users.json یعنی
+# انتقال دادهٔ دیروز به سیستم امشب — دقیقاً همان چیزی که راه‌اندازی تمیز نباید داشته باشد.
+$oldData32 = @('live.json','audit.json','web-users.json','live.json.enc','audit.json.enc','web-users.json.enc') | Where-Object { Test-Path (Join-Path $InstallDir $_) }
+if ($oldData32 -and -not $ForceData) {
+    Write-Host "✗ دادهٔ قدیمی یافت شد؛ برای جلوگیری از انتقال داده، نصب متوقف شد." -ForegroundColor Red
+    Write-Host ("  مسیر مقصد : " + $InstallDir) -ForegroundColor Red
+    Write-Host ("  فایل‌ها   : " + ($oldData32 -join ' ')) -ForegroundColor Red
+    Write-Host "  اگر واقعاً ارتقای همان نصب هستید و انتقال داده عمدی است: نصب را با پرچم -ForceData تکرار کنید." -ForegroundColor Yellow
+    exit 1
+}
+if ($oldData32) { Write-Host ("⚠ -ForceData: نصب روی دادهٔ موجود: " + ($oldData32 -join ' ') + " (انتقال دادهٔ عمدی — مسئولیت با شماست)") -ForegroundColor Yellow }
 
 # ---------- یافتن باینری ----------
 if ($SourceDir -eq "") {
