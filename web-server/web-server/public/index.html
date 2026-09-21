@@ -1472,6 +1472,12 @@
         /* ===== FEAT-FIN-13b (end) ===== */
         .aps-share { font-size: 12px; font-weight: bold; color: #0f2a43; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; padding: 6px 10px; margin: 0 0 8px; display: inline-block; }
         body.theme-dark .aps-share { color: #7fb4d8; background: #0e2233; border-color: #2a4a66; }
+        /* ===== COLDSTART-35 (begin): نوار شروع سرد — تم‌آوار ===== */
+        .aps-cold35 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #f0f9ff; border: 1px solid #7dd3fc; color: #075985; border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: bold; margin: 0 0 10px; }
+        .aps-cold35 .aps-cold-msg35 { flex: 1; min-width: 200px; }
+        body.theme-dark .aps-cold35 { background: #082f49; border-color: #155e75; color: #7dd3fc; }
+        body.theme-dark .aps-cold35 .chip { background: #164e63; color: #a5f3fc; border-color: #155e75; }
+        /* ===== COLDSTART-35 (end) ===== */
         .aps-wexplain { font-size: 11.5px; color: #64748b; margin: 0 0 10px; line-height: 1.9; }
         body.theme-dark .aps-wexplain { color: #8aa6bd; }
         @media (max-width: 480px) {
@@ -2676,6 +2682,8 @@
             <!-- ===== FEAT-PLAN-9c (begin): سناریوهای APS ===== -->
             <div class="panel hidden" id="planApsPanel">
                 <h2>سناریوهای APS — مقایسه و رتبه‌بندی <span class="plan-engine" id="planApsEngine"><span class="skel19c skel-chip19c"></span></span> <!-- FIX-UI-19c: اسکلتون جای متن --></h2>
+                <!-- ===== COLDSTART-35: نوار شروع سرد — فقط وقتی دادهٔ واقعی کمتر از آستانهٔ ۷ روز باشد ===== -->
+                <div id="apsCold35" class="aps-cold35 hidden" role="status">🧊 <span class="aps-cold-msg35">شروع سرد — با ثبت واقعی خودکالیبره می‌شود</span><span class="chip wait" id="apsColdDays35">…</span></div>
                 <div class="aps-weights">
                     <label>وزن تناژ <input type="range" id="apsW1" min="0" max="100" step="5" value="50"><b class="aps-wval" id="apsW1v">۵۰</b></label>
                     <label>وزن ریسک <input type="range" id="apsW2" min="0" max="100" step="5" value="30"><b class="aps-wval" id="apsW2v">۳۰</b></label>
@@ -6932,7 +6940,7 @@ showRes();
 // ===== FEAT-PLAN-9c (begin): سناریوهای APS — رتبه‌بندی چندمعیارهٔ اسلایدر‌دار + مونت‌کارلو =====
 (function planAps() {
     const WKEY = 'san.aps.weights';
-    const st = { scenarios: [], genAt: null, aiNote: null, aiCfg: false, emptyHint: null, loaded: false, w: { ton: 5, risk: 3, waste: 2 } };
+    const st = { scenarios: [], genAt: null, aiNote: null, aiCfg: false, emptyHint: null, loaded: false, cold35: null, w: { ton: 5, risk: 3, waste: 2 } }; /* COLDSTART-35: cold35 = {days, threshold} | null */
     try { const w = JSON.parse(localStorage.getItem(WKEY) || 'null'); if (w && typeof w.ton === 'number') st.w = w; } catch (e) { }
     /* ===== FIX-APS-12a (begin): مهاجرت یک‌بارهٔ مقیاس قدیمی ۰..۱۰ → ۰..۱۰۰ (نسبت‌ها حفظ می‌شود) ===== */
     if (!st.w._v12a) { st.w = { ton: (st.w.ton || 0) * 10, risk: (st.w.risk || 0) * 10, waste: (st.w.waste || 0) * 10, _v12a: 1 }; saveW(); }
@@ -6962,7 +6970,7 @@ showRes();
     }
     function renderChip() {
         const el = $('planApsEngine'); if (!el) return;
-        el.textContent = st.aiCfg ? '⚙️ موتور APS داخلی + توضیح AI' : '⚙️ موتور APS داخلی';
+        el.textContent = (st.aiCfg ? '⚙️ موتور APS داخلی + توضیح AI' : '⚙️ موتور APS داخلی') + (st.cold35 ? ' — 🧊 شروع سرد' : ''); /* COLDSTART-35 */
         const gen = $('apsGenAt');
         if (gen) { /* FIX-PLAN-13a: نمایش ثانیه در timestamp تا هر بازمحاسبهٔ مرئی باشد */
             let g13a = '';
@@ -7027,6 +7035,16 @@ showRes();
         const panel = $('planApsPanel'); if (!panel) return;
         if (st.loaded) panel.classList.remove('hidden');
         renderChip();
+        /* ===== COLDSTART-35 (begin): نوار شروع سرد — با رسیدن داده به آستانه خودکار مخفی می‌شود ===== */
+        const cb35 = $('apsCold35');
+        if (cb35) {
+            if (st.cold35) {
+                cb35.classList.remove('hidden');
+                const d35 = $('apsColdDays35');
+                if (d35) d35.textContent = 'دادهٔ واقعی: ' + toFaDigits(st.cold35.days) + ' از ' + toFaDigits(st.cold35.threshold) + ' روز';
+            } else cb35.classList.add('hidden');
+        }
+        /* ===== COLDSTART-35 (end) ===== */
         const list = rankAll();
         renderCards(list);
         renderTable(list);
@@ -7058,6 +7076,7 @@ showRes();
             st.scenarios = j.scenarios || [];
             st.genAt = j.generated_at; st.aiCfg = !!j.ai_configured; st.aiNote = j.ai_note || null;
             st.emptyHint = (j.reasons_hint || [])[0] || null;
+            st.cold35 = (j.mode === 'cold-start' && j.calibrate) ? j.calibrate : null; /* COLDSTART-35 */
             st.loaded = true;
             render();
             if (viaBtn) {

@@ -1643,6 +1643,17 @@ function appRequestHandler(req, res) {
     }
     // ================================================================
     // ===== FEAT-PLAN-7 (begin): ماژول برنامه‌ریزی تولید + مشاور AI =====
+    /* ===== COLDSTART-35 (begin): شروع سرد برنامه‌ریزی — بدون دادهٔ ۹۰ روزه =====
+       اصل «دروغ نگفتن»: وقتی دادهٔ واقعی ثبت‌شده کمتر از آستانه است، موتور صریحاً برچسب «پایهٔ مهندسی»
+       می‌زند (نرخ اسمی per سایز/خط، ضایعات استاندارد، پذیرش QC هدف) و اطمینان مونت‌کارلو را سقف‌دار
+       پایین نشان می‌دهد؛ با رسیدن دادهٔ واقعی به آستانه، خودکار به حالت عادی برمی‌گردد (بدون تنظیم دستی).
+       محدودیت شمش در شروع سرد از انبار خوانده نمی‌شود (انبار پنهان/خالی است) — سناریوها کپ نمی‌شوند و
+       پرچم کمبود فقط وقتی زده می‌شود که واقعاً دادهٔ انبار موجود و کمتر از نیاز باشد. */
+    const COLD_MIN_DAYS_35 = 7; /* آستانهٔ شروع سرد: کمتر از ۷ روز ثبت تولید واقعی */
+    const COLD_RATE_TON_35 = { 'RB-8': 45, 'RB-10': 55, 'RB-12': 65, 'RB-14': 75, 'RB-16': 85, 'RB-18': 95, 'RB-20': 105, 'RB-22': 115, 'RB-25': 125, 'RB-28': 135, 'RB-32': 145, '5SP': 110 }; /* نرخ اسمی مهندسی per سایز (تن/روز) — خط نورد تک‌خطی؛ قابل تنظیم توسط فروشنده */
+    const COLD_MIX_35 = { 'RB-14': 0.34, 'RB-16': 0.33, 'RB-22': 0.33 }; /* ترکیب مهندسی سه‌سایز متداول میلگرد A3 */
+    const COLD_CONF_CAP_35 = 55; /* سقف اطمینان مونت‌کارلو در حالت شروع سرد — صداقت: اطمینان پایین */
+    /* ===== COLDSTART-35 (end) ===== */
     // مدل داده: live.production_plans[] + live.power_outages[] (افزاینده، سازگار با live.json قدیمی)
     // ================================================================
     const PLAN_READ_ROLES = ['admin', 'planner', 'manager', 'supervisor']; /* SEC-AUDIT-13c: اپراتور حذف شد — فقط ثبت تولید/توقف/ضایعات */
@@ -1737,6 +1748,10 @@ function appRequestHandler(req, res) {
                 const s = bump('5SP'); s.bars += Number(p.good_quantity) || 0; s.daysMap[dayOf(t)] = 1;
             }
         });
+        /* COLDSTART-35: روزهای واقعی ثبت تولید (اتحاد روزهای همهٔ سایزها) */
+        const prodDaysSet35i = {};
+        Object.keys(sizes).forEach((k) => { Object.keys(sizes[k].daysMap).forEach((d) => { prodDaysSet35i[d] = 1; }); });
+        const prodDays35i = Object.keys(prodDaysSet35i).length;
         Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.kgPerDay = s.kg / s.days; delete s.daysMap; });
 
         /* ۲) ضایعات وزنی ۳۰ روز */
@@ -1843,7 +1858,30 @@ function appRequestHandler(req, res) {
                 engine: 'internal', based_on: best.based_on
             });
         }
+        /* COLDSTART-35 (begin): در شروع سرد پیشنهاد از پارامتر مهندسی با تناژ منطقی تولید می‌شود (نه ۰٫۱ تن)؛
+           با دادهٔ ناقص (۱ تا ۶ روز) پیشنهادهای واقعی نگه داشته می‌شوند ولی اطمینان سقف‌دار و برچسب شروع سرد صادق است */
+        const cold35i = prodDays35i < COLD_MIN_DAYS_35;
+        if (cold35i && suggestions.length) {
+            suggestions.forEach((sg) => {
+                sg.confidence = Math.min(Number(sg.confidence) || 0, COLD_CONF_CAP_35);
+                sg.reasons = ['🧊 شروع سرد — دادهٔ واقعی ' + fa(prodDays35i) + ' روز است (آستانهٔ ' + fa(COLD_MIN_DAYS_35) + ' روز)؛ بخش مهندسی: نرخ اسمی/ضایعات استاندارد — با ثبت واقعی خودکالیبره می‌شود'].concat(sg.reasons).slice(0, 6);
+                sg.based_on = String(sg.based_on || '') + ' — پایهٔ مهندسی (شروع سرد)';
+            });
+        }
         if (!suggestions.length) {
+            if (cold35i) {
+                Object.keys(COLD_MIX_35).forEach((k35, i35) => {
+                    const target35 = Math.min(2000, Math.max(1, rounds(COLD_RATE_TON_35[k35] * capFactor * 0.9)));
+                    suggestions.push({
+                        title: 'پیشنهاد ' + fa(i35 + 1) + ' — ' + keyFa(k35),
+                        period: 'day', product_size: k35, target_tonnage: target35, required_billets: null,
+                        machine: 'st-form', shift_id: i35 === 1 ? 'shift-night-302' : 'shift-morning-301',
+                        priority: i35 === 0 ? 'high' : 'medium', confidence: Math.min(45, COLD_CONF_CAP_35 - 10),
+                        reasons: ['🧊 شروع سرد — پایهٔ مهندسی: نرخ اسمی ' + keyFa(k35) + ' حدود ' + fa(COLD_RATE_TON_35[k35]) + ' تن در روز', 'با ثبت واقعی تولید، خودکالیبره می‌شود (آستانه: ' + fa(COLD_MIN_DAYS_35) + ' روز)'],
+                        engine: 'internal', based_on: 'پایهٔ مهندسی (شروع سرد COLDSTART-35)'
+                    });
+                });
+            } else {
             suggestions.push({
                 title: 'دادهٔ کافی برای پیشنهاد تناژ موجود نیست',
                 period: 'day', product_size: '', target_tonnage: 1, required_billets: null,
@@ -1851,8 +1889,10 @@ function appRequestHandler(req, res) {
                 reasons: ['تا امروز تولیدی با سایز استاندارد میلگرد (۶ تا ۵۰) یا گرید 5SP ثبت نشده است.', 'می‌توانید برنامه را دستی ثبت کنید؛ با ثبت دادهٔ تولید، موتور پیشنهاد دقیق‌تر می‌شود.'],
                 engine: 'internal', based_on: 'بدون دادهٔ کافی'
             });
+            }
         }
-        return { engine: 'internal', ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), suggestions: suggestions.slice(0, 5), meta: { wastePct: rounds(wastePct), elecPctDay: rounds(elecPctDay), pmCut, outageCut, rawAvailKg: rounds(rawAvail), obsDays } };
+        /* COLDSTART-35 (end) */
+        return { engine: 'internal', ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), suggestions: suggestions.slice(0, 5), meta: { wastePct: rounds(wastePct), elecPctDay: rounds(elecPctDay), pmCut, outageCut, rawAvailKg: rounds(rawAvail), obsDays, prodDays: prodDays35i, mode: cold35i ? 'cold-start' : 'normal' } }; /* COLDSTART-35: +prodDays/mode */
     }
     function toFa(s) { return String(s == null ? '' : s).replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d))); }
     function fa(x) { return toFa(String(x)); }
@@ -3076,6 +3116,9 @@ function appRequestHandler(req, res) {
                 s.bars += q; s.kg += q * 0.0061654 * nn * nn * 12; s.daysMap[dayOf(t)] = 1;
             } else if (pid === '5SP') { const s = bump('5SP'); s.bars += Number(p.good_quantity) || 0; s.daysMap[dayOf(t)] = 1; }
         });
+        /* COLDSTART-35: روزهای واقعی ثبت تولید (اتحاد روزهای همهٔ سایزها) — معیار آستانهٔ شروع سرد */
+        const prodDaysSet35 = {};
+        Object.keys(sizes).forEach((k) => { Object.keys(sizes[k].daysMap).forEach((d) => { prodDaysSet35[d] = 1; }); });
         Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.kgPerDay = s.kg / s.days; delete s.daysMap; });
         /* ضایعات ۳۰ روزه */
         let wasteKg = 0;
@@ -3158,7 +3201,7 @@ function appRequestHandler(req, res) {
             demandKg[k] = (demandKg[k] || 0) + Math.max(0, tg - ac);
             demandTotalKg += Math.max(0, tg - ac);
         });
-        return { sizes, wastePct: rounds(wastePct), qcPassPct: rounds(qcPassPct * 100) / 100, elecPctDay: rounds(elecPctDay), outageByShift, outageNotes, pmCut, pmNotes, rawAvailKg: rounds(rawAvailKg), billetAvgKg, manpower, demandKg, demandTotalKg: rounds(demandTotalKg), obsDays: Math.max(1, Object.keys(daysSeen).length) };
+        return { sizes, wastePct: rounds(wastePct), qcPassPct: rounds(qcPassPct * 100) / 100, elecPctDay: rounds(elecPctDay), outageByShift, outageNotes, pmCut, pmNotes, rawAvailKg: rounds(rawAvailKg), billetAvgKg, manpower, demandKg, demandTotalKg: rounds(demandTotalKg), obsDays: Math.max(1, Object.keys(daysSeen).length), prodDays: Object.keys(prodDaysSet35).length }; /* COLDSTART-35: +prodDays */
     }
 
     function planApsMulberry32(seed) {
@@ -3180,8 +3223,21 @@ function appRequestHandler(req, res) {
         const st = planApsStats(live);
         const rounds = (x) => Math.round((Number(x) || 0) * 100) / 100;
         const keyFa = (k) => (String(k).indexOf('RB-') === 0 ? 'میلگرد سایز ' + k.slice(3) : (k === '5SP' ? 'میلگرد گرید 5SP' : k));
-        const sizeKeys = Object.keys(st.sizes).filter((k) => st.sizes[k].kg > 0);
-        const totalKg = sizeKeys.reduce((s, k) => s + st.sizes[k].kg, 0);
+        const cold35 = (Number(st.prodDays) || 0) < COLD_MIN_DAYS_35; /* COLDSTART-35 */
+        let sizeKeys = Object.keys(st.sizes).filter((k) => st.sizes[k].kg > 0);
+        let totalKg = sizeKeys.reduce((s, k) => s + st.sizes[k].kg, 0);
+        /* COLDSTART-35 (begin): شروع سرد — نرخ اسمی مهندسی جایگزین نرخ واقعی؛ سایزهای تقاضای باز هم پوشش داده می‌شوند */
+        let engRate35 = null;
+        if (cold35) {
+            engRate35 = {};
+            Object.keys(COLD_MIX_35).forEach((k) => { engRate35[k] = 0; });
+            Object.keys(st.demandKg || {}).forEach((k) => { if ((st.demandKg[k] || 0) > 0 && COLD_RATE_TON_35[k]) engRate35[k] = 0; });
+            Object.keys(engRate35).forEach((k) => { engRate35[k] = COLD_RATE_TON_35[k] * 1000; }); /* kg/روز اسمی */
+            sizeKeys = Object.keys(engRate35);
+            totalKg = sizeKeys.reduce((s, k) => s + engRate35[k], 0);
+        }
+        const sizesEff35 = cold35 ? (function () { const o35 = {}; sizeKeys.forEach((k) => { o35[k] = { kg: engRate35[k], kgPerDay: engRate35[k] }; }); return o35; })() : st.sizes;
+        /* COLDSTART-35 (end) */
         if (!sizeKeys.length) {
             return { engine: 'internal-aps', generated_at: new Date().toISOString(), horizon_days: 7, scenarios: [], meta: Object.assign({ empty: true }, st), ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), ai_note: null, reasons_hint: ['تا امروز تولیدی با سایز استاندارد میلگرد (۶ تا ۵۰) یا گرید 5SP ثبت نشده است؛ با ثبت تولید، سناریوها ساخته می‌شوند.'] };
         }
@@ -3195,11 +3251,11 @@ function appRequestHandler(req, res) {
         });
         const capAvg = (shiftCap['shift-morning-301'].cap + shiftCap['shift-night-302'].cap) / 2;
         /* سهم ترکیب per سناریو */
-        const shareProp = {}; sizeKeys.forEach((k) => { shareProp[k] = st.sizes[k].kg / totalKg; });
+        const shareProp = {}; sizeKeys.forEach((k) => { shareProp[k] = sizesEff35[k].kg / totalKg; }); /* COLDSTART-35: سایز مؤثر */
         const demandKeys = Object.keys(st.demandKg).filter((k) => st.demandKg[k] > 0);
         const demandTotal = demandKeys.reduce((s, k) => s + st.demandKg[k], 0);
         const shareDemand = {}; if (demandTotal > 0) demandKeys.forEach((k) => { shareDemand[k] = st.demandKg[k] / demandTotal; });
-        const shareDiverse = {}; sizeKeys.slice().sort((a, b) => st.sizes[b].kg - st.sizes[a].kg).slice(0, 3).forEach((k) => { shareDiverse[k] = 1 / Math.min(3, sizeKeys.length); });
+        const shareDiverse = {}; sizeKeys.slice().sort((a, b) => sizesEff35[b].kg - sizesEff35[a].kg).slice(0, 3).forEach((k) => { shareDiverse[k] = 1 / Math.min(3, sizeKeys.length); }); /* COLDSTART-35: سایز مؤثر */
         const SCEN = [
             { id: 'aps-conservative', kind: 'conservative', title: 'سناریو محافظه‌کار', util: 0.75, share: shareProp, nightShare: 0.3, riskBase: 15, note: '۷۵٪ ظرفیت عملی — اولویت تحقق مطمئن' },
             { id: 'aps-balanced', kind: 'balanced', title: 'سناریو متعادل', util: 0.9, share: shareProp, nightShare: 0.5, riskBase: 30, note: '۹۰٪ ظرفیت عملی — توازن تناژ و ریسک' },
@@ -3213,7 +3269,7 @@ function appRequestHandler(req, res) {
             const shareSum = Object.keys(sc.share).reduce((s, k) => s + sc.share[k], 0) || 1;
             const mix = sizeKeys.map((k) => {
                 const share = (sc.share[k] || 0) / shareSum;
-                const dailyKg = st.sizes[k].kgPerDay * sc.util * wCap * share;
+                const dailyKg = sizesEff35[k].kgPerDay * sc.util * wCap * share; /* COLDSTART-35: سایز مؤثر */
                 return { size: k, share: rounds(share * 100) / 100, daily_tonnage: rounds(dailyKg / 1000) };
             }).filter((m) => m.daily_tonnage > 0.01).sort((a, b) => b.daily_tonnage - a.daily_tonnage);
             const baseDailyKg = mix.reduce((s, m) => s + m.daily_tonnage * 1000, 0);
@@ -3235,14 +3291,15 @@ function appRequestHandler(req, res) {
             const q = (p) => iters[Math.min(MC_N - 1, Math.max(0, Math.round(p * (MC_N - 1))))];
             const p10 = q(0.1), p50 = q(0.5), p90 = q(0.9);
             const commit = Math.max(0.1, rounds(baseHealthyTon));
-            const conf = Math.round(iters.filter((h) => h >= commit).length / MC_N * 100);
+            let conf = Math.round(iters.filter((h) => h >= commit).length / MC_N * 100);
+            if (cold35) conf = Math.min(conf, COLD_CONF_CAP_35); /* COLDSTART-35: اطمینان پایین — صداقت با مدیر */
             /* شمش */
             const healthyKg = baseHealthyTon * 1000;
             const reqBillets = st.billetAvgKg > 50 ? Math.ceil(healthyKg / st.billetAvgKg) : null;
             const availBillets = (st.billetAvgKg > 50 && st.rawAvailKg > 0) ? Math.floor(st.rawAvailKg / st.billetAvgKg) : null;
             const shortage = reqBillets != null && availBillets != null && reqBillets > availBillets;
             let healthyCapped = baseHealthyTon;
-            if (shortage && availBillets != null) healthyCapped = Math.min(baseHealthyTon, availBillets * st.billetAvgKg / 1000);
+            if (shortage && availBillets != null && !cold35) healthyCapped = Math.min(baseHealthyTon, availBillets * st.billetAvgKg / 1000); /* COLDSTART-35: شروع سرد — سناریو کپ نمی‌شود؛ پرچم فقط با دادهٔ واقعی انبار */
             /* KPIها */
             const wasteKg = healthyCapped > 0 ? healthyCapped * 1000 * (st.wastePct / 100) / (1 - st.wastePct / 100) : 0;
             const oee = Math.round(capAvg * Math.min(1, sc.util) * st.qcPassPct * 1000) / 10;
@@ -3250,15 +3307,16 @@ function appRequestHandler(req, res) {
             const fulfill = st.demandTotalKg > 0 ? Math.round(Math.min(250, healthyCapped * 1000 / st.demandTotalKg * 1000) / 10) : null;
             /* دلایل فارسی قالبی */
             const reasons = [];
-            reasons.push('پایه: نرخ واقعی ۹۰ روزهٔ ' + mix.slice(0, 2).map((m) => keyFa(m.size) + ' (' + fa(m.daily_tonnage) + ' تن/روز)').join(' + '));
+            if (cold35) reasons.push('🧊 شروع سرد — دادهٔ واقعی کافی نیست (' + fa(st.prodDays) + ' روز از ' + fa(COLD_MIN_DAYS_35) + ' روز آستانه)؛ بر پایهٔ مهندسی: نرخ اسمی per سایز، ضایعات استاندارد و OEE هدف — با ثبت واقعی خودکالیبره می‌شود'); /* COLDSTART-35 */
+            reasons.push((cold35 ? 'پایهٔ مهندسی: نرخ اسمی ' : 'پایه: نرخ واقعی ۹۰ روزهٔ ') + mix.slice(0, 2).map((m) => keyFa(m.size) + ' (' + fa(m.daily_tonnage) + ' تن/روز)').join(' + ')); /* COLDSTART-35: برچسب صادق منبع نرخ */
             reasons.push('ظرفیت شیفت با احتساب اختلال برق (' + fa(st.elecPctDay) + '٪)، قطعی ثبت‌شده و PM: ' + fa(Math.round(capAvg * 100)) + '٪');
             if (st.outageNotes.length) reasons.push('قطعی برنامه‌ریزی‌شدهٔ ۷ روز آینده: ' + st.outageNotes.slice(0, 2).join('، '));
             if (st.pmNotes.length) reasons.push('PM سررسیدی هفتهٔ پیش‌رو: ' + st.pmNotes.slice(0, 2).join('، '));
             reasons.push('ضایعات ۳۰ روزهٔ ' + fa(st.wastePct) + '٪ و پذیرش QC ' + fa(Math.round(st.qcPassPct * 100)) + '٪ در تناژ سالم لحاظ شد');
             if (st.manpower['shift-morning-301'].n || st.manpower['shift-night-302'].n) reasons.push('نیروی انسانی شیفت‌ها: ' + fa(shiftCap['shift-morning-301'].manpowerN) + ' صبح / ' + fa(shiftCap['shift-night-302'].manpowerN) + ' شب');
-            if (shortage) reasons.push('پرچم کمبود: شمش لازم ' + fa(reqBillets) + ' در برابر موجودی ' + fa(availBillets) + ' — تناژ به سقف موجودی کپ شد');
+            if (shortage) reasons.push('پرچم کمبود: شمش لازم ' + fa(reqBillets) + ' در برابر موجودی ' + fa(availBillets) + (cold35 ? ' — شروع سرد: کپ نمی‌شود، فقط هشدار' : ' — تناژ به سقف موجودی کپ شد')); /* COLDSTART-35 */
             else if (st.rawAvailKg > 0) reasons.push('موجودی شمش قابل‌مصرف: ' + fa(rounds(st.rawAvailKg / 1000)) + ' تن — محدودیتی نیست');
-            else reasons.push('موجودی شمش در انبار ثبت نشده؛ محدودیت شمش اعمال نشد');
+            else reasons.push(cold35 ? 'پایهٔ مهندسی: شمش در دسترس فرض شد (انبار پنهان/خالی است) — پرچم کمبود فقط با دادهٔ واقعی انبار زده می‌شود' : 'موجودی شمش در انبار ثبت نشده؛ محدودیت شمش اعمال نشد'); /* COLDSTART-35 */
             reasons.push('مونت‌کارلو ' + fa(MC_N) + ' تکرار: اطمینان ' + fa(conf) + '٪ برای تعهد ' + fa(commit) + ' تن — بازهٔ ' + fa(rounds(p10)) + ' تا ' + fa(rounds(p90)) + ' تن');
             reasons.push(sc.note);
             /* پیش‌نمایش اعمال (دو سایز برتر ترکیب) */
@@ -3278,13 +3336,13 @@ function appRequestHandler(req, res) {
                     healthy_tonnage_p50: rounds(p50), healthy_tonnage_p10: rounds(p10), healthy_tonnage_p90: rounds(p90),
                     committed_tonnage: commit, expected_waste_kg: Math.round(wasteKg), oee_pct: oee,
                     risk: risk, shortage: shortage, required_billets: reqBillets, available_billets: availBillets,
-                    fulfillment_pct: fulfill, confidence_mc_pct: conf
+                    fulfillment_pct: fulfill, confidence_mc_pct: conf, basis: cold35 ? 'engineering' : 'observed' /* COLDSTART-35 */
                 },
                 reasons: reasons.slice(0, 8), apply: apply,
-                engine: 'internal', based_on: 'APS ۷روزه — مونت‌کارلو ' + MC_N + ' تکرار'
+                engine: 'internal', based_on: 'APS ۷روزه — مونت‌کارلو ' + MC_N + ' تکرار' + (cold35 ? ' — پایهٔ مهندسی (شروع سرد)' : '')
             };
         });
-        return { engine: 'internal-aps', generated_at: new Date().toISOString(), horizon_days: 7, scenarios: scenarios, meta: st, ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), ai_note: null };
+        return { engine: 'internal-aps', generated_at: new Date().toISOString(), horizon_days: 7, scenarios: scenarios, meta: st, ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), ai_note: null, mode: cold35 ? 'cold-start' : 'normal', mode_label: cold35 ? '🧊 شروع سرد — با ثبت واقعی خودکالیبره می‌شود' : '', calibrate: { days: Number(st.prodDays) || 0, threshold: COLD_MIN_DAYS_35 } }; /* COLDSTART-35: حالت + آستانهٔ خودکالیبره */
     }
 
     /* توضیح اختیاری AI (غیرمسدودکننده) — کش per هش داده */
