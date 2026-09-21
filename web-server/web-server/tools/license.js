@@ -16,6 +16,8 @@
 //    node tools/license.js --sign-ed                        (امضای Ed25519 → license_sig2 — کلید از env: SANATIFY_LIC_ED_PRIV پایه64-PKCS8)
 //    node tools/license.js --verify                         (فقط بررسی امضا — چیزی نمی‌نویسد)
 //    node tools/license.js --hwkey=HW-XXXX-XXXX-XXXX        (SEC-BIND-19f: قفل سخت‌افزاری — فقط روی ماشین دارای این HWKEY بالا می‌آید؛ خالی = حذف قفل)
+//    node tools/license.js --hide-tabs=warehouse,finance,…   (GO-LIVE-32: گیت دامنهٔ راه‌اندازی — این تب‌ها در UI مشتری اصلاً ساخته نمی‌شوند؛ فقط UI، APIها دست‌نخورده؛ خالی = حذف گیت)
+//    node tools/license.js --demo-on | --demo-off            (FIX-UI-19d: حالت دمو — بستن مالی/فروش/خرید در UI و API برای دموی تجاری)
 //    (HWKEY را با tools/generate-hwkey.js روی ماشین مشتری می‌گیرید؛ حذف/تغییر hwkey = امضای نامعتبر = لایسنس پایه)
 //  چند پرچم می‌تواند همزمان بیاید؛ ترتیب اجرا: only → enable → disable → بقیه
 //  ⚠ SEC-LIC-24: tenant.json بدون امضای معتبر ⇒ سرور به لایسنس پایه (summary+production+inventory) برمی‌گردد
@@ -221,6 +223,23 @@ if (args.hwkey !== undefined) {
     cfg.hwkey = hw19f; /* خالی ⇒ حذف قفل */
 }
 /* ===== SEC-BIND-19f (end) ===== */
+/* ===== GO-LIVE-32 (begin): گیت دامنهٔ راه‌اندازی — hidden_tabs (فقط UI) =====
+   • بیرون licCanonical24 است ⇒ تغییرش امضای لایسنس را نمی‌شکند (ولی --sign همیشه امضای تازه می‌زند)
+   • شناسه‌های مجاز عیناً از #nav button[data-tab] در public/index.html استخراج شده‌اند؛ «org» پنل سازمان است و هرگز مخفی نمی‌شود */
+const TABS_LIC_32 = ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'warehouse', 'maintenance', 'planning', 'finance', 'sales', 'purchase'];
+if (args['hide-tabs'] !== undefined) {
+    const raw32 = String(args['hide-tabs'] || '').trim();
+    if (!raw32) cfg.hidden_tabs = []; /* خالی = حذف گیت */
+    else {
+        const parts32 = raw32.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+        const bad32 = parts32.filter((p) => TABS_LIC_32.indexOf(p) === -1);
+        if (bad32.length) fail('تب نامعتبر: ' + bad32.join(', ') + '\n  تب‌های مجاز: ' + TABS_LIC_32.join(', ') + '\n  (تب «org» پنل سازمان است و هرگز مخفی نمی‌شود)');
+        cfg.hidden_tabs = parts32.filter((p, i) => parts32.indexOf(p) === i); /* حذف تکراری — ترتیب ورودی حفظ می‌شود */
+    }
+}
+if (args['demo-on']) cfg.demo_mode = true;
+if (args['demo-off']) cfg.demo_mode = false;
+/* ===== GO-LIVE-32 (end) ===== */
 if (args.expires !== undefined) {
     const e = String(args.expires || '').trim();
     if (e) { const t = Date.parse(e); if (isNaN(t)) fail('تاریخ انقضا نامعتبر است (نمونه: 2027-03-20).'); cfg.expires_at = new Date(t).toISOString(); }
@@ -259,6 +278,8 @@ console.log('✓ tenant.json ذخیره شد → ' + TENANT_FILE);
 console.log('  ماژول‌های فعال (' + cfg.active_modules.length + '/' + MODULES.length + '): ' + cfg.active_modules.join(', '));
 const off = MODULES.filter((m) => cfg.active_modules.indexOf(m) === -1);
 if (off.length) console.log('  غیرفعال: ' + off.join(', ') + '\n  (تب‌ها در UI پنهان و APIهایشان 403 می‌شود — بدون نیاز به ری‌استارت سرور)');
+if (Array.isArray(cfg.hidden_tabs) && cfg.hidden_tabs.length) console.log('  گیت دامنه (GO-LIVE-32): تب‌های مخفی UI (' + cfg.hidden_tabs.length + '): ' + cfg.hidden_tabs.join(', ') + '\n  (فقط UI — کل بخش شامل اکسل/چاپ از DOM حذف می‌شود؛ APIها دست‌نخورده)');
+if (cfg.demo_mode === true) console.log('  حالت دمو: فعال (FIX-UI-19d — مالی/فروش/خرید در UI پنهان و APIهایشان 403)');
 if (cfg.expires_at && Date.parse(cfg.expires_at) < Date.now()) console.warn('  ⚠ لایسنس منقضی است — همهٔ APIها 403 می‌دهند تا انقضا حذف/تمدید شود.');
 /* SEC-LIC-24: وضعیت امضا در گزارش */
 if (args['sign-ed']) console.log('  امضا: ✓ license_sig2 ثبت شد (Ed25519 — کلید خصوصی سمت فروشنده).');

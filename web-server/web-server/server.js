@@ -473,9 +473,16 @@ function handleHealthFast(req, res) {
 // الگوهای SaaS Azure با ایزوله‌سازی کامل داده؛ ERPNext هر tenant را یک site جدا می‌گیرد، ما هر استقرار را)
 const TENANT_FILE_15A = path.join(ROOT, 'tenant.json');
 const MODULES_15A = ['summary', 'analytics', 'production', 'quality', 'inventory', 'maintenance', 'em', 'planning', 'finance', 'sales', 'purchase']; /* FEAT-SALES-21a: +ماژول فروش (گیت لایسنس مثل بقیه) + FEAT-PURCHASE-22a: +ماژول خرید */
+/* ===== GO-LIVE-32 (begin): گیت دامنهٔ راه‌اندازی — hidden_tabs (فقط UI؛ هیچ endpoint/منطق عملیاتی تغییر نمی‌کند) =====
+   • tenant.json: hidden_tabs: ["warehouse","finance",…] — غایب/خالی = همهٔ تب‌ها (سازگاری کامل با استقرارهای موجود)
+   • شناسه‌ها عیناً از #nav button[data-tab] در public/index.html استخراج شدند (نه حدس)؛ «org» پنل سازمان است و هرگز مخفی نمی‌شود
+   • بیرون licCanonical24 است ⇒ امضای لایسنس را نمی‌شکند */
+const TABS_32 = ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'warehouse', 'maintenance', 'planning', 'finance', 'sales', 'purchase', 'org'];
+/* ===== GO-LIVE-32 (end) ===== */
 const DEFAULT_TENANT_15A = {
     tenant_id: 'sanatify', name: 'صنعتی فای', logo: '', brand_colors: {},
     active_modules: MODULES_15A.slice(), max_users: 0, max_records: 0,
+    hidden_tabs: [], /* GO-LIVE-32: گیت دامنهٔ راه‌اندازی */
     role_caps: {}, /* FEAT-ADMIN-17a: سقف نفرات هر نقش (۰ = بی‌سقف) */
     license_key: '', expires_at: '', custom_settings: {}
 };
@@ -495,6 +502,8 @@ function loadTenant15a() {
         else cfg.active_modules = cfg.active_modules.filter((m) => MODULES_15A.indexOf(m) !== -1);
         if (!cfg.active_modules.length) cfg.active_modules = MODULES_15A.slice(); // پیکربندی خراب → قفل کامل نه؛ همهٔ ماژول‌ها
         if (!cfg.custom_settings || typeof cfg.custom_settings !== 'object' || Array.isArray(cfg.custom_settings)) cfg.custom_settings = {};
+        if (!Array.isArray(cfg.hidden_tabs)) cfg.hidden_tabs = []; /* GO-LIVE-32: گیت دامنه — پاک‌سازی شناسه‌های ناشناخته */
+        else cfg.hidden_tabs = cfg.hidden_tabs.map((t) => String(t || '').trim()).filter((t) => TABS_32.indexOf(t) !== -1);
         if (!cfg.role_caps || typeof cfg.role_caps !== 'object' || Array.isArray(cfg.role_caps)) cfg.role_caps = {}; /* FEAT-ADMIN-17a */
         applyLicenseSigGuard24(cfg, st.mtimeMs); /* SEC-LIC-24: تأیید امضا در هر خواندن/بوت */
         tenantCache15a = cfg; tenantMtime15a = st.mtimeMs;
@@ -1040,6 +1049,7 @@ function tenantPublicShape15c(cfg) {
         brand_colors: cfg.brand_colors || {}, active_modules: cfg.active_modules.slice(),
         max_users: Number(cfg.max_users) || 0, max_records: Number(cfg.max_records) || 0,
         role_caps: cfg.role_caps || {}, /* FEAT-ADMIN-17a */
+        hidden_tabs: (Array.isArray(cfg.hidden_tabs) ? cfg.hidden_tabs : []).slice(), /* GO-LIVE-32: حفظ گیت دامنه در پاسخ پنل سازمان — فایل هم حفظ می‌شود (cfg کامل بازنویسی می‌شود) */
         custom_settings: cfg.custom_settings || {},
         license: { expired: isLicenseExpired15a(cfg), expires_at: cfg.expires_at || '', invalid: !!(cfg && cfg.__lic_invalid_24) }, /* SEC-LIC-24 */
     };
@@ -1155,6 +1165,7 @@ function appRequestHandler(req, res) {
             tenant_id: c15a.tenant_id, name: c15a.name, logo: c15a.logo || '',
             brand_colors: c15a.brand_colors || {}, active_modules: c15a.active_modules.slice(),
             demo_mode: !!c15a.demo_mode, /* FIX-UI-19d: حالت دمو — مخفیسازی کامل مالی/فروش/خرید در UI + گیت سرورساید */
+            hidden_tabs: (Array.isArray(c15a.hidden_tabs) ? c15a.hidden_tabs : []).slice(), /* GO-LIVE-32: گیت دامنهٔ راه‌اندازی — فقط UI؛ پاس‌ترو سرراست */
             license: { expired: isLicenseExpired15a(c15a), expires_at: c15a.expires_at || '', invalid: !!(c15a && c15a.__lic_invalid_24) }, /* SEC-LIC-24 */
         } });
     }
