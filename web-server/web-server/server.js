@@ -633,18 +633,29 @@ function applyLicenseSigGuard24(cfg, srcMtime) {
     }
     return cfg;
 }
-function ownerExists24() { /* backward-compat: تا وقتی کاربر owner صریح وجود ندارد، admin همان مالک سیستم است */
-    try {
-        const a24 = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); /* SEC-ANTI-19g */
-        return Array.isArray(a24) && a24.some((u) => u && u.role === 'owner' && u.active !== false);
-    } catch (e) { return false; }
+/* ===== VENDOR-37 (begin): صاحب سیستم (vendor) جدا از admin ===== */
+function vendorRole37(r) { return r === 'vendor' || r === 'owner'; } /* owner = نام قدیمی SEC-LIC-24 */
+function vendorExists37() { /* حداقل یک صاحب سیستم فعال — تا وقتی وجود ندارد، admin همان نقش را دارد (سازگاری) */
+    try { return auth.loadUsers37().some((u) => u && vendorRole37(u.role) && u.active !== false); } catch (e) { return false; }
 }
+function ownerExists24() { return vendorExists37(); } /* backward-compat SEC-LIC-24 */
 function isOwnerReq24(req) {
     const u24 = req && req.user;
     if (!u24) return false;
     const role24 = String(u24.role || 'viewer');
-    return role24 === 'owner' || (role24 === 'admin' && !ownerExists24());
+    return vendorRole37(role24) || (role24 === 'admin' && !vendorExists37());
 }
+function vendorSigOk37(u) { /* امضای Ed25519 روی vendor — فقط با کلید خصوصی فروشنده (--recover-vendor) قابل ساخت */
+    try {
+        const sig37 = String((u && u.vendor_sig) || '').trim();
+        const created37 = String((u && u.created_at) || '');
+        if (!u || !u.username || !sig37 || !created37) return false;
+        const pub37 = loadLicEdPub18J();
+        if (!pub37) return false;
+        return crypto.verify(null, Buffer.from('vendor37|' + String(u.username) + '|' + created37, 'utf8'), pub37, Buffer.from(sig37, 'hex'));
+    } catch (e) { return false; }
+}
+/* ===== VENDOR-37 (end) ===== */
 // ===== SEC-LIC-24 (end) =====
 // ===== SEC-BIND-19f (begin): قفل سخت‌افزاری — Hardware ID Binding =====
 // هدف: نسخهٔ دموی تجاری فقط روی VM مشتریِ دارای لایسنس اجرا شود.
@@ -1055,10 +1066,11 @@ function tenantPublicShape15c(cfg) {
     };
 }
 // ===== FEAT-ADMIN-17a (begin): ثابت‌های نقش + خوانندهٔ فایل کاربران =====
-const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase', 'owner']; /* همان کلیدهای ROLE_VIEW — دست نخورده + FEAT-SALES-21a: نقش فروش + FEAT-PURCHASE-22a: نقش خرید + SEC-LIC-24: نقش مالک (فروشنده) */
-const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید', owner: 'مالک سیستم (فروشنده)' }; /* FEAT-SALES-21a: +نقش فروش + FEAT-PURCHASE-22a: +نقش خرید + SEC-LIC-24: +نقش مالک */
+const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase', 'owner', 'vendor']; /* همان کلیدهای ROLE_VIEW — + FEAT-SALES-21a/FEAT-PURCHASE-22a + SEC-LIC-24: مالک + VENDOR-37: صاحب سیستم (canonical؛ owner = نام قدیمی) */
+const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید', owner: 'مالک سیستم (فروشنده)', vendor: 'صاحب سیستم (فروشنده)' }; /* SEC-LIC-24: مالک + VENDOR-37: صاحب سیستم */
 function readUsers17a() {
-    try { const a = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } /* SEC-ANTI-19g */
+    /* VENDOR-37: مسیر واحد بارگذاری — سخت‌گیرانه (.enc فقط) + مهاجرت یک‌باره + نرمال‌سازی owner→vendor */
+    return auth.loadUsers37();
 }
 // ===== FEAT-ADMIN-17a (end) =====
 // ===== SAAS-15c (end) =====
@@ -1392,7 +1404,8 @@ function appRequestHandler(req, res) {
                 if (!/^[A-Za-z0-9._-]{3,40}$/.test(username17a)) return sendJson(res, { error: 'نام کاربری باید ۳ تا ۴۰ کاراکتر لاتین، عدد، نقطه، زیرخط یا خط تیره باشد.' }, 400);
                 if (!name17a) return sendJson(res, { error: 'نام کامل کاربر الزامی است.' }, 400);
                 if (ROLES_17A.indexOf(role17a) === -1) return sendJson(res, { error: 'نقش انتخاب‌شده نامعتبر است.' }, 400);
-                if (role17a === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
+                if (vendorRole37(role17a) && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «صاحب سیستم» فقط توسط صاحب سیستم (فروشنده) مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 + VENDOR-37 */
+                if (role17a === 'admin' && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «admin» فقط توسط صاحب سیستم (vendor) مجاز است — admin نمی‌تواند admin بسازد.', code: 'VENDOR_ONLY' }, 403); /* VENDOR-37: ساخت admin فقط صاحب سیستم */
                 const polErr18p = auth.passwordPolicyError18P(password17a, username17a); /* HARDEN-18P: حداقل ۸ + پیچیدگی */
                 if (polErr18p) return sendJson(res, { error: polErr18p }, 400);
                 const users17a = readUsers17a();
@@ -1447,10 +1460,11 @@ function appRequestHandler(req, res) {
                     if (role17a !== String(u17a.role || '')) {
                         if (isSelf17a) return sendJson(res, { error: 'تغییر نقش حساب خودتان مجاز نیست — از حساب مدیر دیگری استفاده کنید.' }, 400);
                         /* SEC-LIC-24 (begin): نقش مالک — فقط مالک می‌دهد/می‌گیرد؛ آخرین مالک فعال حفظ می‌شود */
-                        if ((role17a === 'owner' || String(u17a.role || '') === 'owner') && !isOwnerReq24(req)) return sendJson(res, { error: 'تغییر نقش «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403);
-                        if (String(u17a.role || '') === 'owner' && role17a !== 'owner' && u17a.active !== false) {
-                            const ownersLeft24 = users17a.filter((x) => x.role === 'owner' && x.active !== false).length;
-                            if (ownersLeft24 <= 1) return sendJson(res, { error: 'حداقل یک مالک فعال باید باقی بماند.' }, 400);
+                        if ((vendorRole37(role17a) || vendorRole37(String(u17a.role || ''))) && !isOwnerReq24(req)) return sendJson(res, { error: 'تغییر نقش «صاحب سیستم» فقط توسط صاحب سیستم (فروشنده) مجاز است.', code: 'OWNER_ONLY' }, 403); /* VENDOR-37 */
+                        if ((role17a === 'admin' || String(u17a.role || '') === 'admin') && !isOwnerReq24(req)) return sendJson(res, { error: 'تغییر نقش کاربر «admin» فقط توسط صاحب سیستم (vendor) مجاز است.', code: 'VENDOR_ONLY' }, 403); /* VENDOR-37: ساخت/حذف admin فقط صاحب سیستم */
+                        if (vendorRole37(String(u17a.role || '')) && !vendorRole37(role17a) && u17a.active !== false) {
+                            const ownersLeft24 = users17a.filter((x) => vendorRole37(x.role) && x.active !== false).length;
+                            if (ownersLeft24 <= 1) return sendJson(res, { error: 'حداقل یک صاحب سیستم (vendor) فعال باید باقی بماند.' }, 400);
                         }
                         /* SEC-LIC-24 (end) */
                         if (u17a.role === 'admin' && u17a.active !== false) {
@@ -1470,10 +1484,11 @@ function appRequestHandler(req, res) {
                     const act17a = !!b17a.active;
                     if (!act17a && u17a.active !== false) {
                         if (isSelf17a) return sendJson(res, { error: 'غیرفعال‌کردن حساب خودتان مجاز نیست.' }, 400);
-                        if (String(u17a.role || '') === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'غیرفعال‌سازی «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
-                        if (String(u17a.role || '') === 'owner') {
-                            const ownersAct24 = users17a.filter((x) => x.role === 'owner' && x.active !== false).length;
-                            if (ownersAct24 <= 1) return sendJson(res, { error: 'حداقل یک مالک فعال باید باقی بماند.' }, 400); /* SEC-LIC-24 */
+                        if (vendorRole37(String(u17a.role || '')) && !isOwnerReq24(req)) return sendJson(res, { error: 'غیرفعال‌سازی «صاحب سیستم» فقط توسط صاحب سیستم (فروشنده) مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 + VENDOR-37 */
+                        if (u17a.role === 'admin' && !isOwnerReq24(req)) return sendJson(res, { error: 'غیرفعال‌سازی کاربر «admin» فقط توسط صاحب سیستم (vendor) مجاز است.', code: 'VENDOR_ONLY' }, 403); /* VENDOR-37: حذف admin فقط صاحب سیستم */
+                        if (vendorRole37(String(u17a.role || ''))) {
+                            const ownersAct24 = users17a.filter((x) => vendorRole37(x.role) && x.active !== false).length;
+                            if (ownersAct24 <= 1) return sendJson(res, { error: 'حداقل یک صاحب سیستم (vendor) فعال باید باقی بماند.' }, 400); /* SEC-LIC-24 + VENDOR-37 */
                         }
                         if (u17a.role === 'admin') {
                             const admins17a = users17a.filter((x) => x.role === 'admin' && x.active !== false).length;
@@ -1511,7 +1526,7 @@ function appRequestHandler(req, res) {
                 const users17a = readUsers17a();
                 const u17a = users17a.find((x) => String(x.username || '').toLowerCase() === username17a.toLowerCase());
                 if (!u17a) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
-                if (String(u17a.role || '') === 'owner' && !isOwnerReq24(req)) return sendJson(res, { error: 'بازنشانی رمز «مالک سیستم» فقط توسط مالک سیستم مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 */
+                if (vendorRole37(String(u17a.role || '')) && !isOwnerReq24(req)) return sendJson(res, { error: 'بازنشانی رمز «صاحب سیستم» فقط توسط صاحب سیستم (فروشنده) مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 + VENDOR-37 */
                 /* هش فوری + حذف هر باقیماندهٔ plaintext (سازگار با migrate-hashes) */
                 delete u17a.password;
                 u17a.password_hash = auth.hashPassword(pw17a);
@@ -1656,8 +1671,8 @@ function appRequestHandler(req, res) {
     /* ===== COLDSTART-35 (end) ===== */
     // مدل داده: live.production_plans[] + live.power_outages[] (افزاینده، سازگار با live.json قدیمی)
     // ================================================================
-    const PLAN_READ_ROLES = ['admin', 'planner', 'manager', 'supervisor']; /* SEC-AUDIT-13c: اپراتور حذف شد — فقط ثبت تولید/توقف/ضایعات */
-    const PLAN_WRITE_ROLES = ['admin', 'planner'];
+    const PLAN_READ_ROLES = ['admin', 'vendor', 'owner', 'planner', 'manager', 'supervisor']; /* SEC-AUDIT-13c: اپراتور حذف شد + VENDOR-37: صاحب سیستم دسترسی کامل */
+    const PLAN_WRITE_ROLES = ['admin', 'vendor', 'owner', 'planner']; /* VENDOR-37: صاحب سیستم مثل admin */
     function planAudit(req, action, payload) { try { auditLog(req, 'plan.' + action, payload); } catch (e) { /* بی‌ضرر */ } }
 
     function planSeenRequest(list, rid) { return rid ? (list || []).find((x) => x.request_id === rid) || null : null; }
@@ -7848,15 +7863,66 @@ if (process.argv.indexOf('--print-hwkey') !== -1) {
     if (pol32) { console.error('✗ رمز اولیه نامعتبر است: ' + pol32); process.exit(1); }
     const users32 = readUsers17a();
     if (users32.some((u) => String(u.username || '').toLowerCase() === username32.toLowerCase())) { console.error('✗ کاربر «' + username32 + '» از قبل موجود است — ساخت کاربرهای بعدی از پنل سازمان (تب org) انجام می‌شود.'); process.exit(1); }
+    if (users32.some((u) => vendorRole37(u.role) && u.active !== false)) { console.error('✗ گارد دوم: صاحب سیستم (vendor) فعال موجود است — بوت‌استرپ فقط برای نصب تمیز است.'); process.exit(1); }
     if (users32.some((u) => u.role === 'admin' && u.active !== false)) { console.error('✗ گارد ادمین دوم: حداقل یک ادمین فعال موجود است — بوت‌استرپ فقط برای نصب تمیز است. (رمز ادمین گم شده؟ فقط وب‌کاربران را بازسازی کنید.)'); process.exit(1); }
-    users32.push({ username: username32, role: 'admin', name: 'مدیر سامانه', password_hash: auth.hashPassword(password32), must_change_pw: true, created_at: new Date().toISOString(), created_by: 'go-live-bootstrap-32' });
-    if (!auth.writeUsers17a(users32)) { console.error('✗ نوشتن web-users.json ناموفق بود.'); process.exit(1); }
-    try { fs.chmodSync(path.join(ROOT, 'web-users.json'), 0o600); } catch (e32) { /* ویندوز: غیرمرگبار — سرویس با اکانت SYSTEM دسترسی دارد */ }
-    console.log('✓ ادمین بوت‌استرپ ساخته شد: ' + username32 + '  (نقش: admin — اولین ورود اجبار به تغییر رمز دارد)');
+    users32.push({ username: username32, role: 'vendor', name: 'صاحب سیستم (فروشنده)', password_hash: auth.hashPassword(password32), must_change_pw: true, created_at: new Date().toISOString(), created_by: 'vendor-bootstrap-37' }); /* VENDOR-37: بوت‌استرپ = vendor نه admin */
+    if (!auth.writeUsers17a(users32)) { console.error('✗ نوشتن web-users (رمزنگاری‌شده) ناموفق بود.'); process.exit(1); }
+    try { const encp32 = path.join(ROOT, 'web-users.json.enc'); if (fs.existsSync(encp32)) fs.chmodSync(encp32, 0o600); else fs.chmodSync(path.join(ROOT, 'web-users.json'), 0o600); } catch (e32) { /* ویندوز: غیرمرگبار — سرویس با اکانت SYSTEM دسترسی دارد */ }
+    console.log('✓ صاحب سیستم (vendor) بوت‌استرپ شد: ' + username32 + '  (نقش: vendor — تنها نقش با دسترسی لایسنس/ماژول‌ها/ساخت admin — اولین ورود اجبار به تغییر رمز)');
+    console.log('  web-users روی دیسک رمزنگاری‌شده است (web-users.json.enc — کلید مشتق از HWKEY).');
     console.log('  گام بعد: سرویس را استارت کنید، با همین کاربر وارد شوید و از پنل سازمان (تب org) بقیهٔ کاربران/نقش‌ها را بسازید.');
     process.exit(0);
 })();
 /* ===== GO-LIVE-32b (end) ===== */
+/* ===== VENDOR-37 (begin): recovery صاحب سیستم — فقط با کلید خصوصی فروشنده =====
+   مصرف:  SANATIFY_LIC_ED_PRIV="…" ./sanatify-mes --recover-vendor=نام‌کاربری:رمز-اولیه
+   • vendor ساخته/بازنشانی‌شده با امضای Ed25519 فروشنده (vendor_sig) — IT بدون کلید خصوصی نمی‌تواند vendor بسازد.
+   • کاربران سالم موجود (حتی از فایل ردشدهٔ rejected-37) حفظ می‌شوند؛ vendorهای بی‌امضا/جعلی حذف می‌شوند. */
+(function recoverVendor37() {
+    const arg37r = (process.argv.find((a) => a.indexOf('--recover-vendor=') === 0) || '').slice('--recover-vendor='.length);
+    if (!arg37r) return;
+    const idx37r = arg37r.indexOf(':');
+    const username37r = (idx37r === -1 ? arg37r : arg37r.slice(0, idx37r)).trim();
+    const password37r = idx37r === -1 ? String(process.env.SANATIFY_BOOTSTRAP_PW || '') : arg37r.slice(idx37r + 1);
+    const privB6437 = String(process.env.SANATIFY_LIC_ED_PRIV || '').trim();
+    if (!privB6437) { console.error('✗ recovery صاحب سیستم فقط با کلید خصوصی فروشنده ممکن است — env SANATIFY_LIC_ED_PRIV (PKCS8 پایه64) تنظیم نیست (طرح امنیتی VENDOR-37: IT بدون این کلید نمی‌تواند vendor بسازد).'); process.exit(1); }
+    if (!/^[a-zA-Z0-9._-]{3,100}$/.test(username37r)) { console.error('✗ نام کاربری نامعتبر است (۳ تا ۱۰۰ کاراکتر — حروف/عدد/نقطه/زیرخط/خط تیره).'); process.exit(1); }
+    if (!password37r) { console.error('✗ رمز اولیه داده نشد — قالب: --recover-vendor=نام‌کاربری:رمز (یا env SANATIFY_BOOTSTRAP_PW — فقط inline، هرگز export/تاریخچه).'); process.exit(1); }
+    const pol37r = auth.passwordPolicyError18P(password37r, username37r);
+    if (pol37r) { console.error('✗ رمز اولیه نامعتبر است: ' + pol37r); process.exit(1); }
+    let privKey37 = null;
+    try { privKey37 = crypto.createPrivateKey({ key: Buffer.from(privB6437, 'base64'), format: 'der', type: 'pkcs8' }); } catch (e37k) { console.error('✗ کلید خصوصی نامعتبر است (PKCS8 پایه64).'); process.exit(1); }
+    try {
+        const pubSpki37 = crypto.createPublicKey(privKey37).export({ format: 'der', type: 'spki' }).toString('base64');
+        const effPub37 = String(process.env.SANATIFY_LIC_ED_PUB || '').trim() || LIC_ED_PUB_EMBEDDED_27;
+        if (pubSpki37 !== effPub37) { console.error('✗ کلید خصوصی با کلید عمومی مؤثر سرور (embedded/env) مطابقت ندارد — recovery رد شد.'); process.exit(1); }
+    } catch (e37v) { console.error('✗ بررسی کلید عمومی ناموفق بود.'); process.exit(1); }
+    const created37r = new Date().toISOString();
+    let sig37r = '';
+    try { sig37r = crypto.sign(null, Buffer.from('vendor37|' + username37r + '|' + created37r, 'utf8'), privKey37).toString('hex'); } catch (e37s) { console.error('✗ امضای vendor ناموفق بود.'); process.exit(1); }
+    let users37r = readUsers17a();
+    if (!users37r.length) { /* شاید فایل رد شده باشد — کاربران سالم از آخرین rejected بازیابی می‌شوند */
+        try {
+            const rejFiles37 = fs.readdirSync(ROOT).filter((f) => f.indexOf('web-users.json.rejected-37-') === 0).sort();
+            const rej37 = rejFiles37[rejFiles37.length - 1];
+            if (rej37) {
+                const arr37 = JSON.parse(fs.readFileSync(path.join(ROOT, rej37), 'utf8'));
+                users37r = (Array.isArray(arr37) ? arr37 : []).filter((u) => u && (!vendorRole37(String(u.role || '')) || vendorSigOk37(u)));
+                console.log('  کاربران سالم از ' + rej37 + ' بازیابی شدند (' + users37r.length + ' نفر).');
+            }
+        } catch (e37t) { /* noop */ }
+    }
+    users37r = users37r.filter((u) => u && (!vendorRole37(String(u.role || '')) || vendorSigOk37(u))); /* vendor بی‌امضا/جعلی حذف */
+    const exIdx37 = users37r.findIndex((u) => String(u.username || '').toLowerCase() === username37r.toLowerCase());
+    const rec37 = { username: username37r, name: 'صاحب سیستم (فروشنده)', role: 'vendor', active: true, password_hash: auth.hashPassword(password37r), must_change_pw: true, created_at: created37r, created_by: 'vendor-recovery-37', vendor_sig: sig37r };
+    if (exIdx37 !== -1) users37r[exIdx37] = rec37; else users37r.push(rec37);
+    if (!auth.writeUsers17a(users37r)) { console.error('✗ نوشتن web-users رمزنگاری‌شده ناموفق بود.'); process.exit(1); }
+    try { const encp37 = path.join(ROOT, 'web-users.json.enc'); if (fs.existsSync(encp37)) fs.chmodSync(encp37, 0o600); } catch (e37u) { /* ویندوز */ }
+    console.log('✓ صاحب سیستم recovery شد: ' + username37r + '  (نقش: vendor — امضای Ed25519 فروشنده ✓ — اولین ورود اجبار به تغییر رمز)');
+    console.log('  این vendor با کلید خصوصی فروشنده امضا شده و حتی پس از رد فایل کاربران معتبر می‌ماند.');
+    process.exit(0);
+})();
+/* ===== VENDOR-37 (end) ===== */
 // ===== SEC-BIND-19f: گیت بوت قفل سخت‌افزاری — پیش از هر listen؛ روی ماشین قفل‌شدهٔ نامعتبر سرور هرگز گوش نمی‌دهد =====
 (function hwBindBoot19f() {
     console.log('  HWKEY ماشین : ' + HWKEY_19F + '  (برای صدور/تمدید لایسنس نزد فروشنده بفرستید)');
@@ -7892,6 +7958,17 @@ if (process.argv.indexOf('--print-hwkey') !== -1) {
             fatal19g('امضای لایسنس (tenant.json) نامعتبر/دستکاری‌شده است — باینری دمو بالا نمی‌آید؛ tenant.json امضاشدهٔ سالم را کنار exe بگذارید.', 'hwbind.license_invalid');
         }
     }
+    /* ===== VENDOR-37: سرشماری صاحب سیستم — بوت هرگز متوقف نمی‌شود؛ فقط پیام فارسی + راه‌حل CLI چاپ می‌شود ===== */
+    (function vendorCensus37() {
+        let vCount37 = 0;
+        try { vCount37 = auth.loadUsers37().filter((u) => u && vendorRole37(u.role) && u.active !== false).length; } catch (e37c) { vCount37 = 0; }
+        if (vCount37 === 0) {
+            console.warn('⚠ VENDOR-37 — هیچ «صاحب سیستم» (vendor) فعالی وجود ندارد.');
+            console.warn('  تا وقتی vendor نباشد، ادمینِ نصب‌های قدیمی همان نقش را دارد (سازگاری SEC-LIC-24). برای حاکمیت کامل:');
+            console.warn('  • نصب تازه:  ./sanatify-mes --create-admin=نام‌کاربری:رمز   (vendor می‌سازد — نه admin)');
+            console.warn('  • recovery:  SANATIFY_LIC_ED_PRIV="…" ./sanatify-mes --recover-vendor=نام‌کاربری:رمز   (فقط با کلید خصوصی فروشنده)');
+        }
+    })();
     const bound19f = hwNorm19f(cfg19f && cfg19f.hwkey);
     if (bound19f && bound19f !== hwNorm19f(HWKEY_19F)) {
         console.error('========================================================');

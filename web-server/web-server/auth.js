@@ -91,6 +91,51 @@ function dropEnc19g(filePath) {
     } catch (e19g) { /* بی‌ضرر */ }
 }
 /* ===== SEC-ANTI-19g (end) ===== */
+/* ===== VENDOR-37 (begin): صاحب سیستم (vendor) + رمزنگاری اجباری web-users =====
+   • web-users روی دیسک فقط ciphertext است (AES-256-GCM — پاکت عیناً SEC-ANTI-19g، کلید=scrypt(SANATIFY_LIC_KEY|HWKEY))
+     ⇒ فقط روی همین VM رمزگشایی می‌شود؛ IT با ویرایش دستی نمی‌تواند vendor جعل کند.
+   • .enc موجود ولی رمزگشایی‌ناشدنی ⇒ فایل رد می‌شود (fallback به plaintext کهنه ممنوع) — فقط vendor امضاشده
+     با recovery (کلید خصوصی فروشنده) فعال می‌ماند.
+   • plaintext بدون .enc ⇒ مهاجرت یک‌بارهٔ خودکار (به‌جز vendor بی‌امضا در فایل دست‌ساز = جعل ⇒ رد).
+   • نقش vendor = صاحب سیستم؛ 'owner' (SEC-LIC-24) در بارگذاری به vendor نرمال می‌شود. */
+const VENDOR_ROLE_37_A = 'vendor';
+function vendorRole37A(r) { return r === 'vendor' || r === 'owner'; }
+function normalizeRole37A(arr) {
+    (Array.isArray(arr) ? arr : []).forEach((u) => { if (u && String(u.role || '') === 'owner') u.role = 'vendor'; });
+    return Array.isArray(arr) ? arr : [];
+}
+function encryptText37A(text) { /* پاکت عیناً CFG_MAGIC_19G_A — هر تغییر هم‌زمان با server.js/tools/encrypt-config.js */
+    const salt37a = crypto.randomBytes(16);
+    const key37a = cfgDerivedKey19gA(salt37a);
+    const iv37a = crypto.randomBytes(12);
+    const c37a = crypto.createCipheriv('aes-256-gcm', key37a, iv37a);
+    const data37a = Buffer.concat([c37a.update(String(text), 'utf8'), c37a.final()]);
+    return JSON.stringify({ enc: CFG_MAGIC_19G_A, alg: 'aes-256-gcm', salt: salt37a.toString('base64'), iv: iv37a.toString('base64'), tag: c37a.getAuthTag().toString('base64'), data: data37a.toString('base64') });
+}
+function decryptUsersEnc37A() { /* سخت‌گیرانه: رمزگشایی ناموفق ⇒ {ok:false} — برخلاف readMaybeEnc19g که plaintext کهنه را برمی‌گرداند */
+    try {
+        const box37a = JSON.parse(fs.readFileSync(USERS_FILE + '.enc', 'utf8'));
+        if (box37a && box37a.enc === CFG_MAGIC_19G_A && box37a.alg === 'aes-256-gcm') {
+            const key37a = cfgDerivedKey19gA(Buffer.from(String(box37a.salt), 'base64'));
+            const d37a = crypto.createDecipheriv('aes-256-gcm', key37a, Buffer.from(String(box37a.iv), 'base64'));
+            d37a.setAuthTag(Buffer.from(String(box37a.tag), 'base64'));
+            return { ok: true, text: Buffer.concat([d37a.update(Buffer.from(String(box37a.data), 'base64')), d37a.final()]).toString('utf8') };
+        }
+        return { ok: false, reason: 'قالب پاکت ناشناخته است' };
+    } catch (e37a) { return { ok: false, reason: (e37a && e37a.message) || 'رمزگشایی ناموفق' }; }
+}
+function writeUsersEnc37A(arr) { /* نوشتن اتمیک رمزنگاری‌شده + حذف plaintext — ciphertext تنها حالت روی دیسک */
+    try {
+        const tmp37a = USERS_FILE + '.tmp37';
+        const fd37a = fs.openSync(tmp37a, 'w');
+        try { fs.writeFileSync(fd37a, encryptText37A(JSON.stringify(normalizeRole37A(arr))), 'utf8'); fs.fsyncSync(fd37a); } finally { try { fs.closeSync(fd37a); } catch (e37a2) { /* noop */ } }
+        fs.renameSync(tmp37a, USERS_FILE + '.enc');
+        try { if (fs.existsSync(USERS_FILE)) fs.unlinkSync(USERS_FILE); } catch (e37a3) { /* noop */ }
+        try { fs.chmodSync(USERS_FILE + '.enc', 0o600); } catch (e37a4) { /* ویندوز: غیرمرگبار */ }
+        return true;
+    } catch (e37a5) { return false; }
+}
+/* ===== VENDOR-37 (end) ===== */
 const SESSION_COOKIE = 'mes_session';
 const SESSION_MS = 8 * 60 * 60 * 1000; /* SEC-15b: timeout مطلق ۸ ساعت (قبلاً ۱۲ ساعته لغزان) */
 const SESSION_IDLE_MS = 30 * 60 * 1000; /* SEC-15b: idle timeout ۳۰ دقیقه از آخرین فعالیت */
@@ -118,18 +163,45 @@ function setAuditWriter15b(fn) { auditWriter15b = typeof fn === 'function' ? fn 
 function audit15b(entry) { try { if (auditWriter15b) auditWriter15b(entry); } catch (e) { /* بی‌ضرر */ } }
 
 function loadUsers() {
-    try {
-        const rawTxt19g = readMaybeEnc19g(USERS_FILE); /* SEC-ANTI-19g: plaintext یا .enc */
-        if (rawTxt19g == null) {
-            console.warn('[Auth] web-users.json missing/invalid -> nobody can log in to the web panel.');
+    /* VENDOR-37: web-users فقط ciphertext — plaintext/نامعتبر رد می‌شود (فقط vendor امضاشده با recovery فعال می‌ماند) */
+    const hasEnc37 = fs.existsSync(USERS_FILE + '.enc');
+    const hasPlain37 = fs.existsSync(USERS_FILE);
+    if (hasEnc37) {
+        const dec37 = decryptUsersEnc37A();
+        if (!dec37.ok) {
+            console.error('[VENDOR-37] web-users.json.enc پذیرفته نشد (' + dec37.reason + ') — فایل دستکاری/نامعتبر یا HWKEY این ماشین نیست.');
+            console.error('  فقط vendor امضاشده فعال می‌ماند — recovery با کلید خصوصی فروشنده:');
+            console.error('    SANATIFY_LIC_ED_PRIV="…" <server> --recover-vendor=نام‌کاربری:رمز-اولیه');
             return [];
         }
-        const arr = JSON.parse(rawTxt19g);
-        return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-        console.warn('[Auth] web-users.json missing/invalid -> nobody can log in to the web panel.');
-        return [];
+        try { return normalizeRole37A(JSON.parse(dec37.text)); } catch (e37) { console.error('[VENDOR-37] web-users.json.enc تجزیه نشد — رد شد.'); return []; }
     }
+    if (hasPlain37) {
+        /* مهاجرت یک‌بارهٔ استقرارهای قدیمی به ciphertext — با گارد vendor جعلی در فایل دست‌ساز */
+        try {
+            const arr37 = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+            if (!Array.isArray(arr37)) throw new Error('آرایه نیست');
+            const forged37 = arr37.some((u) => u && String(u.role || '') === 'vendor' && !String(u.vendor_sig || '').trim()); /* نقش vendor پیش از این نسخه وجود نداشت — vendor بی‌امضا در plaintext = جعل */
+            if (forged37) {
+                const rej37 = USERS_FILE + '.rejected-37-' + Date.now();
+                try { fs.renameSync(USERS_FILE, rej37); } catch (e37r) { /* noop */ }
+                console.error('[VENDOR-37] web-users.json plaintext حاوی vendor بدون امضای معتبر است — پذیرفته نشد (نسخه: ' + rej37 + ').');
+                console.error('  vendor فقط با کلید خصوصی فروشنده قابل ساخت است: --recover-vendor=نام‌کاربری:رمز');
+                return [];
+            }
+            const norm37 = normalizeRole37A(arr37);
+            if (!writeUsersEnc37A(norm37)) { console.error('[VENDOR-37] رمزنگاری web-users ناموفق بود — فایل plaintext دست‌نخورده ماند.'); return norm37; }
+            const mig37 = USERS_FILE + '.migrated-37-' + Date.now();
+            try { fs.renameSync(USERS_FILE, mig37); } catch (e37m) { try { fs.unlinkSync(USERS_FILE); } catch (e37m2) { /* noop */ } }
+            console.log('[VENDOR-37] مهاجرت رمزنگاری web-users انجام شد ⇒ web-users.json.enc (کلید مشتق از HWKEY؛ plaintext به ' + mig37 + ' منتقل شد).');
+            return norm37;
+        } catch (e37p) {
+            console.warn('[Auth] web-users.json plaintext نامعتبر است ⇒ پذیرفته نشد — nobody can log in (recovery: --recover-vendor).');
+            return [];
+        }
+    }
+    console.warn('[Auth] web-users.json(.enc) موجود نیست ⇒ هیچ‌کس وارد نمی‌شود — بوت‌استرپ: --create-admin (صاحب سیستم را می‌سازد).');
+    return [];
 }
 
 // constant-time compare (no timing leak)
@@ -162,16 +234,8 @@ function verifyPassword(plain, stored) {
         return got.length === want.length && crypto.timingSafeEqual(got, want);
     } catch (e) { return false; }
 }
-function usersWrite15b(arr) { /* نوشتن اتمیک web-users.json — برای ارتقای خودکار per-user */
-    try {
-        /* ===== HARDEN-18A (begin): fsync پیش از rename — مقاوم به قطع برق ===== */
-        const tmp = USERS_FILE + '.tmp';
-        const fd18a = fs.openSync(tmp, 'w');
-        try { fs.writeFileSync(fd18a, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
-        fs.renameSync(tmp, USERS_FILE);
-        dropEnc19g(USERS_FILE); /* SEC-ANTI-19g: تغییر plaintext ⇒ .enc کهنه حذف */
-        /* ===== HARDEN-18A (end) ===== */
-        return true; } catch (e) { return false; }
+function usersWrite15b(arr) { /* نوشتن web-users — VENDOR-37: همیشه رمزنگاری‌شده (.enc) + حذف plaintext */
+    return writeUsersEnc37A(arr);
 }
 // ===== FEAT-ADMIN-17a (begin): مدیریت کاربران از پنل سازمان — نشست‌ها + گارد غیرفعال + نوشتن با بکاپ =====
 function sessionsOfUser17a(username) {
@@ -209,17 +273,22 @@ function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore 
                 const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + String(d.getSeconds()).padStart(2, '0');
                 /* ===== HARDEN-18P (begin): گارد بکاپ — بکاپ کاربران هرگز plaintext نمی‌شود؛
                    اگر فیلد plaintext (password) در فایل بود، بکاپ نسخهٔ پاک‌سازی‌شده (فقط هش) می‌شود ===== */
-                let backupArr = null;
-                const bakTxt19g = readMaybeEnc19g(USERS_FILE); /* SEC-ANTI-19g: plaintext یا .enc */
-                try {
-                    const raw18p = bakTxt19g == null ? null : JSON.parse(bakTxt19g);
-                    if (Array.isArray(raw18p) && raw18p.some((u) => u && u.password != null)) {
-                        backupArr = raw18p.map((u) => { const c = Object.assign({}, u); delete c.password; return c; });
-                        console.warn('[HARDEN-18P] بکاپ کاربران: فیلد plaintext یافت شد — بکاپ فقط با نسخهٔ هش/پاک‌سازی‌شده نوشته شد (plaintext هرگز بکاپ نمی‌شود).');
-                    }
-                } catch (e2) { /* خواندن ناموفق — بکاپ خام مثل قبل */ }
-                if (backupArr) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, JSON.stringify(backupArr, null, 2) + String.fromCharCode(10), 'utf8');
-                else if (bakTxt19g != null) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, bakTxt19g, 'utf8'); /* SEC-ANTI-19g: بکاپ از محتوای واقعی (plaintext/.enc) */
+                /* VENDOR-37: بکاپ بایت‌به‌بایتِ همان حالت دیسک (اولویت: .enc ciphertext) — بکاپ کاربران هرگز plaintext نمی‌شود؛
+                   تنها استثنا: plaintextِ مهاجرت‌نرفته با فیلد password (HARDEN-18P) ⇒ نسخهٔ پاک‌سازی‌شده */
+                const bakSrc37 = fs.existsSync(USERS_FILE + '.enc') ? USERS_FILE + '.enc' : (fs.existsSync(USERS_FILE) ? USERS_FILE : null);
+                const backupTxt37 = bakSrc37 ? fs.readFileSync(bakSrc37, 'utf8') : null;
+                let backupArr37 = null;
+                if (backupTxt37 != null && bakSrc37 === USERS_FILE) { /* فقط plaintext اسکن می‌شود */
+                    try {
+                        const raw18p = JSON.parse(backupTxt37);
+                        if (Array.isArray(raw18p) && raw18p.some((u) => u && u.password != null)) {
+                            backupArr37 = raw18p.map((u) => { const c = Object.assign({}, u); delete c.password; return c; });
+                            console.warn('[HARDEN-18P] بکاپ کاربران: فیلد plaintext یافت شد — بکاپ فقط با نسخهٔ هش/پاک‌سازی‌شده نوشته شد (plaintext هرگز بکاپ نمی‌شود).');
+                        }
+                    } catch (e2) { /* خواندن ناموفق — بکاپ خام مثل قبل */ }
+                }
+                if (backupArr37) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, JSON.stringify(backupArr37, null, 2) + String.fromCharCode(10), 'utf8');
+                else if (backupTxt37 != null) fs.writeFileSync(USERS_FILE + '.bak-' + stamp, backupTxt37, 'utf8');
                 else fs.copyFileSync(USERS_FILE, USERS_FILE + '.bak-' + stamp);
                 /* ===== HARDEN-18P (end) ===== */
                 /* نگه‌داری حداکثر ۱۰ بکاپ اخیر */
@@ -228,13 +297,9 @@ function writeUsers17a(arr) { /* بکاپ زمان‌دار (پوشش gitignore 
                 while (baks.length > 10) { try { fs.unlinkSync(path.join(dir, baks.shift())); } catch (e2) { break; } }
             }
         } catch (eb) { /* بکاپ اختیاری است — نوشتن اصلی ادامه می‌یابد */ }
-        const tmp = USERS_FILE + '.tmp';
-        /* ===== HARDEN-18A (begin): fsync پیش از rename — مقاوم به قطع برق ===== */
-        const fd18a = fs.openSync(tmp, 'w');
-        try { fs.writeFileSync(fd18a, JSON.stringify(arr, null, 2) + String.fromCharCode(10), 'utf8'); fs.fsyncSync(fd18a); } finally { try { fs.closeSync(fd18a); } catch (e18a) { /* noop */ } }
-        /* ===== HARDEN-18A (end) ===== */
-        fs.renameSync(tmp, USERS_FILE);
-        dropEnc19g(USERS_FILE); /* SEC-ANTI-19g: تغییر plaintext ⇒ .enc کهنه حذف */
+        /* VENDOR-37: نوشتن همیشه رمزنگاری‌شده (.enc) — plaintext باقی‌مانده حذف می‌شود؛
+           dropEnc19g اینجا دیگر معنا ندارد (هرگز plaintext نمی‌نویسیم) */
+        if (!writeUsersEnc37A(arr)) return false;
         return true;
     } catch (e) { return false; }
 }
@@ -733,9 +798,9 @@ function doMe(req, res) {
     /* ===== SEC-LIC-24 (begin): is_owner — backward-compat: تا وقتی کاربر owner صریح نیست، admin همان مالک است ===== */
     const u24 = s.user || {};
     const role24 = String(u24.role || 'viewer');
-    let isOwner24 = role24 === 'owner';
+    let isOwner24 = vendorRole37A(role24); /* VENDOR-37: vendor/owner = صاحب سیستم */
     if (!isOwner24 && role24 === 'admin') {
-        try { isOwner24 = !loadUsers().some((x) => x && x.role === 'owner' && x.active !== false); } catch (e) { isOwner24 = true; }
+        try { isOwner24 = !loadUsers().some((x) => x && vendorRole37A(x.role) && x.active !== false); } catch (e) { isOwner24 = true; }
     }
     jsonRes(res, { ok: true, user: Object.assign({}, u24, { is_owner: isOwner24 }) });
     /* ===== SEC-LIC-24 (end) ===== */
@@ -761,6 +826,7 @@ function requireRole(req, allowed) {
     const role = String(u.role || 'viewer');
     if (role === 'admin') return true;
     if (role === 'owner') return true; /* SEC-LIC-24: مالک سیستم — دسترسی کامل مثل admin (ویرایش لایسنس فقط مالک) */
+    if (role === 'vendor') return true; /* VENDOR-37: صاحب سیستم — دسترسی کامل مثل admin */
     return allowed.indexOf(role) !== -1;
 }
 
@@ -771,4 +837,5 @@ module.exports = {
     hashPassword: hashPassword, verifyPassword: verifyPassword, clientIp15b: clientIp15b, setAuditWriter15b: setAuditWriter15b, activeSessions15c: activeSessions15c, /* SEC-15b + SAAS-15c */
     passwordPolicyError18P: passwordPolicyError18P, /* HARDEN-18P: سیاست رمز برای endpoints ساخت/بازنشانی کاربر */
     killSessionsByUsername17a: killSessionsByUsername17a, activeSessionCount17a: activeSessionCount17a, refreshSessionUser17a: refreshSessionUser17a, isUserInactive17a: isUserInactive17a, writeUsers17a: writeUsers17a, findUser17a: findUser17a, /* FEAT-ADMIN-17a */
+    loadUsers37: loadUsers, /* VENDOR-37: بارگذاری نرمال/سخت‌گیرانه/مهاجرت — server.js readUsers17a از همین مسیر می‌خواند */
 };
