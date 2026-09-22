@@ -1640,6 +1640,19 @@
         body.bi-dark .modal39-list label { background:#0f2233; border-color:#1e3a52; color:#cfe3f5; }
         body.bi-dark .modal39-hint { background:#0f2233; color:#9fb9d0; }
         body.bi-dark .modal39-note { background:#2a2109; color:#fcd34d; border-color:#5b4a12; }
+        /* ===== MODULE-OVERRIDE-41 (begin): شفاف‌سازی مودال ماژول‌ها + سوییچ اجبار بر نقش ===== */
+        .ovrow41 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#eef6f6; border:1px solid #cfe3e3; border-radius:8px; padding:7px 9px; margin:0 0 8px; }
+        .ovlab41 { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:#0f2a43; cursor:pointer; }
+        .ovnote41 { font-size:10.5px; color:#64748b; }
+        .modal39-list label.dim41 { opacity:.6; background:#eef2f6; border-style:dashed; cursor:not-allowed; }
+        .modal39-list label.dim41 input { cursor:not-allowed; }
+        .modneed41 { display:inline-block; font-size:9.5px; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; padding:1px 5px; margin-inline-start:4px; white-space:nowrap; }
+        body.theme-dark .ovrow41, body.bi-dark .ovrow41 { background:#0d2233; border-color:#1e3a52; }
+        body.theme-dark .ovlab41, body.bi-dark .ovlab41 { color:#e6f1f9; }
+        body.theme-dark .ovnote41, body.bi-dark .ovnote41 { color:#9fb9d0; }
+        body.theme-dark .modal39-list label.dim41, body.bi-dark .modal39-list label.dim41 { background:#0a1a29; border-color:#1e3a52; }
+        body.theme-dark .modneed41, body.bi-dark .modneed41 { background:#2a2109; color:#fcd34d; border-color:#5b4a12; }
+        /* ===== MODULE-OVERRIDE-41 (end) ===== */
         /* ===== USER-MGMT-39b (begin): منوی عملیات + حذف ===== */
         .umenu39 { position:absolute; z-index:90; background:#fff; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 12px 32px rgba(2,8,20,.25); min-width:190px; overflow:hidden; }
         .umenu39-item { display:block; width:100%; text-align:right; background:none; border:none; padding:9px 12px; font-family:inherit; font-size:12.5px; cursor:pointer; color:#0f172a; }
@@ -3871,8 +3884,12 @@
     <div id="modsModal39" class="modal39-wrap" hidden>
         <div class="modal39-box" role="dialog" aria-modal="true" aria-labelledby="modsModal39T">
             <h4 id="modsModal39T">🔐 دسترسی ماژول‌ها — <span id="modsModal39U" dir="ltr"></span></h4>
-            <p class="modal39-sub">فقط ماژول‌های فعال لایسنس سازمان قابل انتخاب است. ذخیره از درخواست بعدی همان کاربر اعمال می‌شود (بدون خروج اجباری). محدودیت برای نقش‌های ممتاز (admin/صاحب سیستم) اعمال نمی‌شود.</p>
+            <p class="modal39-sub">بدون اجبار، تیک‌ها فقط محدود می‌کنند (دید کاربر = نقش ∩ تیک‌ها)؛ برای افزودن ماژول فراتر از نقش، سوییچ «🔓 اجبار بر نقش» را روشن کنید. فقط ماژول‌های فعال لایسنس سازمان قابل انتخاب است؛ سقف لایسنس و تب‌های مخفی سازمان همیشه برقرار می‌ماند. ذخیره از ورود بعدی همان کاربر اعمال می‌شود (بدون خروج اجباری). محدودیت برای نقش‌های ممتاز (admin/صاحب سیستم) اعمال نمی‌شود.</p>
             <div id="modsModal39Note" class="modal39-note" hidden>این کاربر نقش admin دارد — در عمل دسترسی کامل می‌بیند (محدودیت ذخیره می‌شود ولی تا تغییر نقش اعمال نمی‌شود).</div>
+            <div id="modsOvRow41" class="ovrow41" hidden>
+                <label class="ovlab41"><input type="checkbox" id="modsOv41" /> <span>🔓 اجبار بر نقش (override)</span></label>
+                <span class="ovnote41">تیک‌خورده‌ها به دسترسی نقش اضافه می‌شوند (اتحاد) — فقط صاحب سیستم</span>
+            </div>
             <div id="modsModal39List" class="modal39-list"></div>
             <div class="modal39-hint" id="modsModal39Hint"></div>
             <div class="modal39-btns">
@@ -4512,26 +4529,49 @@ box.innerHTML = html;
         /* ===== USER-MGMT-39a (begin): مودال ویرایش ماژول‌های کاربر — فقط صاحب سیستم (گارد سرور: PATCH) ===== */
         let modsModal39User = '';
         function closeModsModal39() { const m = document.getElementById('modsModal39'); if (m) m.hidden = true; modsModal39User = ''; }
+        function roleCeilMods41(role41) { /* MODULE-OVERRIDE-41: ماژول‌هایی که سقف ROLE_VIEW نقش پوشش می‌دهد */
+            const rv41 = ROLE_VIEW[role41] || [];
+            const out41 = [];
+            rv41.forEach(function (t41) { const m41 = TAB_MODULE_15A[t41]; if (m41 && out41.indexOf(m41) === -1) out41.push(m41); });
+            return out41;
+        }
+        function applyModsOv41() { /* MODULE-OVERRIDE-41: سوییچ اجبار ⇒ فعال/غیرفعال‌سازی تیک‌های خارج از سقف نقش */
+            const ov41 = document.getElementById('modsOv41');
+            if (!ov41) return;
+            Array.prototype.forEach.call(document.querySelectorAll('#modsModal39List label.dim41'), function (lab41) {
+                const inp41 = lab41.querySelector('input[type=checkbox]');
+                if (inp41) inp41.disabled = !ov41.checked;
+            });
+        }
         function openModsModal39(username39) {
             const u39 = orgUsersList17a.find(function (x) { return x.username === username39; });
             if (!u39) return;
             const m39 = document.getElementById('modsModal39'); if (!m39) return;
             modsModal39User = username39;
             const lbl39 = document.getElementById('modsModal39U'); if (lbl39) lbl39.textContent = username39;
-            const note39 = document.getElementById('modsModal39Note'); if (note39) note39.hidden = !(String(u39.role || '') === 'admin');
+            const role39 = String(u39.role || '');
+            const priv39 = role39 === 'admin' || role39 === 'vendor' || role39 === 'owner'; /* ممتاز = محدودیت ماژولی اعمال نمی‌شود */
+            const note39 = document.getElementById('modsModal39Note'); if (note39) note39.hidden = !(role39 === 'admin');
+            /* MODULE-OVERRIDE-41: سوییچ اجبار فقط برای صاحب سیستم (vendor/owner) دیده می‌شود — T6 */
+            const ovRow41 = document.getElementById('modsOvRow41');
+            if (ovRow41) ovRow41.hidden = !(WEB_ROLE === 'vendor' || WEB_ROLE === 'owner');
+            const ov41 = document.getElementById('modsOv41'); if (ov41) ov41.checked = u39.modules_override === true; /* پیش‌فرض خاموش مگر حالت ذخیره‌شده */
             const active39 = (orgTenantMods39 && orgTenantMods39.length) ? orgTenantMods39 : ((TENANT_15A && Array.isArray(TENANT_15A.active_modules) && TENANT_15A.active_modules.length) ? TENANT_15A.active_modules : Object.keys(ORG_MOD_FA_15C));
             const cur39 = Array.isArray(u39.modules) ? u39.modules : [];
+            const ceil39 = priv39 ? null : roleCeilMods41(role39); /* سقف نقش — برای ممتازها بی‌معنا */
             const list39 = document.getElementById('modsModal39List');
             if (list39) {
                 list39.innerHTML = active39.map(function (mk39) {
-                    const on39 = cur39.length ? cur39.indexOf(mk39) !== -1 : true; /* بدون محدودیت = همهٔ تیک‌ها (نشان‌گر حالت مؤثر) */
+                    /* شفاف‌سازی 41: بدون محدودیت ⇒ تیک فقط ماژول‌های داخل سقف نقش (رفع توهم «همه تیک») */
+                    const on39 = cur39.length ? cur39.indexOf(mk39) !== -1 : (ceil39 ? ceil39.indexOf(mk39) !== -1 : true);
+                    const out39 = !!ceil39 && ceil39.indexOf(mk39) === -1; /* خارج از سقف نقش */
+                    if (out39) return '<label class="dim41" title="خارج از سقف نقش — بدون «اجبار بر نقش» اثری ندارد"><input type="checkbox" value="' + esc(mk39) + '"' + (on39 ? ' checked' : '') + ' disabled /> ' + esc(ORG_MOD_FA_15C[mk39] || mk39) + '<span class="modneed41">نیازمند تغییر نقش یا اجبار</span></label>';
                     return '<label><input type="checkbox" value="' + esc(mk39) + '"' + (on39 ? ' checked' : '') + ' /> ' + esc(ORG_MOD_FA_15C[mk39] || mk39) + '</label>';
                 }).join('');
             }
+            applyModsOv41();
             const hint39 = document.getElementById('modsModal39Hint');
-            if (hint39) hint39.textContent = cur39.length
-                ? 'اگر هیچ ماژولی تیک نخورد ⇒ «بدون محدودیت» ذخیره می‌شود (دسترسی کامل نقش). اگر همه تیک بخورند هم محدودیت مؤثر همان دسترسی کامل نقش است.'
-                : 'این کاربر محدودیت ماژولی ندارد (دسترسی کامل نقش) — با ذخیره، انتخاب‌های فعلی به‌عنوان محدودیت ثبت می‌شود.';
+            if (hint39) hint39.textContent = 'بدون اجبار، تیک‌ها فقط محدود می‌کنند؛ ماژول‌های خاکستری («نیازمند تغییر نقش یا اجبار») بدون سوییچ اجبار اثری ندارند. با اجبار: تیک‌خورده‌ها به دسترسی نقش اضافه می‌شوند (اتحاد) ولی سقف لایسنس/تب‌های مخفی برقرار می‌ماند. هیچ تیک ⇒ «بدون محدودیت».';
             m39.hidden = false;
         }
         async function saveModsModal39() {
@@ -4539,7 +4579,18 @@ box.innerHTML = html;
             if (!btn39 || !modsModal39User || btn39.disabled) return;
             const boxes39 = Array.from(document.querySelectorAll('#modsModal39List input[type=checkbox]'));
             const keys39 = boxes39.filter(function (c39) { return c39.checked; }).map(function (c39) { return c39.value; });
-            const send39 = keys39.length === boxes39.length ? [] : keys39; /* همهٔ تیک‌ها = همان دسترسی کامل نقش ⇒ بدون محدودیت */
+            /* MODULE-OVERRIDE-41: با اجبار، تیک‌ها عیناً ارسال می‌شوند؛ بدون اجبار، تیکِ همهٔ ردیف‌های فعال
+               (بدون هیچ ردیف خاکستریِ تیک‌خورده) = دسترسی کامل نقش ⇒ «بدون محدودیت» — مثل قبل */ 
+            const ovRow41s = document.getElementById('modsOvRow41');
+            const ovOn41 = !!(ovRow41s && !ovRow41s.hidden && document.getElementById('modsOv41') && document.getElementById('modsOv41').checked);
+            let send39;
+            if (ovOn41) {
+                send39 = keys39;
+            } else {
+                const dimChecked41 = boxes39.filter(function (c41) { return c41.disabled && c41.checked; }).length;
+                const enabled41 = boxes39.filter(function (c41) { return !c41.disabled; });
+                send39 = (keys39.length === boxes39.length || (!dimChecked41 && enabled41.length && keys39.length === enabled41.length)) ? [] : keys39;
+            }
             btn39.disabled = true;
             try {
                 const r39 = await fetch('/api/admin/users/modules', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: modsModal39User, moduleKeys: send39 }) });
@@ -4556,6 +4607,7 @@ box.innerHTML = html;
         (function wireMods39() {
             const s39 = document.getElementById('modsModal39Save'); if (s39) s39.addEventListener('click', saveModsModal39);
             const c39 = document.getElementById('modsModal39Cancel'); if (c39) c39.addEventListener('click', closeModsModal39);
+            const o41 = document.getElementById('modsOv41'); if (o41) o41.addEventListener('change', applyModsOv41); /* MODULE-OVERRIDE-41 */
             const m39 = document.getElementById('modsModal39'); if (m39) m39.addEventListener('click', function (e39) { if (e39.target === m39) closeModsModal39(); });
             document.addEventListener('keydown', function (e39) { if (e39.key === 'Escape' && !document.getElementById('modsModal39').hidden) closeModsModal39(); });
         })();
