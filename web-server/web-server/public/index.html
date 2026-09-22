@@ -1614,6 +1614,7 @@
         .mchips39 { display:inline-flex; gap:4px; flex-wrap:wrap; align-items:center; }
         .mchips39 .chip { font-size:10px; padding:1px 7px; }
         .modal39-wrap { position:fixed; inset:0; background:rgba(2,8,20,.55); z-index:80; display:flex; align-items:center; justify-content:center; padding:16px; }
+        .modal39-wrap[hidden] { display:none; } /* USER-MGMT-39a: display:flex بر [hidden] UA غلبه میکرد — رفع واقعی پنهاندازی */
         .modal39-box { background:#fff; color:#0f172a; border-radius:14px; padding:18px 18px 14px; width:100%; max-width:430px; box-shadow:0 24px 60px rgba(2,8,20,.5); border-top:4px solid #0e7490; max-height:86vh; overflow-y:auto; }
         .modal39-box h4 { margin:0 0 6px; font-size:14.5px; color:#0f2a43; }
         .modal39-sub { font-size:11.5px; color:#64748b; margin:0 0 10px; line-height:1.8; }
@@ -1637,6 +1638,19 @@
         body.bi-dark .modal39-list label { background:#0f2233; border-color:#1e3a52; color:#cfe3f5; }
         body.bi-dark .modal39-hint { background:#0f2233; color:#9fb9d0; }
         body.bi-dark .modal39-note { background:#2a2109; color:#fcd34d; border-color:#5b4a12; }
+        /* ===== USER-MGMT-39b (begin): منوی عملیات + حذف ===== */
+        .umenu39 { position:absolute; z-index:90; background:#fff; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 12px 32px rgba(2,8,20,.25); min-width:190px; overflow:hidden; }
+        .umenu39-item { display:block; width:100%; text-align:right; background:none; border:none; padding:9px 12px; font-family:inherit; font-size:12.5px; cursor:pointer; color:#0f172a; }
+        .umenu39-item:hover { background:#f1f5f9; }
+        .umenu39-item.danger39 { color:#dc2626; font-weight:bold; }
+        .umenu39-item.danger39:hover { background:#fef2f2; }
+        body.theme-dark .umenu39 { background:#0b1622; border-color:#1e3a52; }
+        body.theme-dark .umenu39-item { color:#cfe3f5; }
+        body.theme-dark .umenu39-item:hover { background:#0f2233; }
+        body.bi-dark .umenu39 { background:#0b1622; border-color:#1e3a52; }
+        body.bi-dark .umenu39-item { color:#cfe3f5; }
+        body.bi-dark .umenu39-item:hover { background:#0f2233; }
+        /* ===== USER-MGMT-39b (end) ===== */
         /* ===== USER-MGMT-39a (end) ===== */
         body.bi-dark #tab-org .org-lbl select.org-sel { background:#0b1622; border-color:#1e3a52; color:#e6f1f9; }
         body.bi-dark #tab-org .org-caps-title { color:#dbe7f3; }
@@ -3864,6 +3878,18 @@
         </div>
     </div>
     <!-- ===== USER-MGMT-39a (end) ===== -->
+    <!-- ===== USER-MGMT-39b (begin): مودال تأیید حذف کاربر ===== -->
+    <div id="delModal39" class="modal39-wrap" hidden>
+        <div class="modal39-box" role="alertdialog" aria-modal="true" aria-labelledby="delModal39T">
+            <h4 id="delModal39T">🗑 حذف کاربر</h4>
+            <p class="modal39-sub" id="delModal39Msg"></p>
+            <div class="modal39-btns">
+                <button type="button" id="delModal39Ok" class="org-btn danger39">حذف کاربر</button>
+                <button type="button" id="delModal39Cancel" class="org-btn2">انصراف</button>
+            </div>
+        </div>
+    </div>
+    <!-- ===== USER-MGMT-39b (end) ===== -->
     <!-- ===== FIX-BRAND-8d: فوتر برنددار — عنوان یکپارچه ERP/MES (چسبان به ته صفحه) ===== -->
     <footer class="app-foot"><span class="app-foot-brand">سامانه یکپارچه صنعتی فای (SANATIFY)</span> — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</footer>
     <script>
@@ -4443,6 +4469,7 @@ box.innerHTML = html;
             orgUsersList17a.forEach(function (u) {
                 const self = u.username === self17a;
                 const vend37 = u.role === 'vendor' || u.role === 'owner'; /* VENDOR-37: صاحب سیستم محافظت‌شده */
+                const del39 = String(u.status || '') === 'deleted'; /* USER-MGMT-39b */
                 const modsCell39 = (canMods39 && !vend37)
                     ? '<button type="button" class="org-ubtn modcell39" data-act="mods" data-un="' + esc(u.username) + '" title="ویرایش دسترسی ماژول‌ها — فقط صاحب سیستم">' + orgModChips39(u) + '</button>'
                     : orgModChips39(u);
@@ -4451,14 +4478,14 @@ box.innerHTML = html;
                     '<td>' + esc(u.name || '-') + '</td>' +
                     '<td>' + esc(orgRoleFa17a(u.role)) + '</td>' +
                     '<td>' + modsCell39 + '</td>' +
-                    '<td>' + (u.active ? '<span class="chip ok">فعال</span>' : '<span class="chip no">غیرفعال</span>') + '</td>' +
+                    '<td>' + (del39 ? '<span class="chip no" title="حذف نرم — ورود مسدود؛ با فعال‌سازی مجدد (✅) بازیابی می‌شود">حذف‌شده</span>' : (u.active ? '<span class="chip ok">فعال</span>' : '<span class="chip no">غیرفعال</span>')) + '</td>' +
                     '<td>' + fa(u.sessions || 0) + '</td>' +
                     '<td class="org-uacts">' +
                     (vend37
-                        ? '<span class="chip ok" title="صاحب سیستم — حذف/تنزل/غیرفعال‌سازی مجاز نیست (VENDOR-37)">🔒 محافظت‌شده</span>'
+                        ? '<span class="chip ok" title="صاحب سیستم — حذف/تنزل/غیرفعال‌سازی مجاز نیست (VENDOR-37)">🔒 محافظت‌شده</span>' + (self ? ' <button type="button" class="org-ubtn" disabled title="نمی‌توانید حساب خودتان را حذف کنید">⋯</button>' : '') /* USER-MGMT-39b: T3 */
                         : '<button type="button" class="org-ubtn" data-act="edit" data-un="' + esc(u.username) + '" title="ویرایش نام/نقش/وضعیت">✏️</button> ' +
                           '<button type="button" class="org-ubtn" data-act="pw" data-un="' + esc(u.username) + '" title="بازنشانی رمز با رمز موقت جدید">🔑</button> ' +
-                          (self ? '' : '<button type="button" class="org-ubtn" data-act="toggle" data-un="' + esc(u.username) + '" data-active="' + (u.active ? '1' : '0') + '" title="' + (u.active ? 'غیرفعال‌سازی (خروج فوری + مسدودی ورود)' : 'فعال‌سازی مجدد') + '">' + (u.active ? '🚫' : '✅') + '</button>')) +
+                          (self ? '' : '<button type="button" class="org-ubtn" data-act="toggle" data-un="' + esc(u.username) + '" data-active="' + (u.active ? '1' : '0') + '" title="' + (u.active ? 'غیرفعال‌سازی (خروج فوری + مسدودی ورود)' : 'فعال‌سازی مجدد') + '">' + (u.active ? '🚫' : '✅') + '</button> ' + (canMods39 ? '<button type="button" class="org-ubtn" data-act="menu" data-un="' + esc(u.username) + '" title="حذف کاربر — فقط صاحب سیستم">⋯</button>' : ''))) +
                     '</td></tr>';
             });
             t.innerHTML = h + '</tbody>';
@@ -4529,6 +4556,70 @@ box.innerHTML = html;
             document.addEventListener('keydown', function (e39) { if (e39.key === 'Escape' && !document.getElementById('modsModal39').hidden) closeModsModal39(); });
         })();
         /* ===== USER-MGMT-39a (end) ===== */
+        /* ===== USER-MGMT-39b (begin): منوی عملیات کاربر + تأیید/انجام حذف — فقط صاحب سیستم (گارد سرور) ===== */
+        let userMenu39El = null;
+        function closeUserMenu39() { if (userMenu39El) { userMenu39El.remove(); userMenu39El = null; } }
+        function openUserMenu39(btn39, username39) {
+            if (userMenu39El && userMenu39El.getAttribute('data-for') === username39) { closeUserMenu39(); return; }
+            closeUserMenu39();
+            const u39m = orgUsersList17a.find(function (x) { return x.username === username39; });
+            if (!u39m) return;
+            const deleted39m = String(u39m.status || '') === 'deleted';
+            userMenu39El = document.createElement('div');
+            userMenu39El.className = 'umenu39';
+            userMenu39El.setAttribute('role', 'menu');
+            userMenu39El.setAttribute('data-for', username39);
+            userMenu39El.innerHTML = deleted39m
+                ? '<button type="button" class="umenu39-item danger39" data-mact="hard" data-un="' + esc(username39) + '">⛔ حذف کامل (بدون بازگشت)</button>'
+                : '<button type="button" class="umenu39-item danger39" data-mact="del" data-un="' + esc(username39) + '">🗑 حذف کاربر</button>';
+            document.body.appendChild(userMenu39El);
+            const r39 = btn39.getBoundingClientRect();
+            userMenu39El.style.top = (r39.bottom + window.scrollY + 4) + 'px';
+            userMenu39El.style.left = Math.max(8, r39.left + window.scrollX - 165) + 'px';
+            userMenu39El.addEventListener('click', function (e39) {
+                const b39c = e39.target.closest ? e39.target.closest('button[data-mact]') : null;
+                if (!b39c) return;
+                closeUserMenu39();
+                confirmDelete39(b39c.getAttribute('data-un'), b39c.getAttribute('data-mact') === 'hard');
+            });
+        }
+        let delModal39User = '', delModal39Hard = false;
+        function closeDelModal39() { const m = document.getElementById('delModal39'); if (m) m.hidden = true; delModal39User = ''; delModal39Hard = false; }
+        function confirmDelete39(username39, hard39) {
+            const m39 = document.getElementById('delModal39'); if (!m39) return;
+            delModal39User = username39; delModal39Hard = !!hard39;
+            const msg39 = document.getElementById('delModal39Msg');
+            if (msg39) msg39.textContent = hard39
+                ? 'حساب «' + username39 + '» به‌طور کامل از سامانه حذف می‌شود (بدون بازگشت). سابقهٔ audit حفظ می‌ماند.'
+                : 'حساب «' + username39 + '» حذف (نرم) می‌شود: ورود مسدود و نشست‌های فعال بسته می‌شود؛ سابقهٔ audit حفظ می‌ماند و با فعال‌سازی مجدد قابل بازیابی است.';
+            const ok39b = document.getElementById('delModal39Ok');
+            if (ok39b) ok39b.textContent = hard39 ? 'حذف کامل' : 'حذف کاربر';
+            m39.hidden = false;
+        }
+        async function doDelete39() {
+            const ok39b = document.getElementById('delModal39Ok');
+            if (!ok39b || !delModal39User || ok39b.disabled) return;
+            ok39b.disabled = true;
+            try {
+                const r39 = await fetch('/api/admin/users?username=' + encodeURIComponent(delModal39User) + (delModal39Hard ? '&hard=1' : ''), { method: 'DELETE' });
+                const j39 = await r39.json();
+                if (!r39.ok) { orgMsg17a(j39.error || 'خطا در حذف کاربر.', true); return; }
+                orgMsg17a(j39.method === 'hard'
+                    ? '✔ کاربر «' + j39.username + '» به‌طور کامل حذف شد.'
+                    : '✔ کاربر «' + j39.username + '» حذف (نرم) شد — ورود او مسدود شد' + (j39.sessions_killed ? ' (' + fa(j39.sessions_killed) + ' نشست بسته شد)' : '') + '.');
+                closeDelModal39();
+                loadUsers17a();
+            } catch (e39) { orgMsg17a('خطا در ارتباط با سرور', true); }
+            finally { ok39b.disabled = false; }
+        }
+        (function wireDel39() {
+            const ok39b = document.getElementById('delModal39Ok'); if (ok39b) ok39b.addEventListener('click', doDelete39);
+            const c39 = document.getElementById('delModal39Cancel'); if (c39) c39.addEventListener('click', closeDelModal39);
+            const m39 = document.getElementById('delModal39'); if (m39) m39.addEventListener('click', function (e39) { if (e39.target === m39) closeDelModal39(); });
+            document.addEventListener('click', function (e39) { if (userMenu39El && !(e39.target.closest && (e39.target.closest('.umenu39') || e39.target.closest('button[data-act=menu]')))) closeUserMenu39(); });
+            document.addEventListener('keydown', function (e39) { if (e39.key === 'Escape') { closeUserMenu39(); } });
+        })();
+        /* ===== USER-MGMT-39b (end) ===== */
         let licenseGateEl15c = null;
         function showLicenseGate15c(on) {
             try {
@@ -4680,6 +4771,7 @@ box.innerHTML = html;
                 const un = b.getAttribute('data-un') || '';
                 const act = b.getAttribute('data-act');
                 if (act === 'mods') { openModsModal39(un); return; } /* USER-MGMT-39a */
+                if (act === 'menu') { openUserMenu39(b, un); return; } /* USER-MGMT-39b */
                 if (act === 'edit') { orgFillUserForm17a(un); orgMsg17a('ویرایش «' + un + '» — نام/نقش/وضعیت را تغییر داده و ذخیره کنید.'); }
                 else if (act === 'pw') {
                     orgFillUserForm17a(un);

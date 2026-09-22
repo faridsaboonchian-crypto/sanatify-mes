@@ -844,7 +844,7 @@ function checkModuleAccess15a(moduleId) {
     return cfg.active_modules.indexOf(moduleId) !== -1;
 }
 function countUsers15a() {
-    try { const a = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; } /* SEC-ANTI-19g */
+    try { const a = JSON.parse(readMaybeEnc19g(path.join(ROOT, 'web-users.json')) || '[]'); return Array.isArray(a) ? a.filter((u) => u && String(u.status || '') !== 'deleted').length : 0; } catch (e) { return 0; } /* SEC-ANTI-19g + USER-MGMT-39b: کاربر حذف‌نرم سقف صندلی لایسنس را اشغال نمی‌کند */
 }
 function countRecords15a(live) {
     let n = 0;
@@ -1498,6 +1498,7 @@ function appRequestHandler(req, res) {
                         u17a.active = false; changed17a.active = false; deactivate17a = true;
                     } else if (act17a && u17a.active === false) {
                         u17a.active = true; changed17a.active = true;
+                        if (String(u17a.status || '') === 'deleted') { delete u17a.status; delete u17a.deleted_at; delete u17a.deleted_by; changed17a.restored = true; } /* USER-MGMT-39b: فعال‌سازی مجدد = بازیابی از حذف نرم */
                     }
                 }
                 if (!Object.keys(changed17a).length) return sendJson(res, { ok: true, message: 'تغییری اعمال نشد — مقادیر همان مقادیر قبلی است.' });
@@ -1584,6 +1585,49 @@ function appRequestHandler(req, res) {
         return;
     }
     // ===== USER-MGMT-39a (end) =====
+    /* ===== USER-MGMT-39b (begin): حذف کاربر — فقط صاحب سیستم (vendor)؛ حذف نرم پیش‌فرض =====
+       DELETE /api/admin/users?username=…[&hard=1]
+       • soft: active=false + status='deleted' + deleted_at/by — لاگین مسدود (مسیر موجود 17a)؛ تاریخچهٔ audit حفظ می‌شود؛ بازیابی با فعال‌سازی مجدد.
+       • hard: حذف کامل رکورد — فقط توسعه/پاک‌سازی؛ در production (SANATIFY_ENV=production) تنها اگر سرور با --force-hard-delete بوت شده باشد.
+       • گاردها: خود-حذفی ✗؛ حذف صاحب سیستم (حداقل یک vendor) ✗؛ آخرین ادمین فعال ✗. */
+    if (pathname === '/api/admin/users' && req.method === 'DELETE') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'حذف کاربر فقط توسط صاحب سیستم (vendor) مجاز است.', code: 'VENDOR_ONLY' }, 403);
+        let q39b = null;
+        try { q39b = new URL(req.url, 'http://x').searchParams; } catch (e39bq) { q39b = null; }
+        const username39b = q39b ? String(q39b.get('username') || '').trim() : '';
+        const hard39b = q39b ? ['1', 'true'].indexOf(String(q39b.get('hard') || '').toLowerCase()) !== -1 : false;
+        if (!username39b) return sendJson(res, { error: 'نام کاربری الزامی است (?username=…).' }, 400);
+        if (hard39b && String(process.env.SANATIFY_ENV || '').trim().toLowerCase() === 'production' && process.argv.indexOf('--force-hard-delete') === -1) {
+            return sendJson(res, { error: 'حذف کامل (hard) در production ممنوع است — فقط با بوت --force-hard-delete (پاک‌سازی توسعه‌دهنده).', code: 'HARD_FORBIDDEN' }, 403);
+        }
+        const users39b = readUsers17a();
+        const idx39b = users39b.findIndex((u) => String(u.username || '').toLowerCase() === username39b.toLowerCase());
+        if (idx39b === -1) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
+        const u39b = users39b[idx39b];
+        if (username39b.toLowerCase() === String(req.user.username || '').toLowerCase()) return sendJson(res, { error: 'نمی‌توانید حساب خودتان را حذف کنید.' }, 400);
+        if (vendorRole37(String(u39b.role || ''))) return sendJson(res, { error: 'حذف «صاحب سیستم» مجاز نیست — حداقل یک صاحب سیستم (vendor) باید باقی بماند.', code: 'LAST_VENDOR' }, 403);
+        if (u39b.role === 'admin' && u39b.active !== false) {
+            const admins39b = users39b.filter((x) => x.role === 'admin' && x.active !== false && String(x.status || '') !== 'deleted').length;
+            if (admins39b <= 1) return sendJson(res, { error: 'حداقل یک مدیر فعال باید باقی بماند — ابتدا مدیر دیگری بسازید یا نقش او را تغییر دهید.' }, 400);
+        }
+        if (hard39b) {
+            users39b.splice(idx39b, 1);
+            if (!auth.writeUsers17a(users39b)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
+            const killed39h = auth.killSessionsByUsername17a(u39b.username);
+            auditLog(req, 'admin.user_delete', { username: u39b.username, method: 'hard', role: String(u39b.role || ''), sessions_killed: killed39h });
+            return sendJson(res, { ok: true, username: u39b.username, method: 'hard', sessions_killed: killed39h });
+        }
+        if (String(u39b.status || '') === 'deleted') return sendJson(res, { error: 'این کاربر قبلاً حذف (نرم) شده است — برای پاک‌سازی کامل از hard=1 استفاده کنید.', code: 'ALREADY_DELETED' }, 400);
+        u39b.active = false;
+        u39b.status = 'deleted';
+        u39b.deleted_at = new Date().toISOString();
+        u39b.deleted_by = req.user.username;
+        if (!auth.writeUsers17a(users39b)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
+        const killed39s = auth.killSessionsByUsername17a(u39b.username);
+        auditLog(req, 'admin.user_delete', { username: u39b.username, method: 'soft', role: String(u39b.role || ''), sessions_killed: killed39s });
+        return sendJson(res, { ok: true, username: u39b.username, method: 'soft', sessions_killed: killed39s });
+    }
+    // ===== USER-MGMT-39b (end) =====
     // ===== FEAT-ADMIN-17a (end) =====
 
     // ===== ✅ ADDITIVE — D3: endpoint اسنپ‌شات برای pull اپ (بدون نشست وب) =====
