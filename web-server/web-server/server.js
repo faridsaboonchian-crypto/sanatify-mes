@@ -5812,6 +5812,7 @@ live.inventory_reservations.splice(idx, 1);
             mech: inc ? inc.mech : (lab ? { ReH: Number(lab.yield_strength) || 0, Rm: Number(lab.tensile_strength) || 0, A: Number(lab.elongation_percent) || 0, bend: !!Number(lab.bend_test_passed) } : null),
             source: inc ? 'آزمون ورودی تأییدشده (اسپکترومتری/کشش)' : (lab ? 'آزمایشگاه QC تولید' : ''),
             inc_test_no: inc ? inc.test_no : '',
+            values_43: inc ? (inc.values_43 || null) : null, /* QC-EDITABLE-43: مقادیر آیتم‌های مستر برای MTC */
         };
     }
     // ===== FEAT-QC-PRO-24b (helpers end) =====
@@ -7271,6 +7272,11 @@ live.inventory_reservations.splice(idx, 1);
         live.qc_incoming_24 = Array.isArray(live.qc_incoming_24) ? live.qc_incoming_24 : [];
         live.qc_seq_24 = live.qc_seq_24 && typeof live.qc_seq_24 === 'object' ? live.qc_seq_24 : {};
         if (live.qc_seq_24.incoming == null) live.qc_seq_24.incoming = 0;
+        /* QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه — آیتم با دسته/واحد + رنج per گرید×سایز
+           افزاینده؛ qc_grades_24/qc_specs_24/qc_incoming_24 دست‌نخورده می‌مانند (نگاشت display، نه migration). */
+        live.qc_master_43 = Array.isArray(live.qc_master_43) ? live.qc_master_43 : [];
+        live.qc_master_rng_43 = Array.isArray(live.qc_master_rng_43) ? live.qc_master_rng_43 : [];
+        /* QC-EDITABLE-43 (end) */
         return live;
     }
     function qcNextNo24a(live, key, prefix) { live.qc_seq_24[key] = (Number(live.qc_seq_24[key]) || 0) + 1; return prefix + '-' + String(live.qc_seq_24[key]).padStart(5, '0'); }
@@ -7309,11 +7315,76 @@ live.inventory_reservations.splice(idx, 1);
         live._qc_seed_24a = { at: new Date().toISOString() };
         return live;
     }
+    /* ===== QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه =====
+       آیتم‌ها با دسته (chem=شیمیایی/mech=مکانیکی/dim=ابعادی)، واحد و رنج per گرید×سایز
+       در live.json (کنار داده، نه هاردکد). seed افزاینده و idempotent — عین ستون‌های
+       ثابت فعلی (C..N / ReH/Rm/A) تا رفتار موجود حفظ شود + دو آیتم ابعادی بدون رنج
+       (فقط ثبت مقدار، بدون اثر بر pass/fail). */
+    const QC_CLASSIC_KEYS_43 = { C: 'chem', Mn: 'chem', Si: 'chem', P: 'chem', S: 'chem', Cu: 'chem', N: 'chem', ReH: 'mech', Rm: 'mech', A: 'mech' };
+    const QC_CAT_FA_43 = { chem: 'شیمیایی', mech: 'مکانیکی', dim: 'ابعادی' };
+    function qcSeedMaster43(live) {
+        qcEnsure24a(live);
+        if (live._qc_seed_43) return live;
+        const mk43 = (key, label, category, unit, sort) => ({ id: 'it43-' + key, key: key, label: label, category: category, unit: unit, active: true, sort: sort, _seed: true });
+        live.qc_master_43.push(
+            mk43('C', 'کربن (C)', 'chem', '٪', 1), mk43('Mn', 'منگنز (Mn)', 'chem', '٪', 2), mk43('Si', 'سیلیس (Si)', 'chem', '٪', 3),
+            mk43('P', 'فسفر (P)', 'chem', '٪', 4), mk43('S', 'گوگرد (S)', 'chem', '٪', 5), mk43('Cu', 'مس (Cu)', 'chem', '٪', 6), mk43('N', 'نیتروژن (N)', 'chem', '٪', 7),
+            mk43('ReH', 'تنش تسلیم (ReH)', 'mech', 'MPa', 8), mk43('Rm', 'مقاومت کششی (Rm)', 'mech', 'MPa', 9), mk43('A', 'ازدیاد طول (A)', 'mech', '٪', 10),
+            mk43('dia_nom', 'قطر اسمی بدنه', 'dim', 'mm', 11), mk43('kgm', 'وزن بر متر', 'dim', 'kg/m', 12)
+        );
+        live._qc_seed_43 = { at: new Date().toISOString() };
+        return live;
+    }
+    function qcActiveItems43(live) { return (live.qc_master_43 || []).filter((i) => i && i.active !== false).sort((a, b) => (Number(a.sort) || 99) - (Number(b.sort) || 99)); }
+    /* رنج مؤثر یک آیتم برای گرید×سایز: رنج مستر (سایز دقیق ← سایز-نامعین) ← حد گرید کلاسیک ← null */
+    function qcMasterRange43(live, key, grade, size) {
+        const it = (live.qc_master_43 || []).find((i) => i && i.key === key && i.active !== false);
+        if (!it) return null;
+        const rngs = live.qc_master_rng_43 || [];
+        const szN = Number(size) || 0;
+        let r = rngs.find((x) => x && x.item_key === key && x.grade_id === grade.id && x.size != null && Number(x.size) === szN);
+        if (!r) r = rngs.find((x) => x && x.item_key === key && x.grade_id === grade.id && x.size == null);
+        if (r) return { min: r.min == null ? null : Number(r.min), max: r.max == null ? null : Number(r.max), src: 'master' };
+        const kind43 = QC_CLASSIC_KEYS_43[key];
+        const spec = kind43 && grade && grade[kind43] ? grade[kind43][key] : null;
+        if (spec && (spec.min != null || spec.max != null)) return { min: spec.min == null ? null : Number(spec.min), max: spec.max == null ? null : Number(spec.max), src: 'grade' };
+        return null;
+    }
+    /* ارزیابی آیتم‌های غیرکلاسیک مستر (custom) per گرید×سایز — بدون رنج = فقط ثبت مقدار (خنثی) */
+    function qcEvalMaster43(live, grade, size, values) {
+        const rows = [];
+        qcActiveItems43(live).forEach((it) => {
+            if (QC_CLASSIC_KEYS_43[it.key]) return; /* کلاسیک‌ها در qcEvalIncoming24a ارزیابی می‌شوند */
+            const rng = qcMasterRange43(live, it.key, grade, size);
+            if (!rng) return; /* بدون رنج → خنثی */
+            const raw = values ? values[it.key] : null;
+            const val = raw != null && raw !== '' ? Number(raw) : null;
+            let ok = true, why = '';
+            if (val == null || isNaN(val)) { ok = false; why = 'نتیجهٔ آزمون ثبت نشده'; }
+            else if (rng.min != null && val < rng.min - 1e-9) { ok = false; why = 'کمتر از حداقل (' + rng.min + ')'; }
+            else if (rng.max != null && val > rng.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر (' + rng.max + ')'; }
+            rows.push({ kind: it.category === 'chem' ? 'chem' : (it.category === 'mech' ? 'mech' : 'dim'), el: it.key, label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), val: val, min: rng.min, max: rng.max, ok: ok, why: why });
+        });
+        return { rows: rows, overall: rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail' };
+    }
+    /* ترکیب ارزیابی کلاسیک + مستر — رکورد بدون values_43 (قدیمی) فقط ارزیابی کلاسیک (سازگاری) */
+    function qcEvalCombined43(live, grade, size, chem, mech, values, hasValues43) {
+        const skip43 = {};
+        (live.qc_master_43 || []).forEach((i) => { if (i && i.active === false && QC_CLASSIC_KEYS_43[i.key]) skip43[i.key] = 1; });
+        const eb = qcEvalIncoming24a(grade, chem, mech, skip43);
+        const rows = eb.rows.slice();
+        if (hasValues43) rows.push.apply(rows, qcEvalMaster43(live, grade, size, values).rows);
+        return { rows: rows, overall: rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail' };
+    }
+    /* ===== QC-EDITABLE-43 (end) ===== */
     /* ارزیابی per عنصر/ویژگی نسبت به مشخصات گرید — pass/fail با دلیل */
-    function qcEvalIncoming24a(grade, chem, mech) {
+    /* QC-EDITABLE-43: پارامتر اختیاری چهارم skip43 — کلیدهای کلاسیکِ غیرفعال‌شده در مستر را از ارزیابی حذف می‌کند
+       (فقط آیتم‌های فعال در نتیجهٔ کلی می‌شمارند)؛ بدون master، رفتار سابق بایت‌به‌بایت. */
+    function qcEvalIncoming24a(grade, chem, mech, skip43) {
         const rows = [];
         const EL_FA_24A = { C: 'کربن (C)', Mn: 'منگنز (Mn)', Si: 'سیلیس (Si)', P: 'فسفر (P)', S: 'گوگرد (S)', Cu: 'مس (Cu)', N: 'نیتروژن (N)' };
         Object.keys(EL_FA_24A).forEach((el) => {
+            if (skip43 && skip43[el]) return; /* QC-EDITABLE-43: آیتم غیرفعال مستر */
             const spec = (grade && grade.chem && grade.chem[el]) || null;
             const hasSpec = !!(spec && (spec.min != null || spec.max != null));
             const val = (chem && chem[el] != null && chem[el] !== '') ? Number(chem[el]) : null;
@@ -7326,6 +7397,7 @@ live.inventory_reservations.splice(idx, 1);
         });
         const MECH_FA_24A = { ReH: 'تنش تسلیم ReH (MPa)', Rm: 'مقاومت کششی Rm (MPa)', A: 'ازدیاد طول A (٪)' };
         Object.keys(MECH_FA_24A).forEach((k) => {
+            if (skip43 && skip43[k]) return; /* QC-EDITABLE-43: آیتم غیرفعال مستر */
             const spec = (grade && grade.mech && grade.mech[k]) || null;
             const val = (mech && mech[k] != null && mech[k] !== '') ? Number(mech[k]) : null;
             if (!spec && val == null) return;
@@ -7358,12 +7430,12 @@ live.inventory_reservations.splice(idx, 1);
 
     if (req.method === 'GET' && pathname === '/api/qcpro/overview') {
         if (!auth.requireRole(req, QC_READ_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشاهدهٔ کنترل کیفیت حرفه‌ای برای نقش شما مجاز نیست.' }, 403);
-        const live = qcSeedGrades24a(qcEnsure24a(readLive()));
+        const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive()))); /* QC-EDITABLE-43: seed مستر */
         writeJson(LIVE_FILE, live); /* seed idempotent — فایل همیشه به‌روز */
         const incEval = (live.qc_incoming_24 || []).map((t) => {
             const g = (live.qc_grades_24 || []).find((x) => x.id === t.grade_id);
             const gr = (live.purchase_receipts || []).find((r) => r.receipt_no === t.receipt_no);
-            const ev = qcEvalIncoming24a(g, t.chem, t.mech);
+            const ev = qcEvalCombined43(live, g, t.size, t.chem, t.mech, t.values_43, !!t.values_43); /* QC-EDITABLE-43: ترکیبی — رکورد قدیمی بدون values_43 = ارزیابی کلاسیک سابق */
             return Object.assign({}, t, { grade_name: g ? g.name : (t.grade || '—'), grade_std: g ? g.standard : '', supplier_name: gr ? gr.supplier_name : (t.supplier_name || '—'), po_no: gr ? gr.po_no : (t.po_no || ''), eval: ev, status_fa: QC_IN_STATUS_FA_24A[t.status] || t.status });
         });
         const kpi24a = {
@@ -7375,6 +7447,8 @@ live.inventory_reservations.splice(idx, 1);
         return sendJson(res, {
             ok: true, today_jalali: finIsoToJalali(new Date().toISOString()),
             grades: live.qc_grades_24, specs: live.qc_specs_24, incoming: incEval.sort((a, b2) => String(b2.created_at || '').localeCompare(String(a.created_at || ''))),
+            /* QC-EDITABLE-43: مستر پارامترها + رنج‌ها — خواندن برای همهٔ نقش‌های QC_READ، نوشتن با endpointهای جدا */
+            items: live.qc_master_43 || [], ranges: live.qc_master_rng_43 || [],
             bom_ref: (live.fin_bom || []).map((b) => ({ size: b.size, std_cost: finStdCostPerTon(b, live.fin_config || {}) })),
             receipts_ref: (live.purchase_receipts || []).slice(0, 80).map((r) => ({ receipt_no: r.receipt_no, po_no: r.po_no, supplier_name: r.supplier_name, status: r.status, lines: (r.lines || []).map((l, i) => ({ i: i, kind: l.kind, item_name: l.item_name, heat_number: l.heat_number || '', qty: l.qty })), has_test: (live.qc_incoming_24 || []).some((t) => t.receipt_no === r.receipt_no) })),
             kpi: kpi24a,
@@ -7505,21 +7579,39 @@ live.inventory_reservations.splice(idx, 1);
                 ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => { if (chem[el] != null && chem[el] !== '') c24a[el] = Number(chem[el]); });
                 ['ReH', 'Rm', 'A'].forEach((k) => { if (mech[k] != null && mech[k] !== '') m24a[k] = Number(mech[k]); });
                 m24a.bend = mech.bend === true || mech.bend === 1 || mech.bend === '1';
+                /* ===== QC-EDITABLE-43 (begin): مقادیر داینامیک مستر — فرم از آیتم‌های فعال تغذیه می‌شود ===== */
+                const size43 = line.kind === 'rebar' ? (Number(line.size) || 0) : 0;
+                const items43 = qcActiveItems43(live);
+                const v43 = {};
+                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => { if (c24a[el] != null) v43[el] = c24a[el]; });
+                ['ReH', 'Rm', 'A'].forEach((k) => { if (m24a[k] != null) v43[k] = m24a[k]; });
+                if (b.values && typeof b.values === 'object') {
+                    items43.forEach((it) => {
+                        const raw43 = b.values[it.key];
+                        if (raw43 == null || raw43 === '') return;
+                        const n43 = Number(raw43);
+                        if (!isFinite(n43)) return;
+                        v43[it.key] = n43;
+                        const kk43 = QC_CLASSIC_KEYS_43[it.key]; /* آینه به مسیر قدیمی — سازگاری کامل ارزیابی/خوانندگان فعلی */
+                        if (kk43 === 'chem' && c24a[it.key] == null) c24a[it.key] = n43;
+                        if (kk43 === 'mech' && m24a[it.key] == null) m24a[it.key] = n43;
+                    });
+                }
+                /* ===== QC-EDITABLE-43 (end) ===== */
                 const rec = {
                     id: 'inc24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                     test_no: qcNextNo24a(live, 'incoming', 'INC'),
                     date_jalali: finIsoToJalali(new Date().toISOString()),
                     receipt_no: receiptNo, po_no: gr.po_no, supplier_name: gr.supplier_name, line_index: lineIdx,
                     item_name: line.item_name || line.kind, kind: line.kind || '',
-                    heat_number: heat, size: line.kind === 'rebar' ? (Number(line.size) || 0) : 0,
-                    grade_id: grade.id, grade: grade.name, quantity_ton: Number(line.qty) || 0,
-                    chem: c24a, mech: m24a,
+                    heat_number: heat, size: size43, grade_id: grade.id, grade: grade.name, quantity_ton: Number(line.qty) || 0,
+                    chem: c24a, mech: m24a, values_43: v43, /* QC-EDITABLE-43: مقادیر per آیتم مستر */
                     method_chem: String(b.method_chem || 'اسپکترومتری').slice(0, 60), method_mech: String(b.method_mech || 'کشش — ISO 6892-1').slice(0, 60),
                     status: 'draft', notes: String(b.notes || '').slice(0, 400),
                     registered_by: String((req.user && (req.user.name || req.user.username)) || ''), registered_at: new Date().toISOString(),
                     decided_by: '', decided_at: null, quarantine_count: 0,
                 };
-                rec.eval = qcEvalIncoming24a(grade, c24a, m24a);
+                rec.eval = qcEvalCombined43(live, grade, size43, c24a, m24a, v43, true); /* QC-EDITABLE-43: کلاسیک فعال + آیتم‌های مستر */
                 live.qc_incoming_24.push(rec);
                 if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ آزمون ورودی انجام نشد.');
                 cache.data = null; cache.at = 0;
@@ -7561,6 +7653,121 @@ live.inventory_reservations.splice(idx, 1);
         }).catch((e) => sendJson(res, { error: e.message }, 500));
         return;
     }
+
+    // ================================================================
+    // ===== QC-EDITABLE-43 (begin): CRUD مستر پارامترهای آزمایشگاه =====
+    // آیتم (key/label/دسته/واحد/فعال) + رنج per گرید×سایز. نوشتن فقط
+    // vendor/owner (isOwnerReq24 — همان گارد SEC-LIC-24 با fallback
+    // admin در نصب‌های قدیمی)؛ خواندن از overview برای نقش‌های QC_READ.
+    // منطق QC موجود (grades/specs/incoming/decide) دست‌نخورده.
+    // ================================================================
+    if (req.method === 'POST' && pathname === '/api/qcpro/master') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'مدیریت پارامترهای آزمایشگاه فقط توسط مدیرعامل (CEO) مجاز است.', code: 'OWNER_ONLY' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive())));
+                const key = String(b.key || '').trim().toLowerCase();
+                const keyUp43 = key.toUpperCase(); /* کلاسیک‌ها حساس به حروف‌اند (C/Mn/ReH/…) — تطبیق بی‌حساسیت برای گارد */
+                if (QC_CLASSIC_KEYS_43[key] || QC_CLASSIC_KEYS_43[keyUp43]) return sendJson(res, { error: 'کلید «' + keyUp43 + '» پارامتر پایهٔ سیستم است — برای تغییر آن از ویرایش همان پارامتر استفاده کنید.' }, 409);
+                if (!/^[a-z0-9_]{2,24}$/.test(key)) return sendJson(res, { error: 'کلید پارامتر باید ۲ تا ۲۴ نویسهٔ لاتین کوچک/عدد/زیرخط باشد.' }, 400);
+                if ((live.qc_master_43 || []).some((i) => i.key === key)) return sendJson(res, { error: 'پارامتری با کلید «' + key + '» قبلاً تعریف شده است.' }, 409);
+                const label = String(b.label || '').trim().slice(0, 60);
+                if (!label) return sendJson(res, { error: 'عنوان پارامتر الزامی است.' }, 400);
+                const category = ['chem', 'mech', 'dim'].indexOf(b.category) !== -1 ? b.category : 'dim';
+                const rec = { id: 'it43-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), key: key, label: label, category: category, unit: String(b.unit || '').trim().slice(0, 20), active: b.active === false ? false : true, sort: Number(b.sort) || 90, notes: String(b.notes || '').slice(0, 200), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
+                live.qc_master_43.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ پارامتر انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.master.create', { key: key, category: category });
+                return sendJson(res, { ok: true, record: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت پارامتر ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    if (req.method === 'PUT' && pathname === '/api/qcpro/master') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'مدیریت پارامترهای آزمایشگاه فقط توسط مدیرعامل (CEO) مجاز است.', code: 'OWNER_ONLY' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive())));
+                const it = (live.qc_master_43 || []).find((x) => x.id === String(b.id || '') || x.key === String(b.id || ''));
+                if (!it) return sendJson(res, { error: 'پارامتر یافت نشد.' }, 404);
+                if (b.label !== undefined) { const l = String(b.label).trim().slice(0, 60); if (!l) return sendJson(res, { error: 'عنوان پارامتر نمی‌تواند خالی باشد.' }, 400); it.label = l; }
+                if (b.unit !== undefined) it.unit = String(b.unit || '').trim().slice(0, 20); /* تغییر واحد — بدون migration */
+                if (b.category !== undefined && ['chem', 'mech', 'dim'].indexOf(b.category) !== -1 && !QC_CLASSIC_KEYS_43[it.key]) it.category = b.category;
+                if (b.active !== undefined) it.active = !!b.active; /* فعال/غیرفعال — غیرفعال از فرم و ارزیابی حذف می‌شود */
+                if (b.sort !== undefined) it.sort = Number(b.sort) || 90;
+                if (b.notes !== undefined) it.notes = String(b.notes || '').slice(0, 200);
+                it.updated_by = String((req.user && (req.user.name || req.user.username)) || '');
+                it.updated_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ پارامتر انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.master.update', { key: it.key, active: it.active, unit: it.unit });
+                return sendJson(res, { ok: true, record: it });
+            } catch (e) { return sendJson(res, { error: 'ویرایش پارامتر ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    if (req.method === 'DELETE' && pathname === '/api/qcpro/master') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'مدیریت پارامترهای آزمایشگاه فقط توسط مدیرعامل (CEO) مجاز است.', code: 'OWNER_ONLY' }, 403);
+        try {
+            const q = new URL(req.url, 'http://x').searchParams; /* QC-EDITABLE-43 */
+            const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive())));
+            const it = (live.qc_master_43 || []).find((x) => x.id === String(q.get('id') || '') || x.key === String(q.get('id') || ''));
+            if (!it) return sendJson(res, { error: 'پارامتر یافت نشد.' }, 404);
+            if (QC_CLASSIC_KEYS_43[it.key]) return sendJson(res, { error: 'پارامتر پایهٔ سیستم («' + it.key + '») حذفشدنی نیست — فقط می‌توانید آن را غیرفعال کنید.' }, 409);
+            const nR = live.qc_master_rng_43.length;
+            live.qc_master_rng_43 = live.qc_master_rng_43.filter((r) => r && r.item_key !== it.key);
+            live.qc_master_43 = live.qc_master_43.filter((x) => x.key !== it.key);
+            if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیره انجام نشد.');
+            cache.data = null; cache.at = 0;
+            auditLog(req, 'qcpro.master.delete', { key: it.key, ranges_removed: nR - live.qc_master_rng_43.length });
+            return sendJson(res, { ok: true });
+        } catch (e) { return sendJson(res, { error: 'حذف پارامتر ناموفق: ' + e.message }, 400); }
+    }
+    if (req.method === 'POST' && pathname === '/api/qcpro/master/range') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'مدیریت رنج پارامترها فقط توسط مدیرعامل (CEO) مجاز است.', code: 'OWNER_ONLY' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive())));
+                const it = (live.qc_master_43 || []).find((x) => x.key === String(b.item_key || '') && x.active !== false);
+                if (!it) return sendJson(res, { error: 'پارامتر یافت نشد یا غیرفعال است.' }, 404);
+                const grade = (live.qc_grades_24 || []).find((g) => g.id === String(b.grade_id || ''));
+                if (!grade) return sendJson(res, { error: 'گرید یافت نشد — ابتدا گرید را در مستر گرید بسازید.' }, 404);
+                const size = (b.size == null || b.size === '' || b.size === 'all') ? null : Math.round(Number(b.size) || 0);
+                if (size != null && !(size >= 4 && size <= 60)) return sendJson(res, { error: 'سایز باید بین ۴ تا ۶۰ باشد (یا خالی = همهٔ سایزها).' }, 400);
+                const min = b.min == null || b.min === '' ? null : Number(b.min);
+                const max = b.max == null || b.max === '' ? null : Number(b.max);
+                if (min == null && max == null) return sendJson(res, { error: 'حداقل یکی از حداقل/حداکثر باید مقدار داشته باشد.' }, 400);
+                if (min != null && max != null && min > max) return sendJson(res, { error: 'حداقل نمی‌تواند از حداکثر بزرگ‌تر باشد.' }, 400);
+                const ex = (live.qc_master_rng_43 || []).find((r) => r.item_key === it.key && r.grade_id === grade.id && ((r.size == null && size == null) || Number(r.size) === Number(size)));
+                if (ex) { ex.min = min; ex.max = max; ex.updated_by = String((req.user && (req.user.name || req.user.username)) || ''); ex.updated_at = new Date().toISOString(); }
+                else live.qc_master_rng_43.push({ id: 'rg43-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), item_key: it.key, grade_id: grade.id, size: size, min: min, max: max, updated_by: String((req.user && (req.user.name || req.user.username)) || ''), updated_at: new Date().toISOString() });
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ رنج انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'qcpro.master.range', { item: it.key, grade: grade.name, size: size, min: min, max: max });
+                return sendJson(res, { ok: true }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت رنج ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    if (req.method === 'DELETE' && pathname === '/api/qcpro/master/range') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'مدیریت رنج پارامترها فقط توسط مدیرعامل (CEO) مجاز است.', code: 'OWNER_ONLY' }, 403);
+        try {
+            const q = new URL(req.url, 'http://x').searchParams; /* QC-EDITABLE-43 */
+            const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive())));
+            const before = live.qc_master_rng_43.length;
+            live.qc_master_rng_43 = live.qc_master_rng_43.filter((r) => r && r.id !== String(q.get('id') || ''));
+            if (live.qc_master_rng_43.length === before) return sendJson(res, { error: 'رنج یافت نشد.' }, 404);
+            if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیره انجام نشد.');
+            cache.data = null; cache.at = 0;
+            auditLog(req, 'qcpro.master.range.delete', { id: String(q.get('id') || '') });
+            return sendJson(res, { ok: true });
+        } catch (e) { return sendJson(res, { error: 'حذف رنج ناموفق: ' + e.message }, 400); }
+    }
+    // ===== QC-EDITABLE-43 (end) =====
     // ===== FEAT-QC-PRO-24a (end) =====
 
     // ================================================================
@@ -7622,6 +7829,9 @@ live.inventory_reservations.splice(idx, 1);
                 if (missing.length) return sendJson(res, { error: 'برای هیت ' + missing.join(', ') + ' نتایج آزمون (شیمیایی/مکانیکی) کامل یافت نشد — ابتدا آزمون ورودی را ثبت و از QC تأیید کنید یا آزمایشگاه QC را تکمیل کنید.', missing: missing }, 409);
                 const mtcNo = qcNextNo24a(live, 'mtc', 'MTC');
                 const vid = 'MTCV' + crypto.createHash('sha1').update(mtcNo + '|' + Date.now() + '|' + Math.random()).digest('hex').slice(0, 10).toUpperCase();
+                /* QC-EDITABLE-43: snapshot آیتم‌های فعال + رنج مؤثر (گرید×سایز) هنگام صدور — چاپ/اکسل پایدار می‌ماند */
+                const items43m = qcActiveItems43(live);
+                const rng43m = items43m.map((it) => { const r43 = qcMasterRange43(live, it.key, grade24b || {}, size); return { key: it.key, min: r43 ? r43.min : null, max: r43 ? r43.max : null }; });
                 const rec = {
                     id: 'mtc24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                     mtc_no: mtcNo, verify_id: vid, cert_type: 'EN 10204 — Type 3.1',
@@ -7632,6 +7842,8 @@ live.inventory_reservations.splice(idx, 1);
                     weight_ton: weight, pieces: pieces, date_jalali: dj,
                     is_export: order.is_export === true,
                     heat_numbers: heats, tests: tests, test_source: tests[heats[0]] && tests[heats[0]].source,
+                    items_43: items43m.map((i43) => ({ key: i43.key, label: i43.label, unit: i43.unit || '', category: i43.category || 'chem' })), /* QC-EDITABLE-43 */
+                    rng_43: rng43m, /* QC-EDITABLE-43 */
                     tol_weight_percent: spec24b ? spec24b.tol_weight_percent : null, piece_length_m: spec24b ? spec24b.piece_length_m : null,
                     issued_by: String((req.user && (req.user.name || req.user.username)) || ''), issued_at: new Date().toISOString(),
                     notes: String(b.notes || '').slice(0, 300),

@@ -2181,6 +2181,44 @@
                 </div>
                 <div class="tablewrap" style="max-height:320px;overflow-y:auto"><table id="tbl-qc-specs24"></table></div>
             </div>
+            <!-- ===== QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه — آیتم با دسته/واحد/رنج per گرید×سایز (CRUD فقط مدیرعامل) ===== -->
+            <div class="panel">
+                <h2>🧪 پارامترهای آزمون (مستر آزمایشگاه) <span class="plan-engine" id="qcMsChip43">…</span></h2>
+                <p class="note">آیتم‌های آزمون با دسته (شیمیایی/مکانیکی/ابعادی) و واحد — فرم «ثبت آزمون ورودی» از همین‌جا تغذیه می‌شود (ستون‌ها داینامیک، نه ثابت ReH/Rm). رنج min/max per گرید×سایز: رنج اختصاصیِ سایز مقدم است، سپس رنج «همهٔ سایزها»، سپس حد گرید در مستر گرید؛ آیتم بدون رنج فقط مقدار ثبت می‌کند (خنثی در نتیجه). نتیجهٔ کلی = منطقیِ همهٔ آیتم‌های فعالِ رنج‌دار + خمش. مدیریت آیتم/واحد/رنج فقط مدیرعامل (CEO).</p>
+                <div class="toolbar">
+                    <button class="act" id="qcMsAdd43" style="display:none">➕ پارامتر جدید</button>
+                </div>
+                <div id="qcMsForm43" class="filters hidden">
+                    <div class="frow">
+                        <label>کلید (لاتین): <input id="qcMsKey43" placeholder="cr_v / v40 / …" style="width:110px" maxlength="24"></label>
+                        <label>عنوان: <input id="qcMsLabel43" placeholder="وانادیم (V)" style="width:150px"></label>
+                        <label>دسته: <select id="qcMsCat43" class="fsel" style="width:110px"><option value="chem">شیمیایی</option><option value="mech">مکانیکی</option><option value="dim">ابعادی</option></select></label>
+                        <label>واحد: <input id="qcMsUnit43" placeholder="٪ / MPa / mm" style="width:90px" maxlength="20"></label>
+                    </div>
+                    <div class="frow">
+                        <label style="flex:1">یادداشت: <input id="qcMsNotes43" placeholder="اختیاری"></label>
+                    </div>
+                    <div class="toolbar">
+                        <button class="act" id="qcMsSave43" style="background:#15803d">ذخیرهٔ پارامتر</button>
+                        <button class="act" id="qcMsCancel43">بستن</button>
+                        <span class="note" id="qcMsMsg43"></span>
+                    </div>
+                </div>
+                <div id="qcMsRngForm43" class="filters hidden">
+                    <div class="frow">
+                        <label>گرید: <select id="qcMsRngGrade43" class="fsel" style="min-width:130px"></select></label>
+                        <label>سایز: <select id="qcMsRngSize43" class="fsel" style="width:120px"><option value="all">همهٔ سایزها</option></select></label>
+                        <label>حداقل: <input id="qcMsRngMin43" style="width:80px" step="any"></label>
+                        <label>حداکثر: <input id="qcMsRngMax43" style="width:80px" step="any"></label>
+                        <button class="act" id="qcMsRngSave43" style="background:#15803d">ذخیرهٔ رنج</button>
+                        <span class="note" id="qcMsRngMsg43"></span>
+                    </div>
+                    <div class="frow"><div class="note" style="flex:1 1 100%">رنج‌های ثبت‌شدهٔ این پارامتر برای گرید انتخابی:</div></div>
+                    <div id="qcMsRngList43" style="font-size:11px;line-height:2"></div>
+                </div>
+                <div class="tablewrap" style="max-height:300px;overflow-y:auto"><table id="tbl-qc-master43"></table></div>
+            </div>
+            <!-- ===== QC-EDITABLE-43 (end) ===== -->
             <div class="panel">
                 <h2>🔬 آزمون ورودی مواد — Heat Number + اسپکترومتری / کشش</h2>
                 <p class="note">هر آزمون به رسید خرید (GRN) + کد هیت ارجاع دارد؛ نتایج شیمیایی/مکانیکی per عنصر با مشخصات گرید مقایسه و pass/fail می‌شود؛ تأیید QC = شمش قابل‌مصرف، رد QC = قرنطینهٔ خودکار ردیف‌های فیزیکی (ستون «مسدود» تب انبار). نقش‌ها: انبار/کیفیت ثبت می‌کنند، تأیید/رد فقط کنترل کیفیت (qc).</p>
@@ -2196,6 +2234,7 @@
                         <label>کد هیت: <input id="qcInHeat24" placeholder="HT-1405-…" style="width:130px"></label>
                         <label>گرید: <select id="qcInGrade24" class="fsel" style="min-width:130px"></select></label>
                     </div>
+                    <div id="qcInClassic24">
                     <div class="frow"><div class="note" style="flex:1 1 100%">آنالیز شیمیایی — اسپکترومتری (٪ وزنی):</div></div>
                     <div class="frow">
                         <label>C: <input id="qcInC24" style="width:70px" step="0.001"></label>
@@ -2213,6 +2252,8 @@
                         <label>A (٪): <input id="qcInA24" style="width:70px" step="0.1"></label>
                         <label>تست خمش: <select id="qcInBend24" class="fsel" style="width:140px"><option value="1">مطابق</option><option value="0">مغایر</option></select></label>
                     </div>
+                    </div>
+                    <div id="qcInDyn43" class="frow" style="flex-wrap:wrap;gap:6px 14px"></div>
                     <div class="frow">
                         <label style="flex:1">یادداشت: <input id="qcInNotes24" placeholder="اختیاری"></label>
                     </div>
@@ -8391,9 +8432,10 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     }
     function qcGradeById24(id) { return ((qcData24 && qcData24.grades) || []).find((g) => g.id === id) || null; }
     /* ارزیابی زندهٔ فرم آزمون ورودی — همان منطق سرور (per عنصر) */
-    function qcEvalLocal24(grade, chem, mech) {
+    function qcEvalLocal24(grade, chem, mech, skip43) { /* QC-EDITABLE-43: skip = آیتم‌های کلاسیک غیرفعال مستر */
         const rows = [];
         ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
+            if (skip43 && skip43[el]) return;
             const sp = grade && grade.chem && grade.chem[el];
             const hasSpec = sp && (sp.min != null || sp.max != null);
             const val = qcNum24(chem[el]);
@@ -8405,6 +8447,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             rows.push({ label: el, val: val, min: hasSpec ? sp.min : null, max: hasSpec ? sp.max : null, ok: ok, why: why });
         });
         ['ReH', 'Rm', 'A'].forEach((k) => {
+            if (skip43 && skip43[k]) return;
             const sp = grade && grade.mech && grade.mech[k];
             const val = qcNum24(mech[k]);
             if (!sp && val == null) return;
@@ -8424,10 +8467,12 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         const gAdd = qcEl24('qcGrAdd24'); if (gAdd) gAdd.style.display = qcGradeW24() ? '' : 'none';
         const sAdd = qcEl24('qcSpAdd24'); if (sAdd) sAdd.style.display = qcGradeW24() ? '' : 'none';
         const iAdd = qcEl24('qcInAdd24'); if (iAdd) iAdd.style.display = qcInReg24() ? '' : 'none';
+        const mAdd43 = qcEl24('qcMsAdd43'); if (mAdd43) mAdd43.style.display = qcOwner43() ? '' : 'none'; /* QC-EDITABLE-43 */
     }
-    function qcRender24() { qcRenderGrades24(); qcRenderSpecs24(); qcRenderIncoming24(); qcFillSelects24(); qcApplyRole24(); }
+    function qcRender24() { qcRenderGrades24(); qcRenderSpecs24(); qcRenderMaster43(); qcRenderIncoming24(); qcFillSelects24(); qcRenderDyn43(); qcApplyRole24(); } /* QC-EDITABLE-43: +master/dyn */
     /* ---------- مستر گرید ---------- */
     let qcGrEdit24 = '';
+    let qcMsEdit43 = '', qcMsRngItem43 = ''; /* QC-EDITABLE-43 */
     function qcRenderGrades24() {
         const el = qcEl24('tbl-qc-grades24'); if (!el) return;
         const rows = (qcData24 && qcData24.grades) || [];
@@ -8609,7 +8654,8 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         const line = rc && rc.lines ? rc.lines[Number(ls.value) || 0] : null;
         if (line && line.heat_number) hs.value = line.heat_number;
     }
-    function qcInEvalPreview24() {
+    function qcInEvalPreview24() { if (qcDynMode43()) qcEvalDynLocal43(); else qcInEvalPreview24Classic43(); } /* QC-EDITABLE-43: dispatch داینامیک/کلاسیک */
+    function qcInEvalPreview24Classic43() {
         const g = qcGradeById24(qcEl24('qcInGrade24') ? qcEl24('qcInGrade24').value : '');
         const box = qcEl24('qcInEval24'); if (!box) return;
         if (!g) { box.textContent = 'برای پیش‌نمایش ارزیابی، گرید را انتخاب کنید.'; return; }
@@ -8618,6 +8664,122 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         const ev = qcEvalLocal24(g, chem, mech);
         box.innerHTML = '<b>پیش‌نمایش ارزیابی نسبت به گرید ' + esc(g.name) + ' (' + esc(g.standard || '') + '):</b> ' + (ev.overall === 'pass' ? '<span style="color:#15803d">مطابق ✓</span>' : '<span style="color:#b91c1c">مغایر ✗</span>') + ' — ' + esc(qcEvalText24(ev));
     }
+    /* ---------- QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه ---------- */
+    const qcOwner43 = () => { try { return isOwner24(); } catch (e43b) { return WEB_ROLE === 'vendor' || WEB_ROLE === 'owner' || !!(WEB_USER && WEB_USER.is_owner); } };
+    const QC_CLASSIC_43 = { C: 1, Mn: 1, Si: 1, P: 1, S: 1, Cu: 1, N: 1, ReH: 1, Rm: 1, A: 1 };
+    const qcItems43 = () => (qcData24 && qcData24.items) || [];
+    const qcRanges43 = () => (qcData24 && qcData24.ranges) || [];
+    const qcDynMode43 = () => qcItems43().some((i) => i.active !== false);
+    function qcRangeFor43(key, gradeId, size) { /* آینهٔ سرور: رنج سایز دقیق ← همهٔ سایزها ← حد گرید کلاسیک */
+        const g = qcGradeById24(gradeId); if (!g) return null;
+        const szN = Number(size) || 0;
+        let r = qcRanges43().find((x) => x && x.item_key === key && x.grade_id === g.id && x.size != null && Number(x.size) === szN);
+        if (!r) r = qcRanges43().find((x) => x && x.item_key === key && x.grade_id === g.id && x.size == null);
+        if (r) return { min: r.min == null ? null : Number(r.min), max: r.max == null ? null : Number(r.max), src: 'master' };
+        const kind43 = { C: 'chem', Mn: 'chem', Si: 'chem', P: 'chem', S: 'chem', Cu: 'chem', N: 'chem', ReH: 'mech', Rm: 'mech', A: 'mech' }[key];
+        const spec = kind43 && g[kind43] ? g[kind43][key] : null;
+        if (spec && (spec.min != null || spec.max != null)) return { min: spec.min == null ? null : Number(spec.min), max: spec.max == null ? null : Number(spec.max), src: 'grade' };
+        return null;
+    }
+    function qcRenderMaster43() {
+        const el = qcEl24('tbl-qc-master43'); if (!el) return;
+        const chip = qcEl24('qcMsChip43'); if (chip) chip.textContent = 'برخط ✅';
+        const items = qcItems43(), rngs = qcRanges43(), own = qcOwner43();
+        const cat43 = { chem: 'شیمیایی', mech: 'مکانیکی', dim: 'ابعادی' };
+        let html = '<thead><tr><th>پارامتر</th><th>کلید</th><th>دسته</th><th>واحد</th><th>رنج‌ها</th><th>وضعیت</th>' + (own ? '<th>عملیات</th>' : '') + '</tr></thead><tbody>';
+        if (!items.length) html += '<tr><td colspan="7" class="empty">پارامتری تعریف نشده است — فرم آزمون از ستون‌های ثابت استفاده می‌کند.</td></tr>';
+        items.forEach((it) => {
+            const nR = rngs.filter((r) => r && r.item_key === it.key).length;
+            html += '<tr><td><b>' + esc(it.label) + '</b></td><td style="direction:ltr">' + esc(it.key) + '</td><td>' + (cat43[it.category] || it.category || '—') + '</td><td>' + esc(it.unit || '—') + '</td><td>' + fa(nR) + ' رنج</td>'
+                + '<td><span class="chip ' + (it.active !== false ? 'ok' : 'no') + '">' + (it.active !== false ? 'فعال' : 'غیرفعال') + '</span></td>'
+                + (own ? '<td style="white-space:nowrap"><button class="act" data-qcmsrng="' + esc(it.id) + '">رنج‌ها</button> <button class="act" data-qcmsedit="' + esc(it.id) + '">ویرایش</button> <button class="act" data-qcmstog="' + esc(it.id) + '">' + (it.active !== false ? 'غیرفعال' : 'فعال') + '</button>' + (it._seed || QC_CLASSIC_43[it.key] ? '' : ' <button class="act" data-qcmsdel="' + esc(it.id) + '" style="background:#b91c1c">حذف</button>') + '</td>' : '') + '</tr>';
+        });
+        el.innerHTML = html + '</tbody>';
+        el.querySelectorAll('button[data-qcmsrng]').forEach((b) => b.addEventListener('click', () => qcMsOpenRanges43(b.dataset.qcmsrng)));
+        el.querySelectorAll('button[data-qcmsedit]').forEach((b) => b.addEventListener('click', () => qcMsFillEdit43(b.dataset.qcmsedit)));
+        el.querySelectorAll('button[data-qcmstog]').forEach((b) => b.addEventListener('click', async () => {
+            const it = qcItems43().find((x) => x.id === b.dataset.qcmstog); if (!it) return;
+            if (!confirm((it.active !== false ? 'غیرفعال‌سازی' : 'فعال‌سازی') + ' پارامتر «' + it.label + '»؟ غیرفعال از فرم آزمون و ارزیابی حذف می‌شود.')) return;
+            try { const r = await fetch('/api/qcpro/master', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: it.id, active: it.active === false }) }); const j = await r.json(); if (!r.ok) { alert(j.error || 'خطا'); return; } toast('پارامتر «' + it.label + '» بروزرسانی شد.', 'ok'); await qcLoad24(); } catch (e43c) { alert('خطا: ' + e43c.message); }
+        }));
+        el.querySelectorAll('button[data-qcmsdel]').forEach((b) => b.addEventListener('click', async () => {
+            const it = qcItems43().find((x) => x.id === b.dataset.qcmsdel); if (!it) return;
+            if (!confirm('حذف پارامتر «' + it.label + '» و همهٔ رنج‌هایش؟ مقادیر ثبت‌شدهٔ گذشته در رکوردها می‌ماند.')) return;
+            try { const r = await fetch('/api/qcpro/master?id=' + encodeURIComponent(it.id), { method: 'DELETE' }); const j = await r.json(); if (!r.ok) { alert(j.error || 'خطا'); return; } toast('پارامتر «' + it.label + '» حذف شد.', 'ok'); await qcLoad24(); } catch (e43d) { alert('خطا: ' + e43d.message); }
+        }));
+    }
+    function qcMsOpenRanges43(id) {
+        const it = qcItems43().find((x) => x.id === id); if (!it) return;
+        qcMsRngItem43 = id;
+        const gs = qcEl24('qcMsRngGrade43');
+        if (gs) { const cur = gs.value; gs.innerHTML = ((qcData24 && qcData24.grades) || []).map((g) => '<option value="' + esc(g.id) + '">' + esc(g.name) + (g.active !== false ? '' : ' (غیرفعال)') + '</option>').join(''); if (cur) gs.value = cur; }
+        qcEl24('qcMsRngForm43').classList.remove('hidden');
+        qcMsRenderRanges43();
+        qcMsg24('qcMsRngMsg43', 'رنج برای: ' + it.label + (it.unit ? ' (' + it.unit + ')' : ''));
+    }
+    function qcMsRenderRanges43() {
+        const it = qcItems43().find((x) => x.id === qcMsRngItem43); const box = qcEl24('qcMsRngList43');
+        if (!it || !box) return;
+        const gs = qcEl24('qcMsRngGrade43'); const gid = gs ? gs.value : '';
+        const gname = ((qcData24 && qcData24.grades) || []).find((g) => g.id === gid);
+        const rows = qcRanges43().filter((r) => r && r.item_key === it.key && r.grade_id === gid);
+        box.innerHTML = (rows.length ? rows.map((r) => '• ' + (gname ? esc(gname.name) : '؟') + ' — ' + (r.size == null ? 'همهٔ سایزها' : 'سایز ' + toFaDigits(r.size)) + ': ' + (r.min == null ? '−∞' : toFaDigits(r.min)) + ' تا ' + (r.max == null ? '+∞' : toFaDigits(r.max)) + ' <button class="act" data-qcmsrngdel="' + esc(r.id) + '" style="background:#b91c1c">حذف</button>').join('<br>') : '<span class="note">رنجی برای این گرید ثبت نشده — مقدارِ بدون رنج خنثی است (فقط ثبت).</span>');
+        box.querySelectorAll('button[data-qcmsrngdel]').forEach((b) => b.addEventListener('click', async () => {
+            try { const r = await fetch('/api/qcpro/master/range?id=' + encodeURIComponent(b.dataset.qcmsrngdel), { method: 'DELETE' }); const j = await r.json(); if (!r.ok) { alert(j.error || 'خطا'); return; } toast('رنج حذف شد.', 'ok'); await qcLoad24(); qcMsRenderRanges43(); } catch (e43e) { alert('خطا: ' + e43e.message); }
+        }));
+    }
+    function qcMsFillEdit43(id) {
+        const it = qcItems43().find((x) => x.id === id); if (!it) return;
+        qcMsEdit43 = id;
+        const k = qcEl24('qcMsKey43'); k.value = it.key || ''; k.disabled = true;
+        qcEl24('qcMsLabel43').value = it.label || '';
+        qcEl24('qcMsCat43').value = it.category || 'dim';
+        qcEl24('qcMsUnit43').value = it.unit || '';
+        qcEl24('qcMsNotes43').value = it.notes || '';
+        qcEl24('qcMsForm43').classList.remove('hidden');
+        qcMsg24('qcMsMsg43', 'ویرایش پارامتر: ' + it.label);
+    }
+    /* ---------- فرم داینامیک آزمون ورودی از مستر ---------- */
+    function qcRenderDyn43() {
+        const box = qcEl24('qcInDyn43'); if (!box) return;
+        const dyn = qcDynMode43();
+        const classic = qcEl24('qcInClassic24'); if (classic) classic.style.display = dyn ? 'none' : '';
+        if (!dyn) { box.innerHTML = ''; return; }
+        const gid = qcEl24('qcInGrade24') ? qcEl24('qcInGrade24').value : '';
+        let html = '<div class="note" style="flex:1 1 100%">پارامترهای آزمون (از مستر آزمایشگاه — ستون‌ها داینامیک):</div>';
+        qcItems43().filter((i) => i.active !== false).forEach((it) => {
+            const r = gid ? qcRangeFor43(it.key, gid, 0) : null;
+            const hint = r ? ((r.min != null ? '≥' + toFaDigits(r.min) : '') + ((r.min != null && r.max != null) ? ' و ' : '') + (r.max != null ? '≤' + toFaDigits(r.max) : '')) : 'بدون رنج — فقط ثبت';
+            html += '<label>' + esc(it.label) + (it.unit ? ' (' + esc(it.unit) + ')' : '') + ' <input data-qcval43="' + esc(it.key) + '" placeholder="' + esc(hint) + '" style="width:92px" step="any"></label>';
+        });
+        html += '<label>تست خمش: <select id="qcInBend43" class="fsel" style="width:140px"><option value="1">مطابق</option><option value="0">مغایر</option></select></label>';
+        box.innerHTML = html;
+        box.querySelectorAll('input[data-qcval43]').forEach((inp) => inp.addEventListener('input', qcInEvalPreview24));
+        const bz = qcEl24('qcInBend43'); if (bz) bz.addEventListener('change', qcInEvalPreview24);
+    }
+    function qcDynCollect43() { const v = {}; const box = qcEl24('qcInDyn43'); if (box) box.querySelectorAll('input[data-qcval43]').forEach((inp) => { v[inp.dataset.qcval43] = inp.value; }); return v; }
+    function qcEvalDynLocal43() { /* پیش‌نمایش داینامیک — آینهٔ qcEvalCombined43 سرور */
+        const g = qcGradeById24(qcEl24('qcInGrade24') ? qcEl24('qcInGrade24').value : '');
+        const box = qcEl24('qcInEval24'); if (!box) return;
+        if (!g) { box.textContent = 'برای پیش‌نمایش ارزیابی، گرید را انتخاب کنید.'; return; }
+        const v = qcDynCollect43();
+        const bend = qcEl24('qcInBend43') ? qcEl24('qcInBend43').value === '1' : true;
+        const skip43 = {}; qcItems43().forEach((i) => { if (i.active === false && QC_CLASSIC_43[i.key]) skip43[i.key] = 1; });
+        const ev = qcEvalLocal24(g, { C: v.C, Mn: v.Mn, Si: v.Si, P: v.P, S: v.S, Cu: v.Cu, N: v.N }, { ReH: v.ReH, Rm: v.Rm, A: v.A, bend: bend }, skip43);
+        const rows = ev.rows.slice();
+        qcItems43().filter((i) => i.active !== false && !QC_CLASSIC_43[i.key]).forEach((it) => {
+            const r = qcRangeFor43(it.key, g.id, 0); if (!r) return;
+            const raw = v[it.key]; const val = raw != null && raw !== '' ? qcNum24(raw) : null;
+            let ok = true, why = '';
+            if (val == null) { ok = false; why = 'ثبت نشده'; }
+            else if (r.min != null && val < r.min) { ok = false; why = 'کمتر از حداقل ' + r.min; }
+            else if (r.max != null && val > r.max) { ok = false; why = 'بیشتر از حداکثر ' + r.max; }
+            rows.push({ label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), val: val, min: r.min, max: r.max, ok: ok, why: why });
+        });
+        const overall = rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail';
+        box.innerHTML = '<b>پیش‌نمایش ارزیابی نسبت به گرید ' + esc(g.name) + ' (' + esc(g.standard || '') + '):</b> ' + (overall === 'pass' ? '<span style="color:#15803d">مطابق ✓</span>' : '<span style="color:#b91c1c">مغایر ✗</span>') + ' — ' + esc(qcEvalText24({ rows: rows }));
+    }
+    /* ---------- QC-EDITABLE-43 (end) ---------- */
     /* ---------- وایرینگ ---------- */
     function qcWire24() {
         const on = (id, ev, fn) => { const el = qcEl24(id); if (el) el.addEventListener(ev, fn); };
@@ -8677,20 +8839,26 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         on('qcInAdd24', 'click', () => {
             qcEl24('qcInForm24').classList.remove('hidden');
             qcMsg24('qcInMsg24', '');
+            qcRenderDyn43();
             qcInEvalPreview24();
         });
         on('qcInCancel24', 'click', () => qcEl24('qcInForm24').classList.add('hidden'));
-        on('qcInRcpt24', 'change', qcInFillLines24);
-        on('qcInLine24', 'change', qcInHeatFromLine24);
-        on('qcInGrade24', 'change', qcInEvalPreview24);
+        on('qcInRcpt24', 'change', () => { qcInFillLines24(); qcRenderDyn43(); });
+        on('qcInLine24', 'change', () => { qcInHeatFromLine24(); qcRenderDyn43(); });
+        on('qcInGrade24', 'change', () => { qcRenderDyn43(); qcInEvalPreview24(); });
         ['qcInC24', 'qcInMn24', 'qcInSi24', 'qcInP24', 'qcInS24', 'qcInCu24', 'qcInN24', 'qcInReH24', 'qcInRm24', 'qcInA24', 'qcInBend24'].forEach((id) => on(id, 'input', qcInEvalPreview24));
         on('qcInBend24', 'change', qcInEvalPreview24);
         on('qcInSave24', 'click', async () => {
+            const dyn43 = qcDynMode43(); /* QC-EDITABLE-43 */
+            const v43 = dyn43 ? qcDynCollect43() : {};
+            const gval43 = (k) => (dyn43 && v43[k] != null ? v43[k] : '');
+            const bend43 = dyn43 ? (qcEl24('qcInBend43') ? qcEl24('qcInBend43').value === '1' : true) : qcEl24('qcInBend24').value === '1';
             const payload = {
                 receipt_no: qcEl24('qcInRcpt24').value, line_index: qcNum24(qcEl24('qcInLine24').value) || 0,
                 heat_number: qcEl24('qcInHeat24').value.trim(), grade_id: qcEl24('qcInGrade24').value,
-                chem: { C: qcEl24('qcInC24').value, Mn: qcEl24('qcInMn24').value, Si: qcEl24('qcInSi24').value, P: qcEl24('qcInP24').value, S: qcEl24('qcInS24').value, Cu: qcEl24('qcInCu24').value, N: qcEl24('qcInN24').value },
-                mech: { ReH: qcEl24('qcInReH24').value, Rm: qcEl24('qcInRm24').value, A: qcEl24('qcInA24').value, bend: qcEl24('qcInBend24').value === '1' },
+                chem: { C: gval43('C'), Mn: gval43('Mn'), Si: gval43('Si'), P: gval43('P'), S: gval43('S'), Cu: gval43('Cu'), N: gval43('N') },
+                mech: { ReH: gval43('ReH'), Rm: gval43('Rm'), A: gval43('A'), bend: bend43 },
+                values: dyn43 ? v43 : undefined, /* QC-EDITABLE-43: مقادیر per آیتم مستر */
                 notes: qcEl24('qcInNotes24').value.trim(),
             };
             if (!payload.receipt_no) { qcMsg24('qcInMsg24', 'انتخاب رسید خرید الزامی است.', true); return; }
@@ -8704,6 +8872,46 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
                 qcEl24('qcInForm24').classList.add('hidden');
                 await qcLoad24();
             } catch (e) { qcMsg24('qcInMsg24', 'خطا: ' + e.message, true); }
+        });
+        /* QC-EDITABLE-43: وایرینگ مستر پارامترها */
+        on('qcMsAdd43', 'click', () => {
+            qcMsEdit43 = '';
+            const k = qcEl24('qcMsKey43'); k.value = ''; k.disabled = false;
+            qcEl24('qcMsLabel43').value = ''; qcEl24('qcMsCat43').value = 'dim'; qcEl24('qcMsUnit43').value = ''; qcEl24('qcMsNotes43').value = '';
+            qcEl24('qcMsForm43').classList.remove('hidden');
+            qcMsg24('qcMsMsg43', 'پارامتر جدید — کلید لاتین یکتا.');
+        });
+        on('qcMsCancel43', 'click', () => qcEl24('qcMsForm43').classList.add('hidden'));
+        on('qcMsSave43', 'click', async () => {
+            const key43 = qcEl24('qcMsKey43').value.trim().toLowerCase();
+            const payload = { key: key43, label: qcEl24('qcMsLabel43').value.trim(), category: qcEl24('qcMsCat43').value, unit: qcEl24('qcMsUnit43').value.trim(), notes: qcEl24('qcMsNotes43').value.trim() };
+            if (!qcMsEdit43 && !/^[a-z0-9_]{2,24}$/.test(key43)) { qcMsg24('qcMsMsg43', 'کلید باید ۲ تا ۲۴ نویسهٔ لاتین کوچک/عدد/زیرخط باشد.', true); return; }
+            if (!payload.label) { qcMsg24('qcMsMsg43', 'عنوان پارامتر الزامی است.', true); return; }
+            try {
+                const r = await fetch('/api/qcpro/master', { method: qcMsEdit43 ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(qcMsEdit43 ? Object.assign({ id: qcMsEdit43 }, payload) : payload) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24('qcMsMsg43', j.error || 'خطا', true); return; }
+                toast('پارامتر «' + payload.label + '» ذخیره شد.', 'ok');
+                qcEl24('qcMsForm43').classList.add('hidden');
+                await qcLoad24();
+            } catch (e43f) { qcMsg24('qcMsMsg43', 'خطا: ' + e43f.message, true); }
+        });
+        on('qcMsRngGrade43', 'change', qcMsRenderRanges43);
+        const sz43 = qcEl24('qcMsRngSize43');
+        if (sz43 && sz43.options.length <= 1) sz43.innerHTML = '<option value="all">همهٔ سایزها</option>' + [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32].map((s) => '<option value="' + s + '">سایز ' + fa(s) + '</option>').join('');
+        on('qcMsRngSave43', 'click', async () => {
+            const it = qcItems43().find((x) => x.id === qcMsRngItem43);
+            if (!it) { qcMsg24('qcMsRngMsg43', 'ابتدا با دکمهٔ «رنج‌ها» یک پارامتر را انتخاب کنید.', true); return; }
+            const gs = qcEl24('qcMsRngGrade43');
+            if (!gs.value) { qcMsg24('qcMsRngMsg43', 'گرید الزامی است.', true); return; }
+            const payload = { item_key: it.key, grade_id: gs.value, size: qcEl24('qcMsRngSize43').value === 'all' ? 'all' : qcEl24('qcMsRngSize43').value, min: qcEl24('qcMsRngMin43').value, max: qcEl24('qcMsRngMax43').value };
+            try {
+                const r = await fetch('/api/qcpro/master/range', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const j = await r.json();
+                if (!r.ok) { qcMsg24('qcMsRngMsg43', j.error || 'خطا', true); return; }
+                toast('رنج ذخیره شد.', 'ok');
+                await qcLoad24(); qcMsRenderRanges43();
+            } catch (e43g) { qcMsg24('qcMsRngMsg43', 'خطا: ' + e43g.message, true); }
         });
         /* خروجی اکسل — گریدها (فرمت طولانی per عنصر) */
         on('qcGrXls24', 'click', () => {
@@ -8730,9 +8938,13 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         on('qcInXls24', 'click', () => {
             const rows = (((qcData24 && qcData24.incoming) || [])).map((t) => {
                 const c = t.chem || {}, m = t.mech || {};
-                return { no: t.test_no, date: t.date_jalali, rc: t.receipt_no, po: t.po_no, sup: t.supplier_name, heat: t.heat_number, grade: t.grade_name || t.grade, qty: t.quantity_ton, C: c.C, Mn: c.Mn, Si: c.Si, P: c.P, S: c.S, Cu: c.Cu, N: c.N, ReH: m.ReH, Rm: m.Rm, A: m.A, bend: m.bend ? 'مطابق' : 'مغایر', overall: t.eval && t.eval.overall === 'pass' ? 'مطابق' : 'مغایر', status: t.status_fa, reg: t.registered_by, dec: t.decided_by, q: t.quarantine_count || '' };
+                const r = { no: t.test_no, date: t.date_jalali, rc: t.receipt_no, po: t.po_no, sup: t.supplier_name, heat: t.heat_number, grade: t.grade_name || t.grade, qty: t.quantity_ton }; /* QC-EDITABLE-43 */
+                qcItems43().filter((i) => i.active !== false).forEach((it) => { r[it.key] = (t.values_43 && t.values_43[it.key] != null) ? t.values_43[it.key] : (c[it.key] != null ? c[it.key] : (m[it.key] != null ? m[it.key] : '')); });
+                r.bend = m.bend ? 'مطابق' : 'مغایر'; r.overall = t.eval && t.eval.overall === 'pass' ? 'مطابق' : 'مغایر'; r.status = t.status_fa; r.reg = t.registered_by; r.dec = t.decided_by; r.q = t.quarantine_count || '';
+                return r;
             });
-            downloadXls('آزمون_ورودی_مواد', [{ label: 'شماره', key: 'no' }, { label: 'تاریخ', key: 'date' }, { label: 'رسید', key: 'rc' }, { label: 'PO', key: 'po' }, { label: 'تأمین‌کننده', key: 'sup' }, { label: 'کد هیت', key: 'heat' }, { label: 'گرید', key: 'grade' }, { label: 'تناژ (تن)', key: 'qty' }, { label: 'C٪', key: 'C' }, { label: 'Mn٪', key: 'Mn' }, { label: 'Si٪', key: 'Si' }, { label: 'P٪', key: 'P' }, { label: 'S٪', key: 'S' }, { label: 'Cu٪', key: 'Cu' }, { label: 'N٪', key: 'N' }, { label: 'ReH (MPa)', key: 'ReH' }, { label: 'Rm (MPa)', key: 'Rm' }, { label: 'A٪', key: 'A' }, { label: 'خمش', key: 'bend' }, { label: 'نتیجهٔ کلی', key: 'overall' }, { label: 'وضعیت', key: 'status' }, { label: 'ثبت‌کننده', key: 'reg' }, { label: 'تصمیم', key: 'dec' }, { label: 'ردیف قرنطینه', key: 'q' }], rows, 'آزمون ورودی مواد — Heat Number + اسپکترومتری/کشش');
+            const cols43 = [{ label: 'شماره', key: 'no' }, { label: 'تاریخ', key: 'date' }, { label: 'رسید', key: 'rc' }, { label: 'PO', key: 'po' }, { label: 'تأمین‌کننده', key: 'sup' }, { label: 'کد هیت', key: 'heat' }, { label: 'گرید', key: 'grade' }, { label: 'تناژ (تن)', key: 'qty' }].concat(qcItems43().filter((i) => i.active !== false).map((it) => ({ label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), key: it.key }))).concat([{ label: 'خمش', key: 'bend' }, { label: 'نتیجهٔ کلی', key: 'overall' }, { label: 'وضعیت', key: 'status' }, { label: 'ثبت‌کننده', key: 'reg' }, { label: 'تصمیم', key: 'dec' }, { label: 'ردیف قرنطینه', key: 'q' }]);
+            downloadXls('آزمون_ورودی_مواد', cols43, rows, 'آزمون ورودی مواد — Heat Number + پارامترهای مستر (داینامیک)');
         });
     }
     try { qcWire24(); } catch (e) { /* بی‌ضرر */ }
@@ -8817,6 +9029,9 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>هیت</th><th>' + Object.keys(elFa).map((k) => k).join('</th><th>') + '</th></tr></thead><tbody>' + chemRows + '</tbody></table>' +
             '<div style="font-weight:800;margin:12px 0 4px">۲) خواص مکانیکی (کشش — ISO 6892-1)</div>' +
             '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>هیت</th><th>ReH — تسلیم (MPa)</th><th>Rm — کشش (MPa)</th><th>A — ازدیاد طول (٪)</th><th>خمش</th><th>Rm/ReH</th></tr></thead><tbody>' + mechRows + '</tbody></table>' +
+            (m.items_43 && m.items_43.length ? /* QC-EDITABLE-43: پارامترهای فعال + مقدار + رنج — snapshot هنگام صدور */
+            '<div style="font-weight:800;margin:12px 0 4px">۳) پارامترهای تکمیلی (مستر آزمایشگاه)</div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>پارامتر</th><th>واحد</th>' + heats.map((h) => '<th>' + esc(h) + '</th>').join('') + '<th>رنج مرجع</th></tr></thead><tbody>' + m.items_43.map((it) => { const rg = (m.rng_43 || []).find((x) => x.key === it.key) || {}; return '<tr><td>' + esc(it.label) + '</td><td>' + esc(it.unit || '—') + '</td>' + heats.map((h) => { const v = ((g24[h] || {}).values_43 || {})[it.key]; return '<td>' + (v == null ? '—' : v) + '</td>'; }).join('') + '<td>' + (rg.min == null && rg.max == null ? '—' : (rg.min != null ? '≥' + toFaDigits(rg.min) : '') + (rg.min != null && rg.max != null ? ' و ' : '') + (rg.max != null ? '≤' + toFaDigits(rg.max) : '')) + '</td></tr>'; }).join('') + '</tbody></table>' : '') +
             (m.tol_weight_percent ? '<div style="font-size:11px;color:#555;margin-top:6px">تلرانس جرم طولی اعمال‌شده: ' + toFaDigits('±' + m.tol_weight_percent.max) + '٪ (ISO 6935-2) — ابعاد و آج مطابق ' + esc(m.standard || 'استاندارد مرجع') + '.</div>' : '') +
             '<div style="display:flex;gap:40px;margin-top:30px;font-size:12px"><div style="flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555">نمایندهٔ بازرسی مستقل از تولید (EN 10204 3.1)<br><b>' + esc(m.issued_by || '') + '</b></div><div style="flex:1;border-top:1px dashed #64748b;padding-top:6px;text-align:center;color:#555">مهر و امضای کارخانه</div></div>' +
             '</div>';
