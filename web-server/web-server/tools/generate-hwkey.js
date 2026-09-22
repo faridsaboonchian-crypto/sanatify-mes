@@ -117,5 +117,5 @@ if (showDetails) {
 
 console.log(hwkey19f);
 if (!showJson && !showDetails) {
-    console.error('  (این HWKEY را برای صدور لایسنس نزد فروشنده بفرستید — جزئیات: --details)');
+    console.error('  (این HWKEY را برای صدور لایسنس نزد سازنده بفرستید — جزئیات: --details)');
 }

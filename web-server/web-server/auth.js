@@ -102,13 +102,13 @@ function dropEnc19g(filePath) {
     } catch (e19g) { /* بی‌ضرر */ }
 }
 /* ===== SEC-ANTI-19g (end) ===== */
-/* ===== VENDOR-37 (begin): صاحب سیستم (vendor) + رمزنگاری اجباری web-users =====
+/* ===== VENDOR-37 (begin): مدیرعامل (CEO) (vendor) + رمزنگاری اجباری web-users =====
    • web-users روی دیسک فقط ciphertext است (AES-256-GCM — پاکت عیناً SEC-ANTI-19g، کلید=scrypt(SANATIFY_LIC_KEY|HWKEY))
      ⇒ فقط روی همین VM رمزگشایی می‌شود؛ IT با ویرایش دستی نمی‌تواند vendor جعل کند.
    • .enc موجود ولی رمزگشایی‌ناشدنی ⇒ فایل رد می‌شود (fallback به plaintext کهنه ممنوع) — فقط vendor امضاشده
-     با recovery (کلید خصوصی فروشنده) فعال می‌ماند.
+     با recovery (کلید خصوصی سازنده) فعال می‌ماند.
    • plaintext بدون .enc ⇒ مهاجرت یک‌بارهٔ خودکار (به‌جز vendor بی‌امضا در فایل دست‌ساز = جعل ⇒ رد).
-   • نقش vendor = صاحب سیستم؛ 'owner' (SEC-LIC-24) در بارگذاری به vendor نرمال می‌شود. */
+   • نقش vendor = مدیرعامل (CEO)؛ 'owner' (SEC-LIC-24) در بارگذاری به vendor نرمال می‌شود. */
 const VENDOR_ROLE_37_A = 'vendor';
 function vendorRole37A(r) { return r === 'vendor' || r === 'owner'; }
 function normalizeRole37A(arr) {
@@ -181,7 +181,7 @@ function loadUsers() {
         const dec37 = decryptUsersEnc37A();
         if (!dec37.ok) {
             console.error('[VENDOR-37] web-users.json.enc پذیرفته نشد (' + dec37.reason + ') — فایل دستکاری/نامعتبر یا HWKEY این ماشین نیست.');
-            console.error('  فقط vendor امضاشده فعال می‌ماند — recovery با کلید خصوصی فروشنده:');
+            console.error('  فقط vendor امضاشده فعال می‌ماند — recovery با کلید خصوصی سازنده:');
             console.error('    SANATIFY_LIC_ED_PRIV="…" <server> --recover-vendor=نام‌کاربری:رمز-اولیه');
             return [];
         }
@@ -197,7 +197,7 @@ function loadUsers() {
                 const rej37 = USERS_FILE + '.rejected-37-' + Date.now();
                 try { fs.renameSync(USERS_FILE, rej37); } catch (e37r) { /* noop */ }
                 console.error('[VENDOR-37] web-users.json plaintext حاوی vendor بدون امضای معتبر است — پذیرفته نشد (نسخه: ' + rej37 + ').');
-                console.error('  vendor فقط با کلید خصوصی فروشنده قابل ساخت است: --recover-vendor=نام‌کاربری:رمز');
+                console.error('  vendor فقط با کلید خصوصی سازنده قابل ساخت است: --recover-vendor=نام‌کاربری:رمز');
                 return [];
             }
             const norm37 = normalizeRole37A(arr37);
@@ -211,7 +211,7 @@ function loadUsers() {
             return [];
         }
     }
-    console.warn('[Auth] web-users.json(.enc) موجود نیست ⇒ هیچ‌کس وارد نمی‌شود — بوت‌استرپ: --create-admin (صاحب سیستم را می‌سازد).');
+    console.warn('[Auth] web-users.json(.enc) موجود نیست ⇒ هیچ‌کس وارد نمی‌شود — بوت‌استرپ: --create-admin (مدیرعامل (CEO) را می‌سازد).');
     return [];
 }
 
@@ -809,7 +809,7 @@ function doMe(req, res) {
     /* ===== SEC-LIC-24 (begin): is_owner — backward-compat: تا وقتی کاربر owner صریح نیست، admin همان مالک است ===== */
     const u24 = s.user || {};
     const role24 = String(u24.role || 'viewer');
-    let isOwner24 = vendorRole37A(role24); /* VENDOR-37: vendor/owner = صاحب سیستم */
+    let isOwner24 = vendorRole37A(role24); /* VENDOR-37: vendor/owner = مدیرعامل (CEO) */
     if (!isOwner24 && role24 === 'admin') {
         try { isOwner24 = !loadUsers().some((x) => x && vendorRole37A(x.role) && x.active !== false); } catch (e) { isOwner24 = true; }
     }
@@ -836,8 +836,8 @@ function requireRole(req, allowed) {
     if (!u) return false;
     const role = String(u.role || 'viewer');
     if (role === 'admin') return true;
-    if (role === 'owner') return true; /* SEC-LIC-24: مالک سیستم — دسترسی کامل مثل admin (ویرایش لایسنس فقط مالک) */
-    if (role === 'vendor') return true; /* VENDOR-37: صاحب سیستم — دسترسی کامل مثل admin */
+    if (role === 'owner') return true; /* SEC-LIC-24: مالک سامانه — دسترسی کامل مثل admin (ویرایش لایسنس فقط مالک) */
+    if (role === 'vendor') return true; /* VENDOR-37: مدیرعامل (CEO) — دسترسی کامل مثل admin */
     return allowed.indexOf(role) !== -1;
 }
 

@@ -119,7 +119,7 @@ $hwkey = & (Join-Path $InstallDir "sanatify-mes.exe") --print-hwkey 2>$null | Se
 Write-Host "━━━ قفل سخت‌افزاری (SEC-BIND-19f) ━━━"
 Write-Host "  HWKEY این ماشین : $hwkey"
 Write-Host ""
-Write-Host "  گام بعدی (روی ماشین فروشنده):"
+Write-Host "  گام بعدی (روی ماشین سازنده):"
 Write-Host "    node tools/license.js --hwkey=$hwkey --only=summary,production,inventory,quality,maintenance --expires=YYYY-MM-DD --sign --sign-ed"
 Write-Host "    → tenant.json امضاشده را کنار exe ($InstallDir) کپی کنید، سپس:"
 Write-Host "    sc.exe stop $ServiceName ; sc.exe start $ServiceName"

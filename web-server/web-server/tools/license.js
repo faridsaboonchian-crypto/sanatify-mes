@@ -12,7 +12,7 @@
 //    node tools/license.js --name="فولاد ..." --max-users=25 --max-records=200000
 //    node tools/license.js --sign                           (FIX-LIC-27: امضای کامل — HMAC + Ed25519 با هم؛ بدون SANATIFY_LIC_ED_PRIV خطای صریح)
 //                                                           (کلید HMAC از env یا license.key؛ اگر license.key کنار server.js نبود، با کلید env ساخته می‌شود — یک‌بار — تا بوت سرد بدون env هم معتبر بماند)
-//    node tools/license.js --gen-ed-keys [--out=lic-ed-keys.json]  (تولید جفت‌کلید Ed25519 — خصوصی فقط نزد فروشنده)
+//    node tools/license.js --gen-ed-keys [--out=lic-ed-keys.json]  (تولید جفت‌کلید Ed25519 — خصوصی فقط نزد سازنده)
 //    node tools/license.js --sign-ed                        (امضای Ed25519 → license_sig2 — کلید از env: SANATIFY_LIC_ED_PRIV پایه64-PKCS8)
 //    node tools/license.js --verify                         (فقط بررسی امضا — چیزی نمی‌نویسد)
 //    node tools/license.js --hwkey=HW-XXXX-XXXX-XXXX        (SEC-BIND-19f: قفل سخت‌افزاری — فقط روی ماشین دارای این HWKEY بالا می‌آید؛ خالی = حذف قفل)
@@ -146,9 +146,9 @@ if (args['gen-ed-keys']) {
     const privB64 = kp.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
     const pubB64 = kp.publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
     const outF = args.out ? String(args.out) : 'lic-ed-keys.json';
-    fs.writeFileSync(outF, JSON.stringify({ private_pkcs8_b64: privB64, public_spki_b64: pubB64, note: 'فایل خصوصی — فقط نزد فروشنده؛ هرگز commit/ارسال نشود' }, null, 2) + String.fromCharCode(10), { mode: 0o600 });
+    fs.writeFileSync(outF, JSON.stringify({ private_pkcs8_b64: privB64, public_spki_b64: pubB64, note: 'فایل خصوصی — فقط نزد سازنده؛ هرگز commit/ارسال نشود' }, null, 2) + String.fromCharCode(10), { mode: 0o600 });
     console.log('✓ جفت‌کلید Ed25519 ساخته شد → ' + outF + ' (دسترسی ۰۶۰۰)');
-    console.log('  کلید خصوصی (env سرورِ فروشنده هنگام امضا):');
+    console.log('  کلید خصوصی (env سرورِ سازنده هنگام امضا):');
     console.log('    SANATIFY_LIC_ED_PRIV="' + privB64 + '"');
     console.log('  کلید عمومی (env سرور استقرار):');
     console.log('    SANATIFY_LIC_ED_PUB="' + pubB64 + '"');
@@ -282,7 +282,7 @@ if (Array.isArray(cfg.hidden_tabs) && cfg.hidden_tabs.length) console.log('  گ�
 if (cfg.demo_mode === true) console.log('  حالت دمو: فعال (FIX-UI-19d — مالی/فروش/خرید در UI پنهان و APIهایشان 403)');
 if (cfg.expires_at && Date.parse(cfg.expires_at) < Date.now()) console.warn('  ⚠ لایسنس منقضی است — همهٔ APIها 403 می‌دهند تا انقضا حذف/تمدید شود.');
 /* SEC-LIC-24: وضعیت امضا در گزارش */
-if (args['sign-ed']) console.log('  امضا: ✓ license_sig2 ثبت شد (Ed25519 — کلید خصوصی سمت فروشنده).');
+if (args['sign-ed']) console.log('  امضا: ✓ license_sig2 ثبت شد (Ed25519 — کلید خصوصی سمت سازنده).');
 if (args.sign) console.log('  امضا: ✓ license_sig (HMAC-SHA256) + license_sig2 (Ed25519 — مسیر اصلی) ثبت شد.');
 else if (!cfg.license_sig) console.warn('  ⚠ امضا ندارد (license_sig غایب) — سرور به لایسنس پایه برمی‌گردد. امضا: SANATIFY_LIC_KEY="..." SANATIFY_LIC_ED_PRIV="..." node tools/license.js --sign');
 else if (licResolveKey27() && !licVerify24(cfg)) console.warn('  ⚠ امضای موجود با منبع کلید فعلی تأیید نمی‌شود (کهنه/کلید دیگر) — دوباره --sign بزنید.');

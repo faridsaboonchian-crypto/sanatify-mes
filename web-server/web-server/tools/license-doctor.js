@@ -22,7 +22,7 @@
 //  ۱۳  امضای Ed25519 (license_sig2) موجود ولی نامعتبر
 //  ۱۴  امضای HMAC (license_sig) با منبع کلید موجود تأیید نمی‌شود
 //  ۱۵  هیچ منبع کلید HMAC موجود نیست (نه env و نه license.key) — تلهٔ بوت سرد
-//  ۱۶  امضای فروشنده اصلاً موجود نیست (بدون امضا / فقط کلید پیش‌فرض)
+//  ۱۶  امضای سازنده اصلاً موجود نیست (بدون امضا / فقط کلید پیش‌فرض)
 //
 // ⚠ الگوریتم‌های canonical/HWKEY/کلید پیش‌فرض عیناً با server.js یکی است — هر تغییری
 //   باید هم‌زمان در server.js و tools/license.js و همین فایل اعمال شود.
@@ -34,7 +34,7 @@ const crypto = require('crypto');
 
 /* عیناً با LIC_ED_PUB_EMBEDDED_27 در server.js و tools/license.js یکی است — کلید عمومی راز نیست */
 const LIC_ED_PUB_EMBEDDED_27 = 'MCowBQYDK2VwAyEAGAgTWhsg6AGqDDMf25ZHQfQZ8WiaiVTHZP5jdDzxKpY=';
-/* عیناً با LIC_DEFAULT_KEY_27 در server.js — سقوط نهایی که امضای واقعی فروشنده با آن ساخته نمی‌شود */
+/* عیناً با LIC_DEFAULT_KEY_27 در server.js — سقوط نهایی که امضای واقعی سازنده با آن ساخته نمی‌شود */
 const LIC_DEFAULT_KEY_27 = 'Sanatify-Lic-Verify::v1::1405';
 
 // ---------- آرگومان ----------
@@ -155,7 +155,7 @@ if (!fs.existsSync(TENANT_FILE)) {
     console.log(' ① tenant.json        : ✗ موجود نیست' + (hasEnc27 ? '  (⚠ tenant.json.enc رمزنگاری‌شده هست — این ابزار آن را باز نمی‌کند؛ وضعیت را از خط «وضعیت لایسنس» در لاگ بوت بخوانید)‌' : ''));
     finish(10,
         'tenant.json کنار server.js/exe موجود نیست' + (hasEnc27 ? ' (فقط نسخهٔ رمزنگاری‌شدهٔ .enc هست)' : '') + '.',
-        'tenant.json امضاشده را کنار server.js/exe کپی کنید. امضا روی ماشین فروشنده: SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign   (بخش ۴-۵ README-DEPLOY)' + (hasEnc27 ? ' — یا اگر .enc عمدی است: SANATIFY_LIC_KEY باید در env همان پروسهٔ سرور باشد.' : ''));
+        'tenant.json امضاشده را کنار server.js/exe کپی کنید. امضا روی ماشین سازنده: SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign   (بخش ۴-۵ README-DEPLOY)' + (hasEnc27 ? ' — یا اگر .enc عمدی است: SANATIFY_LIC_KEY باید در env همان پروسهٔ سرور باشد.' : ''));
 }
 try {
     cfg27 = JSON.parse(fs.readFileSync(TENANT_FILE, 'utf8'));
@@ -174,7 +174,7 @@ if (!bound27) {
     console.log(' ② قفل سخت‌افزاری     : ✗ تطبیق ندارد — لایسنس: ' + bound27 + ' | این ماشین: ' + HWKEY27 + '  (بوت سرور exit 1 می‌شود)');
     finish(11,
         'hwkey لایسنس («' + bound27 + '») با HWKEY این ماشین («' + HWKEY27 + '») تطبیق ندارد — سرور با گیت SEC-BIND-19f بالا نمی‌آید.',
-        'HWKEY بالا («' + HWKEY27 + '») را برای صدور نزد فروشنده بفرستید؛ امضای تازه: node tools/license.js --hwkey=' + HWKEY27 + ' --only=… --expires=… --sign');
+        'HWKEY بالا («' + HWKEY27 + '») را برای صدور نزد سازنده بفرستید؛ امضای تازه: node tools/license.js --hwkey=' + HWKEY27 + ' --only=… --expires=… --sign');
 } else {
     console.log(' ② قفل سخت‌افزاری     : ✓ تطبیق دارد (' + bound27 + ')');
 }
@@ -233,11 +233,11 @@ if (edOk27 === true) {
     if (!ks27.real) console.log('   ⚠ توجه: هیچ منبع کلید واقعی موجود نیست — اگر sig2 را حذف/منقضی کنید لایسنس می‌افتد؛ توصیه: license.key بسازید (دستور در بخش اصلاح پایین).');
 } else if (!/^[0-9a-f]{64}$/.test(sig127)) {
     console.log(' ⑤ امضای HMAC        : ✗ ' + (sig127 ? 'فرمت license_sig نامعتبر است' : 'license_sig غایب است'));
-    finish(16, 'tenant.json هیچ امضای فروشنده‌ای ندارد (license_sig غایب/خراب و license_sig2 هم معتبر نیست).', 'امضا: SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign');
+    finish(16, 'tenant.json هیچ امضای سازنده‌ای ندارد (license_sig غایب/خراب و license_sig2 هم معتبر نیست).', 'امضا: SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign');
 } else if (hmacOk27 === true && !ks27.real) {
     console.log(' ⑤ امضای HMAC        : ✓ معتبر — منبع کلید: ' + ks27.source);
     finish(16,
-        'امضا فقط با «کلید پیش‌فرض» تأیید می‌شود (نه env و نه license.key موجود است) — این امضای فروشنده نیست؛ در استقرار واقعی/بوت سرد لایسنس نامعتبر تلقی می‌شود.',
+        'امضا فقط با «کلید پیش‌فرض» تأیید می‌شود (نه env و نه license.key موجود است) — این امضای سازنده نیست؛ در استقرار واقعی/بوت سرد لایسنس نامعتبر تلقی می‌شود.',
         'یک‌بار با env امضا بزنید تا license.key برای همیشه ساخته شود: SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign');
 } else if (hmacOk27 === true) {
     console.log(' ⑤ امضای HMAC        : ✓ معتبر — منبع کلید: ' + ks27.source);

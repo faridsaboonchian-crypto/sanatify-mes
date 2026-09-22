@@ -19,7 +19,7 @@
        backups/pre-reset-<ts>/ منتقل می‌شوند (منتقل = نه حذف).
      • ساختار خالی معتبر با کل فهرست کلیدها ساخته می‌شود (سازگار با سرور).
      • --include-users: web-users.json (و .enc/بکاپ‌ها) هم منتقل و فایل خالی می‌شود —
-       بعد از آن اولین راه‌اندازی با --create-admin باید صاحب سیستم را بسازد.
+       بعد از آن اولین راه‌اندازی با --create-admin باید مدیرعامل (CEO) را بسازد.
      • برگشت: خروجی همین ابزار دستور دقیق restore را چاپ می‌کند.
    ===================================================================== */
 'use strict';
@@ -96,7 +96,7 @@ console.log('══════════════════════�
 
 if (INCLUDE_USERS) {
     console.log('⚠ هشدار: --include-users فعال است — همهٔ وب‌کاربران حذف می‌شوند.');
-    console.log('  بعد از ریست، اولین راه‌اندازی باید با --create-admin=نام‌کاربری:رمز صاحب سیستم (vendor) را بسازد.');
+    console.log('  بعد از ریست، اولین راه‌اندازی باید با --create-admin=نام‌کاربری:رمز مدیرعامل (CEO) (vendor) را بسازد.');
 }
 
 const files = collectDataFiles();
@@ -124,7 +124,7 @@ if (DO_BACKUP && files.length) {
 fs.writeFileSync(path.join(ROOT, 'live.json'), JSON.stringify(emptyLive(), null, 2) + String.fromCharCode(10), 'utf8');
 if (!fs.existsSync(path.join(ROOT, 'audit.json'))) fs.writeFileSync(path.join(ROOT, 'audit.json'), '[]' + String.fromCharCode(10), 'utf8');
 if (INCLUDE_USERS) {
-    /* web-users.json منتقل شده — خالیِ معتبر می‌سازیم (بوت‌استرپ صاحب سیستم با --create-admin) */
+    /* web-users.json منتقل شده — خالیِ معتبر می‌سازیم (بوت‌استرپ مدیرعامل (CEO) با --create-admin) */
     fs.writeFileSync(path.join(ROOT, 'web-users.json'), '[]' + String.fromCharCode(10), 'utf8');
     try { fs.chmodSync(path.join(ROOT, 'web-users.json'), 0o600); } catch (e) { /* ویندوز: غیرمرگبار */ }
 }

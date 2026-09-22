@@ -43,7 +43,7 @@ if (-not $cfg -or -not $cfg.ok) {
 } else {
     if ($cfg.tenant.demo_mode) { Row "F" "demo_mode" "فعال است! — راه‌اندازی تمیز باید false باشد (tenant.json: demo_mode=false + امضای دوباره)" }
     else { Row "P" "demo_mode" "false — بدون گیت دمو" }
-    if ($cfg.tenant.license.invalid) { Row "F" "license" "نامعتبر — تشخیص: node tools/license-doctor.js (در ماشین فروشنده)" }
+    if ($cfg.tenant.license.invalid) { Row "F" "license" "نامعتبر — تشخیص: node tools/license-doctor.js (در ماشین سازنده)" }
     else { Row "P" "license" "معتبر (server-side verify)" }
     $ht = @($cfg.tenant.hidden_tabs)
     if ($ht.Count -eq 0) {

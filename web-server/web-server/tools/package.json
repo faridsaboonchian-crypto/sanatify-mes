@@ -2,7 +2,7 @@
   "name": "sanatify-protect",
   "version": "1.0.0",
   "private": true,
-  "description": "SEC-PROTECT-19e — ابزار حفاظت کد (مبهم‌سازی + کامپایل) — فقط سمت فروشنده؛ روی VM مشتری نصب نمی‌شود. این دو بسته devDependency هستند نه dependency.",
+  "description": "SEC-PROTECT-19e — ابزار حفاظت کد (مبهم‌سازی + کامپایل) — فقط سمت سازنده؛ روی VM مشتری نصب نمی‌شود. این دو بسته devDependency هستند نه dependency.",
   "devDependencies": {
     "javascript-obfuscator": "^5.6.0",
     "pkg": "^5.8.1"

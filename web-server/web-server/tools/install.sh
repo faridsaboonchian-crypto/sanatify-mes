@@ -163,7 +163,7 @@ HWKEY="$($PREFIX/sanatify-mes --print-hwkey 2>/dev/null | tail -1)"
 echo "━━━ قفل سخت‌افزاری (SEC-BIND-19f) ━━━"
 echo "  HWKEY این ماشین : ${HWKEY:-?}"
 echo
-echo "  گام بعدی (روی ماشین فروشنده، tools/ نصب است):"
+echo "  گام بعدی (روی ماشین سازنده، tools/ نصب است):"
 echo "    node tools/license.js --hwkey=${HWKEY:-HW-XXXX-XXXX-XXXX} --only=summary,production,inventory,quality,maintenance --expires=YYYY-MM-DD --sign --sign-ed"
 echo "    → tenant.json امضاشده را کنار باینری ($PREFIX) کپی کنید و سرویس را ری‌استارت کنید:"
 [ "$RUNNING" = "systemd" ] && echo "    sudo systemctl restart ${SERVICE}" || echo "    $PREFIX/stop.sh && $PREFIX/start.sh"

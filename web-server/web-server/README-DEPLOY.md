@@ -36,7 +36,7 @@ sudo bash tools/install.sh          # یا: bash tools/install.sh --prefix=/opt/
 
 نمونه: `HW-3F2A-91BC-04DE` — این کد **اثر انگشت سخت‌افزاری همین VM** است (ثابت در ری‌استارت/کپونینگ).
 
-## ۴) امضای لایسنس (روی ماشین فروشنده)
+## ۴) امضای لایسنس (روی ماشین سازنده)
 
 ```bash
 node tools/license.js --hwkey=HW-3F2A-91BC-04DE \
@@ -75,7 +75,7 @@ sudo systemctl restart sanatify-mes                        # لینوکس (یا:
 ## ۷) دادهٔ دمو
 
 ```bash
-node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ بندیل + ۱۰ توقف + ۵ PM (روی ماشین فروشنده، سپس live.json را کپی کنید)
+node tools/demo-seed.js        # ۳۰ روز تولید + ۵۰ بندیل + ۱۰ توقف + ۵ PM (روی ماشین سازنده، سپس live.json را کپی کنید)
 ```
 
 > 🔴 **خط قرمز (PURGE-36):** `demo-seed` فقط با فراخوانی صریح کاربر اجرا می‌شود — در بوت/UI/اینستالر هیچ
@@ -122,7 +122,7 @@ env SANATIFY_LIC_KEY  →  فایل license.key کنار server.js/exe  →  پ�
 
 ### ✅ راه درست (توصیه‌شده — صفر env)
 
-1. روی ماشین فروشنده یک‌بار: `SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign`
+1. روی ماشین سازنده یک‌بار: `SANATIFY_LIC_KEY="…" SANATIFY_LIC_ED_PRIV="…" node tools/license.js --sign`
    → امضای کامل + ساخت `license.key` کنار server.js.
 2. هر دو فایل `tenant.json` **و** `license.key` را کنار exe کپی کنید (گام ۵ + همین بخش).
 3. تست بوت سرد واقعی: یک پوستهٔ کاملاً تازه (بدون env) باز کنید و سرویس/سرور را ری‌استارت کنید؛
@@ -146,7 +146,7 @@ node tools/license-doctor.js --dir="C:\Program Files\SanatifyMES"
 ```
 
 همان زنجیرهٔ تأیید سرور را گام‌به‌گام اجرا می‌کند: tenant → hwkey → انقضا → Ed25519 (مسیر اصلی) → HMAC (با کدام منبع کلید؟)
-و «علت» + «دستور اصلاح» چاپ می‌کند. کدهای خروج متمایز: ۰ سالم | ۱۰ tenant | ۱۱ hwkey | ۱۲ انقضا | ۱۳ Ed | ۱۴ HMAC | ۱۵ بدون منبع کلید (تلهٔ بوت سرد) | ۱۶ بدون امضای فروشنده.
+و «علت» + «دستور اصلاح» چاپ می‌کند. کدهای خروج متمایز: ۰ سالم | ۱۰ tenant | ۱۱ hwkey | ۱۲ انقضا | ۱۳ Ed | ۱۴ HMAC | ۱۵ بدون منبع کلید (تلهٔ بوت سرد) | ۱۶ بدون امضای سازنده.
 
 ---
 
@@ -163,11 +163,11 @@ node tools/license-doctor.js --dir="C:\Program Files\SanatifyMES"
 
 ---
 
-## یادداشت‌های حفاظت (فروشنده)
+## یادداشت‌های حفاظت (سازنده)
 
-- **حالت source** (`node server.js` روی لپ‌تاپ فروشنده) هرگز این گاردها را ندارد — فقط باینری (`process.pkg`).
-- **Anti-Debug** (فقط exe): inspector/پرچم‌ها/والد مشکوک ⇒ خروج. برای دیباگ فروشنده روی VM: env `SANATIFY_ANTIDBG=off`.
+- **حالت source** (`node server.js` روی لپ‌تاپ سازنده) هرگز این گاردها را ندارد — فقط باینری (`process.pkg`).
+- **Anti-Debug** (فقط exe): inspector/پرچم‌ها/والد مشکوک ⇒ خروج. برای دیباگ سازنده روی VM: env `SANATIFY_ANTIDBG=off`.
 - **رمزنگاری پیکربندی** اختیاری است؛ plaintext همیشه پشتیبانی می‌شود. اگر سرور فایل را به‌روز کند، `.enc` حذف می‌شود (هشدار در لاگ) — دوباره `encrypt-config.js` بزنید.
-- کلیدهای HMAC/Ed25519 فقط نزد فروشنده (env یا `license.key`) — هرگز روی VM مشتری `SANATIFY_LIC_ED_PRIV`.
+- کلیدهای HMAC/Ed25519 فقط نزد سازنده (env یا `license.key`) — هرگز روی VM مشتری `SANATIFY_LIC_ED_PRIV`.
 - **FIX-LIC-27**: کلید عمومی Ed25519 در سرور embed شده (راز نیست؛ env `SANATIFY_LIC_ED_PUB` فقط برای چرخش کلید).
   کلید خصوصی Ed را در جایی امن نگه دارید — اگر از دست برود، صدور لایسنس جدید مستلزم embedِ کلید عمومی تازه در سرور است.

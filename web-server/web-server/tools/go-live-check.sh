@@ -60,7 +60,7 @@ else
         row PASS "demo_mode" "false — بدون گیت دمو"
     fi
     if grep -q '"invalid":true' "$TMPD/cfg.json"; then
-        row FAIL "license" "نامعتبر — تشخیص: node tools/license-doctor.js (در ماشین فروشنده)"
+        row FAIL "license" "نامعتبر — تشخیص: node tools/license-doctor.js (در ماشین سازنده)"
     else
         row PASS "license" "معتبر (server-side verify)"
     fi

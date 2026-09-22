@@ -2,7 +2,7 @@
 # =====================================================================
 # REHEARSAL-29 — ابزار تمرین دمو تک‌دستوری (معادل لینوکسی tools/rehearse.ps1)
 #
-# هدف: فروشنده قبل از اولین نصب واقعی روی VM مشتری، کل سناریوی «نصب» را روی
+# هدف: سازنده قبل از اولین نصب واقعی روی VM مشتری، کل سناریوی «نصب» را روی
 #      ماشین خودش، در پوشهٔ جدا و پورت جدا (3101) شبیه‌سازی و اثبات می‌کند.
 #      در پایان جدول PASS/FAIL + فایل «چک‌لیست روز نصب.md» تحویل می‌دهد.
 #
@@ -22,10 +22,10 @@
 #   • در پایان، هش server.js/index.html/sw.js با شروع مقایسه می‌شود (نگهبان داخلی).
 #
 # کلیدهای امضا (مثل روز نصب واقعی — فقط برای «امضا»؛ بوت‌ها عمداً بدون env = بوت سرد):
-#   SANATIFY_LIC_ED_PRIV  — کلید خصوصی Ed25519 فروشنده (الزامی برای امضا)
+#   SANATIFY_LIC_ED_PRIV  — کلید خصوصی Ed25519 سازنده (الزامی برای امضا)
 #   SANATIFY_LIC_KEY      — کلید HMAC (اگر نبود license.key موجود کپی/استفاده می‌شود)
 #
-# ⚠ این اسکریپت روی لینوکس/سندباکس اثبات شده؛ تست نهایی روی ویندوز فروشنده با
+# ⚠ این اسکریپت روی لینوکس/سندباکس اثبات شده؛ تست نهایی روی ویندوز سازنده با
 #   tools/rehearse.ps1 انجام می‌شود (همان سناریوها، همان ترتیب).
 # =====================================================================
 set -u
@@ -66,7 +66,7 @@ die() {
     echo
     echo "راهنمای سریع:"
     echo "  • کلیدها را در همان شل ست کنید:  export SANATIFY_LIC_ED_PRIV=... SANATIFY_LIC_KEY=..."
-    echo "  • کلید خصوصی Ed ندارید؟ روی ماشین فروشنده:  node tools/license.js --gen-ed-keys --out=lic-ed-keys.json"
+    echo "  • کلید خصوصی Ed ندارید؟ روی ماشین سازنده:  node tools/license.js --gen-ed-keys --out=lic-ed-keys.json"
     echo "  • پوشهٔ دیگر:  bash tools/rehearse.sh --dir=/مسیر/دیگر"
     cleanup
     exit 2
@@ -427,7 +427,7 @@ cat > "${CHECKLIST}" <<'CHECKLIST_EOF'
 > همین صفحه را چاپ کنید و روز نصب گام‌به‌گام جلو بروید.
 > ⚠ دو قانون طلایی: (۱) باینری همیشه با SHA256SUMS.txt کنارش است؛ (۲) tenant.json + license.key همیشه کنار exe هستند.
 
-## الف) شب قبل — روی ماشین فروشنده
+## الف) شب قبل — روی ماشین سازنده
 - [ ] ۱. بیلد نهایی: `node tools/build-protected.js --compile --target=node18-win-x64 --package`
 - [ ] ۲. کلید خصوصی امضا را چک کنید: `SANATIFY_LIC_ED_PRIV` (مدیر رمز) — بدون آن امضا ممکن نیست
 - [ ] ۳. تمرین کامل: `powershell -ExecutionPolicy Bypass -File tools\rehearse.ps1` ⇒ همهٔ S1..S6 = PASS
@@ -441,7 +441,7 @@ cat > "${CHECKLIST}" <<'CHECKLIST_EOF'
 - [ ] ۸. سرویس را یک‌بار اجرا کنید → در کنسول/لاگ خط **«HWKEY ماشین»** را بردارید
       (میانبر: `sanatify-mes-node18-win-x64.exe --print-hwkey`)
 
-## ج) امضا — روی ماشین فروشنده
+## ج) امضا — روی ماشین سازنده
 - [ ] ۹. با HWKEY مرحله ۸ امضا بزنید:
       `set SANATIFY_LIC_KEY=... & set SANATIFY_LIC_ED_PRIV=...`
       `node tools\license.js --hwkey=<HWKEY-VM> --only=summary,production,inventory,quality,maintenance --expires=YYYY-MM-DD --sign`
@@ -479,7 +479,7 @@ CHECKLIST_EOF
     echo "- HWKEY ماشین تمرین: \`${HWKEY:-?}\`"
     echo "- کاربر موقت: \`admin\` / رمز: \`${PW}\` (در \`rehearsal-credentials.txt\`)"
     echo "- نتیجهٔ تمرین: **${pass} PASS / ${fail} FAIL** — لاگ‌ها: \`${RH}/logs/\`"
-    echo "- ⚠ تست نهایی روی ویندوز فروشنده: \`powershell -ExecutionPolicy Bypass -File tools\\rehearse.ps1\`"
+    echo "- ⚠ تست نهایی روی ویندوز سازنده: \`powershell -ExecutionPolicy Bypass -File tools\\rehearse.ps1\`"
 } >> "${CHECKLIST}"
 echo "  ✓ ${CHECKLIST}"
 
@@ -511,7 +511,7 @@ echo "  چک‌لیست روز نصب              : ${CHECKLIST}"
 echo "  اعتبارنامهٔ موقت             : ${RH}/rehearsal-credentials.txt (admin / ${PW})"
 echo "  لاگ‌ها                       : ${RH}/logs/"
 echo
-echo "⚠ تست نهایی روی ویندوز فروشنده:  powershell -ExecutionPolicy Bypass -File tools\\rehearse.ps1"
+echo "⚠ تست نهایی روی ویندوز سازنده:  powershell -ExecutionPolicy Bypass -File tools\\rehearse.ps1"
 if [ "${fail}" -gt 0 ]; then
     echo
     echo "✖ ${fail} سناریو FAIL شد — قبل از نصب واقعی رفع/بررسی شود."
