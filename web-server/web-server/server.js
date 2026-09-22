@@ -1380,11 +1380,12 @@ function appRequestHandler(req, res) {
         const list17a = users17a.map((u) => {
             const act17a = u.active !== false;
             if (act17a) { activeUsers17a++; if (roleCounts17a[u.role] !== undefined) roleCounts17a[u.role]++; }
-            return { username: String(u.username || ''), name: String(u.name || ''), role: String(u.role || 'viewer'), active: act17a, sessions: auth.activeSessionCount17a(u.username) };
+            return { username: String(u.username || ''), name: String(u.name || ''), role: String(u.role || 'viewer'), active: act17a, status: String(u.status || ''), modules: Array.isArray(u.modules) ? u.modules.slice() : [], sessions: auth.activeSessionCount17a(u.username) }; /* USER-MGMT-39a: +وضعیت حذف نرم + ماژول‌های کاربر */
         });
         return sendJson(res, {
             ok: true,
             users: list17a,
+            tenant_modules: (Array.isArray(cfg17a.active_modules) ? cfg17a.active_modules : []).slice(), /* USER-MGMT-39a: ماژول‌های فعال tenant برای مودال چک‌باکس */
             role_counts: roleCounts17a,
             role_caps: cfg17a.role_caps || {},
             total_users: list17a.length,
@@ -1542,6 +1543,47 @@ function appRequestHandler(req, res) {
         });
         return;
     }
+    /* ===== USER-MGMT-39a (begin): ویرایش دسترسی‌های ماژولی کاربر — فقط صاحب سیستم (vendor) =====
+       PATCH /api/admin/users/modules   بدنه: { username, moduleKeys: [] }
+       • moduleKeys باید زیرمجموعهٔ ماژول‌های فعال tenant باشد (کلید ناشناس/غیرفعال ⇒ 400).
+       • آرایهٔ خالی = «بدون محدودیت» (دسترسی کامل نقش) — ضد قفل‌شدگی صفر-تب.
+       • جایگزینی کامل permissions ماژولی؛ audit: چه‌کسی چه‌ماژول‌هایی افزود/حذف کرد.
+       • بدون خروج اجباری: refreshSessionUser17a ⇒ /api/auth/me درخواست بعدی محدودیت تازه را می‌دهد. */
+    if (pathname === '/api/admin/users/modules' && req.method === 'PATCH') {
+        if (!isOwnerReq24(req)) return sendJson(res, { error: 'ویرایش دسترسی‌های ماژولی کاربر فقط توسط صاحب سیستم (vendor) مجاز است.', code: 'VENDOR_ONLY' }, 403);
+        readBody(req).then((body39a) => {
+            try {
+                const b39a = JSON.parse(body39a || '{}');
+                const username39a = String(b39a.username || '').trim();
+                if (!username39a) return sendJson(res, { error: 'نام کاربری الزامی است.' }, 400);
+                if (!Array.isArray(b39a.moduleKeys)) return sendJson(res, { error: 'moduleKeys باید آرایه باشد.' }, 400);
+                const keys39a = Array.from(new Set(b39a.moduleKeys.map((m) => String(m || '').trim()).filter((m) => m)));
+                const unknown39a = keys39a.filter((m) => MODULES_15A.indexOf(m) === -1);
+                if (unknown39a.length) return sendJson(res, { error: 'کلید ماژول نامعتبر: ' + unknown39a.join(', ') }, 400);
+                const cfg39a = loadTenant15a();
+                const active39a = Array.isArray(cfg39a.active_modules) && cfg39a.active_modules.length ? cfg39a.active_modules : MODULES_15A.slice();
+                const inactive39a = keys39a.filter((m) => active39a.indexOf(m) === -1);
+                if (inactive39a.length) return sendJson(res, { error: 'این ماژول‌ها در لایسنس سازمان فعال نیستند: ' + inactive39a.join(', '), code: 'MODULE_INACTIVE' }, 400);
+                const users39a = readUsers17a();
+                const u39a = users39a.find((x) => String(x.username || '').toLowerCase() === username39a.toLowerCase());
+                if (!u39a) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
+                if (vendorRole37(String(u39a.role || ''))) return sendJson(res, { error: 'صاحب سیستم (vendor) همیشه دسترسی کامل دارد — محدودیت ماژول قابل اعمال نیست.', code: 'PROTECTED' }, 403);
+                if (String(u39a.status || '') === 'deleted') return sendJson(res, { error: 'این کاربر حذف (نرم) شده است — ابتدا از بخش کاربران فعال‌سازی مجدد کنید.', code: 'DELETED' }, 400);
+                const before39a = Array.isArray(u39a.modules) ? u39a.modules.slice() : [];
+                if (keys39a.length) u39a.modules = keys39a; else delete u39a.modules; /* خالی = بدون محدودیت */
+                if (!auth.writeUsers17a(users39a)) return sendJson(res, { error: 'خطا در نوشتن فایل کاربران — تغییر ذخیره نشد.' }, 500);
+                const added39a = keys39a.filter((m) => before39a.indexOf(m) === -1);
+                const removed39a = before39a.filter((m) => keys39a.indexOf(m) === -1);
+                auth.refreshSessionUser17a(u39a.username, { modules: keys39a.length ? keys39a.slice() : undefined }); /* بدون logout — درخواست بعدی اعمال می‌شود */
+                auditLog(req, 'admin.user_modules', { username: u39a.username, added: added39a, removed: removed39a, modules: keys39a.slice(), unrestricted: !keys39a.length });
+                return sendJson(res, { ok: true, username: u39a.username, modules: keys39a.slice(), unrestricted: !keys39a.length, added: added39a, removed: removed39a });
+            } catch (e) {
+                return sendJson(res, { error: 'خطا در ویرایش دسترسی‌ها: ' + String(e && e.message ? e.message : e) }, 500);
+            }
+        });
+        return;
+    }
+    // ===== USER-MGMT-39a (end) =====
     // ===== FEAT-ADMIN-17a (end) =====
 
     // ===== ✅ ADDITIVE — D3: endpoint اسنپ‌شات برای pull اپ (بدون نشست وب) =====

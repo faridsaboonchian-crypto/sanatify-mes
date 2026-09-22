@@ -1609,6 +1609,35 @@
         #orgUsersWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%; } /* FIX-17a: جدول کاربران در موبایل داخل کارت اسکرول می‌شود — صفر overflow صفحه */
         #orgUsersTbl { min-width:560px; }
         #orgUsersTbl button { min-width:34px; }
+        /* ===== USER-MGMT-39a (begin): مودال ویرایش ماژول‌های کاربر ===== */
+        .modcell39 { width:100%; text-align:right; cursor:pointer; }
+        .mchips39 { display:inline-flex; gap:4px; flex-wrap:wrap; align-items:center; }
+        .mchips39 .chip { font-size:10px; padding:1px 7px; }
+        .modal39-wrap { position:fixed; inset:0; background:rgba(2,8,20,.55); z-index:80; display:flex; align-items:center; justify-content:center; padding:16px; }
+        .modal39-box { background:#fff; color:#0f172a; border-radius:14px; padding:18px 18px 14px; width:100%; max-width:430px; box-shadow:0 24px 60px rgba(2,8,20,.5); border-top:4px solid #0e7490; max-height:86vh; overflow-y:auto; }
+        .modal39-box h4 { margin:0 0 6px; font-size:14.5px; color:#0f2a43; }
+        .modal39-sub { font-size:11.5px; color:#64748b; margin:0 0 10px; line-height:1.8; }
+        .modal39-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:6px 12px; margin:8px 0 6px; }
+        .modal39-list label { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#1e293b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:7px 9px; cursor:pointer; }
+        .modal39-list input { margin:0; }
+        .modal39-hint { font-size:11px; color:#64748b; background:#f1f5f9; border-radius:8px; padding:6px 9px; margin:4px 0 10px; line-height:1.7; }
+        .modal39-note { font-size:11.5px; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:6px 9px; margin:6px 0; line-height:1.7; }
+        .modal39-btns { display:flex; gap:8px; margin-top:6px; }
+        .modal39-btns .org-btn { min-width:96px; }
+        .modal39-btns .danger39 { background:#dc2626; border-color:#dc2626; color:#fff; }
+        .modal39-btns .danger39:hover { filter:brightness(.94); }
+        .org-ubtn:disabled { opacity:.45; cursor:not-allowed; }
+        body.theme-dark .modal39-box { background:#0b1622; color:#cfe3f5; border-color:#1e3a52; }
+        body.theme-dark .modal39-box h4 { color:#e6f1f9; }
+        body.theme-dark .modal39-list label { background:#0f2233; border-color:#1e3a52; color:#cfe3f5; }
+        body.theme-dark .modal39-hint { background:#0f2233; color:#9fb9d0; }
+        body.theme-dark .modal39-note { background:#2a2109; color:#fcd34d; border-color:#5b4a12; }
+        body.bi-dark .modal39-box { background:#0b1622; color:#cfe3f5; border-color:#1e3a52; }
+        body.bi-dark .modal39-box h4 { color:#e6f1f9; }
+        body.bi-dark .modal39-list label { background:#0f2233; border-color:#1e3a52; color:#cfe3f5; }
+        body.bi-dark .modal39-hint { background:#0f2233; color:#9fb9d0; }
+        body.bi-dark .modal39-note { background:#2a2109; color:#fcd34d; border-color:#5b4a12; }
+        /* ===== USER-MGMT-39a (end) ===== */
         body.bi-dark #tab-org .org-lbl select.org-sel { background:#0b1622; border-color:#1e3a52; color:#e6f1f9; }
         body.bi-dark #tab-org .org-caps-title { color:#dbe7f3; }
         body.bi-dark #tab-org .org-cap-row { background:#0b1622; border-color:#1e3a52; color:#cfe3f5; }
@@ -1673,6 +1702,7 @@
     <!-- ===== FIX-UX-9b: wrapper فلکس — اجازهٔ جمع‌شدن زیر min-content جدول‌ها (main دوباره بلوک عادی) ===== -->
     <div id="mainWrap">
     <main>
+        <div id="noModuleMsg39" class="empty" style="margin:48px auto;max-width:600px;text-align:center;padding:24px" hidden>🚫 هیچ ماژولی برای نقش شما فعال نیست — دسترسی‌های ماژولی حساب شما توسط صاحب سیستم تنظیم شده است. برای بازگرداندن دسترسی با او تماس بگیرید.</div>
         <div class="filter-panel" id="filterPanel" style="display:none">
             <div class="frow">
                 <label>از تاریخ: <input type="text" inputmode="numeric" data-jp="pf" id="filterFrom"
@@ -3819,6 +3849,21 @@
         <!-- ===== SAAS-15c (end) ===== -->
     </main>
     </div>
+    <!-- ===== USER-MGMT-39a (begin): مودال ویرایش ماژول‌های کاربر — فقط صاحب سیستم ===== -->
+    <div id="modsModal39" class="modal39-wrap" hidden>
+        <div class="modal39-box" role="dialog" aria-modal="true" aria-labelledby="modsModal39T">
+            <h4 id="modsModal39T">🔐 دسترسی ماژول‌ها — <span id="modsModal39U" dir="ltr"></span></h4>
+            <p class="modal39-sub">فقط ماژول‌های فعال لایسنس سازمان قابل انتخاب است. ذخیره از درخواست بعدی همان کاربر اعمال می‌شود (بدون خروج اجباری). محدودیت برای نقش‌های ممتاز (admin/صاحب سیستم) اعمال نمی‌شود.</p>
+            <div id="modsModal39Note" class="modal39-note" hidden>این کاربر نقش admin دارد — در عمل دسترسی کامل می‌بیند (محدودیت ذخیره می‌شود ولی تا تغییر نقش اعمال نمی‌شود).</div>
+            <div id="modsModal39List" class="modal39-list"></div>
+            <div class="modal39-hint" id="modsModal39Hint"></div>
+            <div class="modal39-btns">
+                <button type="button" id="modsModal39Save" class="org-btn">ذخیره</button>
+                <button type="button" id="modsModal39Cancel" class="org-btn2">انصراف</button>
+            </div>
+        </div>
+    </div>
+    <!-- ===== USER-MGMT-39a (end) ===== -->
     <!-- ===== FIX-BRAND-8d: فوتر برنددار — عنوان یکپارچه ERP/MES (چسبان به ته صفحه) ===== -->
     <footer class="app-foot"><span class="app-foot-brand">سامانه یکپارچه صنعتی فای (SANATIFY)</span> — ERP/MES مدیریت، گزارش‌گیری و ردیابی تولید فولاد</footer>
     <script>
@@ -4332,6 +4377,7 @@ box.innerHTML = html;
             { id: 'finance', fa: 'مالی' }, { id: 'sales', fa: 'واحد فروش' }, { id: 'purchase', fa: 'واحد خرید' }, /* FEAT-SALES-21a + FEAT-PURCHASE-22a */ { id: 'viewer', fa: 'فقط مشاهده' }, { id: 'owner', fa: 'مالک سیستم (فروشنده)' }, /* SEC-LIC-24 */ { id: 'vendor', fa: 'صاحب سیستم (فروشنده)' }, /* VENDOR-37 */
         ];
         let orgUserMode17a = 'add', orgUserEdit17a = '', orgUsersList17a = [];
+        let orgTenantMods39 = []; /* USER-MGMT-39a: ماژول‌های فعال tenant از آخرین GET کاربران */
         function orgRoleFa17a(r) { const x = ORG_ROLES_17A.find(function (y) { return y.id === r; }); return x ? x.fa : r; }
         function orgMsg17a(text, isErr) { const m = document.getElementById('orgUsersMsg'); if (!m) return; m.textContent = text || ''; m.classList.toggle('err', !!isErr); }
         function orgGenPw17a() {
@@ -4381,19 +4427,30 @@ box.innerHTML = html;
         function updateCapsCounts17a(counts17a) {
             ORG_ROLES_17A.forEach(function (r) { const el = document.getElementById('orgRoleCnt-' + r.id); if (el) el.textContent = fa(Number((counts17a || {})[r.id]) || 0) + ' نفر'; });
         }
+        const ORG_MOD_SHORT_39 = { summary: 'خلاصه', analytics: 'تحلیلی', production: 'تولید', quality: 'کیفیت', inventory: 'انبار', maintenance: 'PM', em: 'انرژی', planning: 'برنامه‌ریزی', finance: 'مالی', sales: 'فروش', purchase: 'خرید' }; /* USER-MGMT-39a */
+        function orgModChips39(u39) {
+            const set39 = Array.isArray(u39.modules) ? u39.modules : [];
+            if (!set39.length) return '<span class="ocp-note">همه (نقش)</span>';
+            return '<span class="mchips39">' + set39.slice(0, 3).map(function (m39) { return '<span class="chip">' + esc(ORG_MOD_SHORT_39[m39] || m39) + '</span>'; }).join('') + (set39.length > 3 ? '<span class="chip">+' + fa(set39.length - 3) + '</span>' : '') + '</span>';
+        }
         function renderUsers17a(users17a) {
             orgUsersList17a = users17a || [];
             const t = document.getElementById('orgUsersTbl'); if (!t) return;
             const self17a = WEB_USER && WEB_USER.username ? String(WEB_USER.username) : '';
-            let h = '<thead><tr><th>نام کاربری</th><th>نام کامل</th><th>نقش</th><th>وضعیت</th><th>نشست فعال</th><th>عملیات</th></tr></thead><tbody>';
-            if (!orgUsersList17a.length) h += '<tr><td colspan="6" class="empty">کاربری تعریف نشده است.</td></tr>';
+            const canMods39 = isOwner24(); /* USER-MGMT-39a: ویرایش ماژول‌ها فقط صاحب سیستم (گارد سرور: PATCH) */
+            let h = '<thead><tr><th>نام کاربری</th><th>نام کامل</th><th>نقش</th><th>ماژول‌ها</th><th>وضعیت</th><th>نشست فعال</th><th>عملیات</th></tr></thead><tbody>';
+            if (!orgUsersList17a.length) h += '<tr><td colspan="7" class="empty">کاربری تعریف نشده است.</td></tr>';
             orgUsersList17a.forEach(function (u) {
                 const self = u.username === self17a;
                 const vend37 = u.role === 'vendor' || u.role === 'owner'; /* VENDOR-37: صاحب سیستم محافظت‌شده */
+                const modsCell39 = (canMods39 && !vend37)
+                    ? '<button type="button" class="org-ubtn modcell39" data-act="mods" data-un="' + esc(u.username) + '" title="ویرایش دسترسی ماژول‌ها — فقط صاحب سیستم">' + orgModChips39(u) + '</button>'
+                    : orgModChips39(u);
                 h += '<tr>' +
                     '<td dir="ltr" style="text-align:right">' + esc(u.username) + (self ? ' <span class="ocp-note">(خود شما)</span>' : '') + '</td>' +
                     '<td>' + esc(u.name || '-') + '</td>' +
                     '<td>' + esc(orgRoleFa17a(u.role)) + '</td>' +
+                    '<td>' + modsCell39 + '</td>' +
                     '<td>' + (u.active ? '<span class="chip ok">فعال</span>' : '<span class="chip no">غیرفعال</span>') + '</td>' +
                     '<td>' + fa(u.sessions || 0) + '</td>' +
                     '<td class="org-uacts">' +
@@ -4409,9 +4466,10 @@ box.innerHTML = html;
         async function loadUsers17a() {
             try {
                 const r = await fetch('/api/admin/users', { cache: 'no-store' });
-                if (!r.ok) { const t = document.getElementById('orgUsersTbl'); if (t) t.innerHTML = '<tbody><tr><td colspan="6" class="empty">دسترسی به مدیریت کاربران فقط برای مدیر سامانه.</td></tr></tbody>'; return; }
+                if (!r.ok) { const t = document.getElementById('orgUsersTbl'); if (t) t.innerHTML = '<tbody><tr><td colspan="7" class="empty">دسترسی به مدیریت کاربران فقط برای مدیر سامانه.</td></tr></tbody>'; return; }
                 const j = await r.json();
                 if (!j || !j.ok) return;
+                orgTenantMods39 = Array.isArray(j.tenant_modules) ? j.tenant_modules : []; /* USER-MGMT-39a */
                 buildCaps17a(j.role_caps, j.role_counts);
                 updateCapsCounts17a(j.role_counts);
                 renderUsers17a(j.users);
@@ -4420,6 +4478,57 @@ box.innerHTML = html;
             } catch (e) { /* بی‌ضرر */ }
         }
         /* ===== FEAT-ADMIN-17a (end) ===== */
+        /* ===== USER-MGMT-39a (begin): مودال ویرایش ماژول‌های کاربر — فقط صاحب سیستم (گارد سرور: PATCH) ===== */
+        let modsModal39User = '';
+        function closeModsModal39() { const m = document.getElementById('modsModal39'); if (m) m.hidden = true; modsModal39User = ''; }
+        function openModsModal39(username39) {
+            const u39 = orgUsersList17a.find(function (x) { return x.username === username39; });
+            if (!u39) return;
+            const m39 = document.getElementById('modsModal39'); if (!m39) return;
+            modsModal39User = username39;
+            const lbl39 = document.getElementById('modsModal39U'); if (lbl39) lbl39.textContent = username39;
+            const note39 = document.getElementById('modsModal39Note'); if (note39) note39.hidden = !(String(u39.role || '') === 'admin');
+            const active39 = (orgTenantMods39 && orgTenantMods39.length) ? orgTenantMods39 : ((TENANT_15A && Array.isArray(TENANT_15A.active_modules) && TENANT_15A.active_modules.length) ? TENANT_15A.active_modules : Object.keys(ORG_MOD_FA_15C));
+            const cur39 = Array.isArray(u39.modules) ? u39.modules : [];
+            const list39 = document.getElementById('modsModal39List');
+            if (list39) {
+                list39.innerHTML = active39.map(function (mk39) {
+                    const on39 = cur39.length ? cur39.indexOf(mk39) !== -1 : true; /* بدون محدودیت = همهٔ تیک‌ها (نشان‌گر حالت مؤثر) */
+                    return '<label><input type="checkbox" value="' + esc(mk39) + '"' + (on39 ? ' checked' : '') + ' /> ' + esc(ORG_MOD_FA_15C[mk39] || mk39) + '</label>';
+                }).join('');
+            }
+            const hint39 = document.getElementById('modsModal39Hint');
+            if (hint39) hint39.textContent = cur39.length
+                ? 'اگر هیچ ماژولی تیک نخورد ⇒ «بدون محدودیت» ذخیره می‌شود (دسترسی کامل نقش). اگر همه تیک بخورند هم محدودیت مؤثر همان دسترسی کامل نقش است.'
+                : 'این کاربر محدودیت ماژولی ندارد (دسترسی کامل نقش) — با ذخیره، انتخاب‌های فعلی به‌عنوان محدودیت ثبت می‌شود.';
+            m39.hidden = false;
+        }
+        async function saveModsModal39() {
+            const btn39 = document.getElementById('modsModal39Save');
+            if (!btn39 || !modsModal39User || btn39.disabled) return;
+            const boxes39 = Array.from(document.querySelectorAll('#modsModal39List input[type=checkbox]'));
+            const keys39 = boxes39.filter(function (c39) { return c39.checked; }).map(function (c39) { return c39.value; });
+            const send39 = keys39.length === boxes39.length ? [] : keys39; /* همهٔ تیک‌ها = همان دسترسی کامل نقش ⇒ بدون محدودیت */
+            btn39.disabled = true;
+            try {
+                const r39 = await fetch('/api/admin/users/modules', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: modsModal39User, moduleKeys: send39 }) });
+                const j39 = await r39.json();
+                if (!r39.ok) { orgMsg17a(j39.error || 'خطا در ذخیرهٔ دسترسی‌ها.', true); return; }
+                orgMsg17a(j39.unrestricted
+                    ? '✔ دسترسی «' + modsModal39User + '» بدون محدودیت شد (دسترسی کامل نقش).'
+                    : '✔ دسترسی ماژولی «' + modsModal39User + '» ذخیره شد — از درخواست بعدی او اعمال می‌شود (' + fa((j39.modules || []).length) + ' ماژول).');
+                closeModsModal39();
+                loadUsers17a();
+            } catch (e39) { orgMsg17a('خطا در ارتباط با سرور', true); }
+            finally { btn39.disabled = false; }
+        }
+        (function wireMods39() {
+            const s39 = document.getElementById('modsModal39Save'); if (s39) s39.addEventListener('click', saveModsModal39);
+            const c39 = document.getElementById('modsModal39Cancel'); if (c39) c39.addEventListener('click', closeModsModal39);
+            const m39 = document.getElementById('modsModal39'); if (m39) m39.addEventListener('click', function (e39) { if (e39.target === m39) closeModsModal39(); });
+            document.addEventListener('keydown', function (e39) { if (e39.key === 'Escape' && !document.getElementById('modsModal39').hidden) closeModsModal39(); });
+        })();
+        /* ===== USER-MGMT-39a (end) ===== */
         let licenseGateEl15c = null;
         function showLicenseGate15c(on) {
             try {
@@ -4570,6 +4679,7 @@ box.innerHTML = html;
                 const b = e.target.closest('button[data-act]'); if (!b) return;
                 const un = b.getAttribute('data-un') || '';
                 const act = b.getAttribute('data-act');
+                if (act === 'mods') { openModsModal39(un); return; } /* USER-MGMT-39a */
                 if (act === 'edit') { orgFillUserForm17a(un); orgMsg17a('ویرایش «' + un + '» — نام/نقش/وضعیت را تغییر داده و ذخیره کنید.'); }
                 else if (act === 'pw') {
                     orgFillUserForm17a(un);
@@ -4754,8 +4864,18 @@ box.innerHTML = html;
            تب مخفی = حذف کامل از DOM (دکمهٔ ناوبری + کل بخش شامل اکسل/چاپ)؛ ثبت‌های عملیاتی سرور دست‌نخورده می‌مانند (مثلاً رسید انبار از سمت تولید ثبت می‌شود ولی تب انبار دیده نمی‌شود). */
         function hiddenTabs32() { try { return (TENANT_15A && Array.isArray(TENANT_15A.hidden_tabs)) ? TENANT_15A.hidden_tabs : []; } catch (e32) { return []; } }
         function tenantTabHidden32(t32) { return hiddenTabs32().indexOf(String(t32 || '')) !== -1; }
+        function userModRestrict39() { /* USER-MGMT-39a: محدودیت ماژولی کاربر — فقط نقش‌های غیرممتاز */
+            if (WEB_ROLE === 'admin' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner') return null;
+            const m39 = WEB_USER && Array.isArray(WEB_USER.modules) ? WEB_USER.modules : null;
+            return (m39 && m39.length) ? m39 : null;
+        }
+        function effectiveView39(view39) { /* USER-MGMT-39a: ROLE_VIEW ∩ ماژول‌های مجاز کاربر */
+            const r39 = userModRestrict39();
+            if (!r39) return view39;
+            return (view39 || []).filter(function (t39) { const m39 = TAB_MODULE_15A[t39]; return !!m39 && r39.indexOf(m39) !== -1; });
+        }
         function navFirstVisibleTab32() {
-            const view32 = ROLE_VIEW[WEB_ROLE] || ['summary'];
+            const view32 = effectiveView39(ROLE_VIEW[WEB_ROLE] || ['summary']); /* USER-MGMT-39a */
             for (let i32 = 0; i32 < view32.length; i32++) {
                 const t32 = view32[i32];
                 if (tenantTabHidden32(t32) || demoTabHidden19d(t32) || !moduleEnabled15a(t32)) continue;
@@ -4774,9 +4894,9 @@ box.innerHTML = html;
             });
         }
         /* ===== GO-LIVE-32 (end) ===== */
-        function applyRoleUI() {            applyHiddenTabs32(); /* GO-LIVE-32: حذف DOM تب‌های مخفی — پیش از هر محاسبهٔ نمایش */            const can = (tab) =>                WEB_ROLE === 'admin' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner' || /* SEC-LIC-24: مالک = دسترسی کامل + VENDOR-37: صاحب سیستم */                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            /* ===== FEAT-SALES-21a (begin): دسترسی دکمه‌های فروش ===== */            const salW21a = WEB_ROLE === 'admin' || WEB_ROLE === 'sales';            ['salCustAdd', 'salPriceAdd', 'salOrderAdd'].forEach(function (id21a) { const el21a = document.getElementById(id21a); if (el21a) el21a.style.display = salW21a ? '' : 'none'; });            const salX21a = document.getElementById('salExitAdd'); if (salX21a) salX21a.style.display = (salW21a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-SALES-21a (end) ===== */            /* ===== FEAT-PURCHASE-22a (begin): دسترسی دکمه‌های خرید ===== */            const purW22a = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purSupAdd', 'purReqAdd', 'purQuoteAdd', 'purPOAdd'].forEach(function (id22a) { const el22a = document.getElementById(id22a); if (el22a) el22a.style.display = purW22a ? '' : 'none'; });            const purR22a = document.getElementById('purRcptAdd'); if (purR22a) purR22a.style.display = (purW22a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-PURCHASE-22b (begin): دکمه‌های فاکتور/پرداخت — فقط واحد خرید ===== */            const purWB22b = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purInvAdd22b', 'purPayAdd22b'].forEach(function (id22b) { const el22b = document.getElementById(id22b); if (el22b) el22b.style.display = purWB22b ? '' : 'none'; });            /* ===== FEAT-PURCHASE-22b (end) ===== */            /* ===== FEAT-PURCHASE-22a (end) ===== */            const view =                ROLE_VIEW[WEB_ROLE] ||                ['summary'];            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        ((button.dataset.tab === 'org' ? (WEB_ROLE === 'admin' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner') : view.indexOf(button.dataset.tab) !== -1) /* VENDOR-37: +صاحب سیستم */ /* SEC-LIC-24 */ && moduleEnabled15a(button.dataset.tab) && !demoTabHidden19d(button.dataset.tab) && !tenantTabHidden32(button.dataset.tab)) /* SAAS-15a + SAAS-15c + FIX-UI-19d + GO-LIVE-32 */                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            if (                ((currentTab !== 'org' && view.indexOf(currentTab) === -1) || !moduleEnabled15a(currentTab) || demoTabHidden19d(currentTab) || tenantTabHidden32(currentTab)) /* SAAS-15a + SAAS-15c + FIX-UI-19d + GO-LIVE-32 */            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
+        function applyRoleUI() {            applyHiddenTabs32(); /* GO-LIVE-32: حذف DOM تب‌های مخفی — پیش از هر محاسبهٔ نمایش */            const can = (tab) =>                WEB_ROLE === 'admin' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner' || /* SEC-LIC-24: مالک = دسترسی کامل + VENDOR-37: صاحب سیستم */                (ROLE_CAN[tab] || [])                    .indexOf(WEB_ROLE) !== -1;            const bp =                document.getElementById(                    'btnAddProduction'                );            if (bp)                bp.style.display =                    can('production')                        ? ''                        : 'none';            const bw =                document.getElementById(                    'btnAddWaste'                );            if (bw)                bw.style.display =                    can('waste')                        ? ''                        : 'none';            const bd =                document.getElementById(                    'btnAddDowntime'                );            if (bd)                bd.style.display =                    can('downtime')                        ? ''                        : 'none';            const bq =                document.getElementById(                    'btnAddQuality'                );            if (bq)                bq.style.display =                    can('quality')                        ? ''                        : 'none';            const bm =                document.getElementById(                    'btnAddMaintenance'                );            if (bm)                bm.style.display =                    can('maintenance')                        ? ''                        : 'none';            const bpl =                document.getElementById(                    'btnAddPlan'                );            if (bpl)                bpl.style.display =                    can('maintenance')                        ? ''                        : 'none';            // =====================================================            // INVENTORY PERMISSIONS            // =====================================================            [                'btnAddInventoryItem',                'btnInventoryReceipt',                'btnInventoryIssue',                'btnInventoryTransfer',                'btnInventoryAdjust'            ].forEach(id => {                const el =                    document.getElementById(id);                if (el) {                    el.style.display =                        can('warehouse')                            ? ''                            : 'none';                }            });            /* ===== FEAT-SALES-21a (begin): دسترسی دکمه‌های فروش ===== */            const salW21a = WEB_ROLE === 'admin' || WEB_ROLE === 'sales';            ['salCustAdd', 'salPriceAdd', 'salOrderAdd'].forEach(function (id21a) { const el21a = document.getElementById(id21a); if (el21a) el21a.style.display = salW21a ? '' : 'none'; });            const salX21a = document.getElementById('salExitAdd'); if (salX21a) salX21a.style.display = (salW21a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-SALES-21a (end) ===== */            /* ===== FEAT-PURCHASE-22a (begin): دسترسی دکمه‌های خرید ===== */            const purW22a = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purSupAdd', 'purReqAdd', 'purQuoteAdd', 'purPOAdd'].forEach(function (id22a) { const el22a = document.getElementById(id22a); if (el22a) el22a.style.display = purW22a ? '' : 'none'; });            const purR22a = document.getElementById('purRcptAdd'); if (purR22a) purR22a.style.display = (purW22a || WEB_ROLE === 'warehouse') ? '' : 'none';            /* ===== FEAT-PURCHASE-22b (begin): دکمه‌های فاکتور/پرداخت — فقط واحد خرید ===== */            const purWB22b = WEB_ROLE === 'admin' || WEB_ROLE === 'purchase';            ['purInvAdd22b', 'purPayAdd22b'].forEach(function (id22b) { const el22b = document.getElementById(id22b); if (el22b) el22b.style.display = purWB22b ? '' : 'none'; });            /* ===== FEAT-PURCHASE-22b (end) ===== */            /* ===== FEAT-PURCHASE-22a (end) ===== */            const view =                effectiveView39(ROLE_VIEW[WEB_ROLE] || ['summary']); /* USER-MGMT-39a: نقش ∩ ماژول‌های مجاز کاربر */            document                .querySelectorAll(                    '#nav button[data-tab]'                )                .forEach(button => {                    button.style.display =                        ((button.dataset.tab === 'org' ? (WEB_ROLE === 'admin' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner') : view.indexOf(button.dataset.tab) !== -1) /* VENDOR-37: +صاحب سیستم */ /* SEC-LIC-24 */ && moduleEnabled15a(button.dataset.tab) && !demoTabHidden19d(button.dataset.tab) && !tenantTabHidden32(button.dataset.tab)) /* SAAS-15a + SAAS-15c + FIX-UI-19d + GO-LIVE-32 */                            ? ''                            : 'none';                });            const fp =                document.getElementById(                    'filterPanel'                );            if (fp) {                fp.style.display =                    (                        WEB_ROLE === 'admin' ||                        WEB_ROLE === 'manager'                    )                        &&                        (                            currentTab === 'summary' ||                            currentTab === 'analytics'                        )                        ? ''                        : 'none';            }            const em39v = document.getElementById('noModuleMsg39'); if (em39v) em39v.hidden = true; /* USER-MGMT-39a */            if (                ((currentTab !== 'org' && view.indexOf(currentTab) === -1) || !moduleEnabled15a(currentTab) || demoTabHidden19d(currentTab) || tenantTabHidden32(currentTab)) /* SAAS-15a + SAAS-15c + FIX-UI-19d + GO-LIVE-32 */            ) {                const first =                    document.querySelector(                        '#nav button[data-tab="' +
                         (navFirstVisibleTab32() || view[0]) + /* GO-LIVE-32: اولین تب مجاز (نقش+ماژول+دمو+hidden) — نه صرفاً view[0] که خودش مخفی می‌تواند باشد (ضد حلقهٔ ریدایرکت) */
-                        '"]'                    );                if (first) {                    first.click();                } else {                    document                        .querySelectorAll(                            'main > section'                        )                        .forEach(                            section =>                                section.classList                                    .add('hidden')                        );                }            }        }        window.__roleReady = loadRole(); /* SEC-AUDIT-13c */
+                        '"]'                    );                if (first && first.style.display !== 'none') { /* USER-MGMT-39a: فقط دکمهٔ نمایش‌پذیر — ضد حلقهٔ ریدایرکت */                    first.click();                } else {                    document                        .querySelectorAll(                            'main > section'                        )                        .forEach(                            section =>                                section.classList                                    .add('hidden')                        );                    const em39 = document.getElementById('noModuleMsg39');                    if (em39) em39.hidden = !userModRestrict39(); /* USER-MGMT-39a: پیام فقط وقتی علت، محدودیت ماژولی خود کاربر است */                }            }        }        window.__roleReady = loadRole(); /* SEC-AUDIT-13c */
         loadTenantConfig15a(); /* SAAS-15a: برندینگ + گیت ماژولی */        document.getElementById('applyFilter').addEventListener('click', () => {            activeFilter = { from: readJalaliValue(document, 'pf'), to: readJalaliValue(document, 'pt'), shift: document.getElementById('filterShift').value, product: document.getElementById('filterProduct').value };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('clearFilter').addEventListener('click', () => {            ['pf', 'pt'].forEach((p) => { document.querySelectorAll('input[data-jp="' + p + '"]').forEach((el) => { el.value = ''; }); });            document.getElementById('filterShift').value = 'all'; document.getElementById('filterProduct').value = 'all';            activeFilter = { from: '', to: '', shift: 'all', product: 'all' };            if (currentTab === 'summary') loadSummary(); else if (currentTab === 'analytics') buildAnalytics(); window.dispatchEvent(new Event('flt3-apply'));        });        document.getElementById('btnAddProduction').addEventListener('click', () => { document.getElementById('formProduction').classList.toggle('hidden'); document.getElementById('fpMsg').textContent = ''; });        document.getElementById('fpCancel').addEventListener('click', () => { document.getElementById('formProduction').classList.add('hidden'); });        document.getElementById('fpSave').addEventListener('click', async () => {            const msg = document.getElementById('fpMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', product_id: document.getElementById('fpProduct').value, shift_id: document.getElementById('fpShift').value, good_quantity: Number(document.getElementById('fpQty').value), pallet_count: Number(document.getElementById('fpPallets').value) || 0, machine_id: 'st-pack', heat_number: document.getElementById('fpHeat').value.trim(), description: document.getElementById('fpDesc').value.trim() };            try {                const r = await fetch('/api/entry/production', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formProduction').classList.add('hidden');                ['fpQty', 'fpPallets', 'fpDesc', 'fpHeat'].forEach((id) => { document.getElementById(id).value = ''; });                await loadProduction(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت تولید با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddWaste').addEventListener('click', () => { document.getElementById('formWaste').classList.toggle('hidden'); document.getElementById('fwMsg').textContent = ''; });        document.getElementById('fwCancel').addEventListener('click', () => { document.getElementById('formWaste').classList.add('hidden'); });        document.getElementById('fwSave').addEventListener('click', async () => {            const msg = document.getElementById('fwMsg'); msg.textContent = '';            /* FIX-WASTE-26a: اعتبارسنجی وزنی — تناژ > ۰ و ≤ ۵۰۰ تن (اعشاری مجاز) */            const ton26a = Number(document.getElementById('fwTon').value); const size26a = document.getElementById('fwSize').value;            if (!(ton26a > 0) || ton26a > 500) { msg.textContent = 'تناژ را به تن وارد کنید — عددی بزرگ‌تر از صفر و حداکثر ۵۰۰ (مثال: ۵ یا ۲٫۵).'; return; }            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', machine_id: document.getElementById('fwStation').value, waste_type: document.getElementById('fwType').value, reason_id: document.getElementById('fwReason').value, shift_id: document.getElementById('fwShift').value, tonnage_ton: ton26a, product_size: size26a, description: document.getElementById('fwDesc').value.trim() }; /* FIX-WASTE-26a: وزنی */            try {                const r = await fetch('/api/entry/waste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formWaste').classList.add('hidden');                ['fwTon', 'fwDesc'].forEach((id) => { document.getElementById(id).value = ''; }); document.getElementById('fwSize').value = ''; /* FIX-WASTE-26a */                await loadWaste(); lastOkAt = Date.now(); setLiveStatus(true); alert(fwOk26a(ton26a, size26a)); /* FIX-WASTE-26a: پیام وزنی — «۵ تن ضایعات برای سایز ۱۴ ثبت شد» */            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddDowntime').addEventListener('click', () => { document.getElementById('formDowntime').classList.toggle('hidden'); document.getElementById('fdMsg').textContent = ''; });        document.getElementById('fdCancel').addEventListener('click', () => { document.getElementById('formDowntime').classList.add('hidden'); });        document.getElementById('fdSave').addEventListener('click', async () => {            const msg = document.getElementById('fdMsg'); msg.textContent = '';            const sd = readJalaliValue(document, 'fds'), ed = readJalaliValue(document, 'fde');            if (!sd || !ed) { msg.textContent = 'تاریخ شمسی را کامل وارد کنید (مثال: ۱۴۰۵/۰۵/۱۶).'; return; }            const start = parseJalaliDateTime(sd, document.getElementById('fdStartTime').value);            const end = parseJalaliDateTime(ed, document.getElementById('fdEndTime').value);            if (!start || !end) { msg.textContent = 'تاریخ یا ساعت نامعتبر است.'; return; }            const body = { reason_id: document.getElementById('fdReason').value, is_unplanned: Number(document.getElementById('fdType').value), shift_id: document.getElementById('fdShift').value, start_time: start.toISOString(), end_time: end.toISOString(), machine_id: document.getElementById('fdStation').value, description: document.getElementById('fdDesc').value.trim() };            try {                const r = await fetch('/api/entry/downtime', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formDowntime').classList.add('hidden');                ['fdStartTime', 'fdEndTime', 'fdDesc'].forEach((id) => { document.getElementById(id).value = ''; });                document.querySelectorAll('#formDowntime input[data-jp]').forEach((el) => { el.value = ''; });                await loadDowntime(); lastOkAt = Date.now(); setLiveStatus(true); alert('ثبت توقف با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        document.getElementById('btnAddQuality').addEventListener('click', () => { document.getElementById('formQuality').classList.toggle('hidden'); document.getElementById('fqMsg').textContent = ''; });        document.getElementById('fqCancel').addEventListener('click', () => { document.getElementById('formQuality').classList.add('hidden'); });        document.getElementById('fqSave').addEventListener('click', async () => {            const msg = document.getElementById('fqMsg'); msg.textContent = '';            const body = { operator_id: WEB_USER ? (WEB_USER.username || WEB_USER.name || '') : '', heat_number: document.getElementById('fqHeat').value.trim(), rebar_size: Number(document.getElementById('fqSize').value), yield_strength: Number(document.getElementById('fqPressure').value), tensile_strength: Number(document.getElementById('fqLining').value), elongation_percent: Number(document.getElementById('fqDrop').value) || 0, /* ===== FEAT-QC-3: ارسال فیلدهای دستگاه ===== */ sample_length_mm: Number(document.getElementById('fqLen').value) || 0, sample_weight_g: Number(document.getElementById('fqWt').value) || 0, nominal_diameter_mm: Number(document.getElementById('fqDia').value) || 0, section_area_mm2: Number(document.getElementById('fqArea').value) || 0, yield_kgf: Number(document.getElementById('fqYkgf').value) || 0, kg_per_m: Number(document.getElementById('fqKgM').value) || 0, rib_diameter_mm: Number(document.getElementById('fqRibD').value) || 0, nafi_diameter_mm: Number(document.getElementById('fqNafi').value) || 0 /* FIX-QC-3b: نافی */, ratio_rm_reh: Number(document.getElementById('fqRatio').value) || 0, bend_test_passed: Number(document.getElementById('fqLeak').value), visual_inspection: Number(document.getElementById('fqVisual').value), description: document.getElementById('fqDesc').value.trim() };            try {                const r = await fetch('/api/entry/quality', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });                const j = await r.json(); if (!r.ok) { msg.textContent = j.error || 'خطا در ثبت'; return; }                document.getElementById('formQuality').classList.add('hidden');                ['fqHeat', 'fqPressure', 'fqLining', 'fqDrop', 'fqDesc', 'fqLen', 'fqWt', 'fqRibD', 'fqNafi'].forEach((id) => { document.getElementById(id).value = ''; });                await loadQuality(); lastOkAt = Date.now(); setLiveStatus(true); alert('آزمون QC با موفقیت ذخیره شد ✅');            } catch (e) { msg.textContent = 'خطا در ارتباط با سرور'; }        });        // ===== REVERT-STEEL-2: ارزیابی زندهٔ QC در فرم (هم‌تراز مانیتور دستگاه تست کشش) =====
         /* ===== FEAT-QC-3 (begin): محاسبات خودکار + ارزیابی زندهٔ هم‌تراز مانیتور دستگاه تست کشش ===== */
         function fqAutoCalc() {

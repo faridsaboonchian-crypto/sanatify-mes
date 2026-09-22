@@ -487,7 +487,7 @@ function verify(username, password) {
         } catch (e) { /* بی‌ضرر — دفعهٔ بعد دوباره تلاش می‌شود */ }
     }
     /* HARDEN-18P: پرچم تغییر اجباری رمز همراه نشست حمل می‌شود (پاسخ لاگین + /api/auth/me) */
-    return { username: u.username, role: u.role || 'viewer', name: u.name || u.username, must_change_pw: u.must_change_pw === true };
+    return { username: u.username, role: u.role || 'viewer', name: u.name || u.username, must_change_pw: u.must_change_pw === true, modules: Array.isArray(u.modules) ? u.modules.slice() : undefined }; /* USER-MGMT-39a: +ماژول‌های کاربر برای گیت نمایش تب‌ها */
 }
 function getSession(req) {
     const sid = parseCookies(req.headers.cookie)[SESSION_COOKIE];
