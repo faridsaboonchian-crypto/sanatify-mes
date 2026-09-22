@@ -802,7 +802,7 @@ function antiTamper19g() {
    قالب فایل .enc عیناً با tools/encrypt-config.js و auth.js یکی است؛ plaintext همچنان پشتیبانی می‌شود (سازگاری کامل) */
 const CFG_MAGIC_19G = 'sanatify-cfg-19g';
 function cfgDerivedKey19g(salt19g) {
-    const secret19g = String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405') + '|' + HWKEY_19F;
+    const secret19g = auth.devBypass40() ? auth.devBypassSecret40() : (String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405') + '|' + HWKEY_19F); /* DEV-BYPASS-40: هم‌گام با auth.js */
     return crypto.scryptSync(secret19g, salt19g, 32, { N: 16384, r: 8, p: 1 });
 }
 function readMaybeEnc19g(filePath) {
@@ -7932,6 +7932,25 @@ if (process.argv.indexOf('--print-hwkey') !== -1) {
     console.log(HWKEY_19F);
     process.exit(0);
 }
+/* ===== DEV-BYPASS-40 (begin): گارد بوت — دورزدن قفل HWKEY فقط توسعه/آزمون؛ production = رفض بوت ===== */
+(function devBypass40Boot() {
+    if (!auth.devBypass40()) return;
+    if (String(process.env.SANATIFY_ENV || '').trim().toLowerCase() === 'production') {
+        console.error('==========================================================');
+        console.error('✗ بوت متوقف شد — DEV BYPASS در محیط production ممنوع است.');
+        console.error('  SANATIFY_ENV=production با --dev-bypass-hwkey / SANATIFY_DEV_BYPASS_HWKEY=1 سازگار نیست.');
+        console.error('  قفل سخت‌افزاری web-users (کلید مشتق از HWKEY — VENDOR-37) در production باید فعال بماند.');
+        console.error('  رفع: پرچم/متغیر bypass را حذف کنید و سرویس را با متغیرهای عادی production بوت کنید.');
+        console.error('==========================================================');
+        process.exit(1);
+    }
+    console.error('==========================================================');
+    console.error('⚠️  DEV BYPASS ACTIVE — DO NOT USE IN PRODUCTION');
+    console.error('⚠️  دورزدن قفل سخت‌افزاری web-users فعال شد (کلید ثابت توسعه).');
+    console.error('⚠️  فقط برای توسعه/آزمون — در production بوت متوقف می‌شود.');
+    console.error('==========================================================');
+})();
+/* ===== DEV-BYPASS-40 (end) ===== */
 /* ===== GO-LIVE-32b (begin): --create-admin= — بوت‌استرپ اولین ادمین روی VM تازه (الگوی --print-hwkey) =====
    بن‌بست واقعی نصب تمیز: web-users.json وجود ندارد ⇒ هیچ‌کس نمی‌تواند وارد شود تا از پنل کاربر بسازد.
    مصرف:  ./sanatify-mes --create-admin=نام‌کاربری:رمز-اولیه     (یا --create-admin=نام‌کاربری با env SANATIFY_BOOTSTRAP_PW)

@@ -197,3 +197,31 @@ sudo rm -f /opt/sanatify/{live.json,live.json.bak*,audit.json,web-users.json,web
 | ۱۶ | اصلاً امضا ندارد | گام (ج) کامل |
 
 *تهیه‌شده در GO-LIVE-32 — گیت دامنهٔ راه‌اندازی (hidden_tabs) + نصب بدون دادهٔ قدیمی + کنترل نهایی.*
+
+## پیوست — DEV BYPASS HWKEY (فقط توسعه/آزمون — DEV-BYPASS-40)
+
+> ⚠️ این قابلیت فقط برای توسعه/آزمون است. در production هرگز فعال نکنید — سرور با `SANATIFY_ENV=production` اصلاً بوت نمی‌شود (گارد بوت، خروج ۱ با پیام فارسی).
+
+### فعال‌سازی (دو راه — CLI اولویت بالاتر)
+- پرچم CLI: `node server.js --dev-bypass-hwkey` (یا `sanatify-mes.exe --dev-bypass-hwkey`)
+- متغیر محیطی: `SANATIFY_DEV_BYPASS_HWKEY=1`
+
+### چه می‌کند
+- کلید رمزنگاری `web-users.json.enc` به‌جای مشتق از HWKEY ماشین، **ثابت** می‌شود: `scrypt(SHA256('dev-key-sanatify-2026'), salt)`.
+- نتیجه: فایل `.enc` بین ماشین‌های مختلف قابل حمل است — برای تست QA بدون نصب مجدد صاحب سیستم.
+- هنگام بوت: هشدار بزرگ «DEV BYPASS ACTIVE — DO NOT USE IN PRODUCTION» + بنر قرمز بالای پنل (`/api/auth/me → dev_bypass:true`).
+
+### غیرفعال‌سازی
+- پرچم را حذف کنید / متغیر را بردارید. توجه: فایل‌های `.enc` ساخته‌شده در حالت bypass روی ماشین واقعی رمزگشایی نمی‌شوند — کاربران را دوباره بسازید (`--create-admin` / `--recover-vendor`) یا `tools/reset-live.js` بزنید.
+
+### تست دو-ماشینی (T5)
+1. لپ‌تاپ A: `SANATIFY_DEV_BYPASS_HWKEY=1 node server.js` → صاحب سیستم را بسازید → ورود ✓
+2. `web-users.json.enc` را به لپ‌تاپ B کپی کنید.
+3. لپ‌تاپ B با bypass روشن: ورود ✓ (کلید ثابت — HWKEY فرق نمی‌کند).
+4. لپ‌تاپ B بدون bypass: ورود ✗ (رمزگشایی ناموفق — HWKEY ماشین B متفاوت است) — رفتار درست.
+
+### گارد production (T6)
+`SANATIFY_ENV=production` + هر شکلی از bypass ⇒ پیام فارسی «بوت متوقف شد — DEV BYPASS در محیط production ممنوع است.» + exit 1.
+
+### حذف کامل (hard) کاربر در production — USER-MGMT-39b
+`DELETE /api/admin/users?username=…&hard=1` در production تنها وقتی مجاز است که سرور با `--force-hard-delete` بوت شده باشد (پاک‌سازی توسعه‌دهنده). حذف نرم (پیش‌فرض) همیشه برای صاحب سیستم مجاز است.

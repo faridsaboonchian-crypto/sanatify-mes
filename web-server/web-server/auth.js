@@ -61,8 +61,19 @@ const HWKEY_19G_A = (function () {
     } catch (e) { return 'HW-UNKNOWN'; }
 })();
 const CFG_MAGIC_19G_A = 'sanatify-cfg-19g';
+/* ===== DEV-BYPASS-40 (begin): دورزدن قفل HWKEY برای توسعه/آزمون — opt-in، در production ممنوع =====
+   فعال‌سازی:  --dev-bypass-hwkey (اولویت بالاتر)  یا  env SANATIFY_DEV_BYPASS_HWKEY=1
+   کلید مؤثر web-users.json.enc ثابت می‌شود: scrypt(SHA256('dev-key-sanatify-2026'), salt)
+   ⇒ فایل .enc مستقل از HWKEY/SANATIFY_LIC_KEY روی هر ماشینی رمزگشایی می‌شود (تست دو-ماشینی QA).
+   گارد production در server.js (devBypass40Boot): SANATIFY_ENV=production ⇒ رفض بوت (exit 1). */
+const DEV_BYPASS_SECRET_40 = crypto.createHash('sha256').update('dev-key-sanatify-2026', 'utf8').digest('hex');
+function devBypass40() {
+    if (process.argv.indexOf('--dev-bypass-hwkey') !== -1) return true; /* CLI — اولویت بالاتر از env */
+    return String(process.env.SANATIFY_DEV_BYPASS_HWKEY || '').trim() === '1';
+}
+/* ===== DEV-BYPASS-40 (end) ===== */
 function cfgDerivedKey19gA(salt19g) {
-    const secret19g = String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405') + '|' + HWKEY_19G_A;
+    const secret19g = devBypass40() ? DEV_BYPASS_SECRET_40 : (String(process.env.SANATIFY_LIC_KEY || 'Sanatify-Lic-Verify::v1::1405') + '|' + HWKEY_19G_A); /* DEV-BYPASS-40 */
     return crypto.scryptSync(secret19g, salt19g, 32, { N: 16384, r: 8, p: 1 });
 }
 function readMaybeEnc19g(filePath) {
@@ -802,7 +813,7 @@ function doMe(req, res) {
     if (!isOwner24 && role24 === 'admin') {
         try { isOwner24 = !loadUsers().some((x) => x && vendorRole37A(x.role) && x.active !== false); } catch (e) { isOwner24 = true; }
     }
-    jsonRes(res, { ok: true, user: Object.assign({}, u24, { is_owner: isOwner24 }) });
+    jsonRes(res, { ok: true, user: Object.assign({}, u24, { is_owner: isOwner24 }), dev_bypass: devBypass40() }); /* DEV-BYPASS-40: بنر قرمز کلاینت */
     /* ===== SEC-LIC-24 (end) ===== */
 }
 
@@ -838,4 +849,5 @@ module.exports = {
     passwordPolicyError18P: passwordPolicyError18P, /* HARDEN-18P: سیاست رمز برای endpoints ساخت/بازنشانی کاربر */
     killSessionsByUsername17a: killSessionsByUsername17a, activeSessionCount17a: activeSessionCount17a, refreshSessionUser17a: refreshSessionUser17a, isUserInactive17a: isUserInactive17a, writeUsers17a: writeUsers17a, findUser17a: findUser17a, /* FEAT-ADMIN-17a */
     loadUsers37: loadUsers, /* VENDOR-37: بارگذاری نرمال/سخت‌گیرانه/مهاجرت — server.js readUsers17a از همین مسیر می‌خواند */
+    devBypass40: devBypass40, devBypassSecret40: function () { return DEV_BYPASS_SECRET_40; }, /* DEV-BYPASS-40: هم‌گامی مشتق‌کلید server.js */
 };
