@@ -1591,6 +1591,32 @@ function appRequestHandler(req, res) {
         return;
     }
     // ===== USER-MGMT-39a (end) =====
+    /* ===== MODULE-OVERRIDE-41 (begin): خروج اجباری کاربر — فقط صاحب سیستم (vendor)؛ اختیاری پس از تغییر ماژول‌ها =====
+       POST /api/admin/users/force-logout   بدنه: { username }
+       • همهٔ نشست‌های زندهٔ کاربر هدف بسته می‌شود (killSessionsByUsername17a) — ورود بعدی با دسترسی‌های تازه.
+       • gardo-ha: هدف vendor/صاحب‌سیستم ⇒ 403 PROTECTED؛ خودِ درخواست‌کننده vendor است (گارد بالا) — خود-خروجی ناممکن.
+       • audit: admin.user_force_logout { username, sessions_killed }. */
+    if (pathname === '/api/admin/users/force-logout' && req.method === 'POST') {
+        if (!vendorRole37(String((req.user && req.user.role) || ''))) return sendJson(res, { error: 'اجبار به خروج کاربر فقط توسط صاحب سیستم (vendor) مجاز است.', code: 'VENDOR_ONLY' }, 403);
+        readBody(req).then((body41) => {
+            try {
+                const b41 = JSON.parse(body41 || '{}');
+                const username41 = String(b41.username || '').trim();
+                if (!username41) return sendJson(res, { error: 'نام کاربری الزامی است.' }, 400);
+                const users41 = readUsers17a();
+                const u41 = users41.find((x) => String(x.username || '').toLowerCase() === username41.toLowerCase());
+                if (!u41) return sendJson(res, { error: 'کاربر یافت نشد.' }, 404);
+                if (vendorRole37(String(u41.role || ''))) return sendJson(res, { error: 'صاحب سیستم (vendor) قابل اجبار به خروج نیست.', code: 'PROTECTED' }, 403);
+                const killed41 = auth.killSessionsByUsername17a(u41.username);
+                auditLog(req, 'admin.user_force_logout', { username: u41.username, sessions_killed: killed41 });
+                return sendJson(res, { ok: true, username: u41.username, sessions_killed: killed41 });
+            } catch (e) {
+                return sendJson(res, { error: 'خطا در اجبار به خروج: ' + String(e && e.message ? e.message : e) }, 500);
+            }
+        });
+        return;
+    }
+    // ===== MODULE-OVERRIDE-41 force-logout (end) =====
     /* ===== USER-MGMT-39b (begin): حذف کاربر — فقط صاحب سیستم (vendor)؛ حذف نرم پیش‌فرض =====
        DELETE /api/admin/users?username=…[&hard=1]
        • soft: active=false + status='deleted' + deleted_at/by — لاگین مسدود (مسیر موجود 17a)؛ تاریخچهٔ audit حفظ می‌شود؛ بازیابی با فعال‌سازی مجدد.

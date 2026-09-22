@@ -1652,6 +1652,9 @@
         body.theme-dark .ovnote41, body.bi-dark .ovnote41 { color:#9fb9d0; }
         body.theme-dark .modal39-list label.dim41, body.bi-dark .modal39-list label.dim41 { background:#0a1a29; border-color:#1e3a52; }
         body.theme-dark .modneed41, body.bi-dark .modneed41 { background:#2a2109; color:#fcd34d; border-color:#5b4a12; }
+        .flbanner41 { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:8px 12px; margin:8px 0 0; font-size:12.5px; line-height:1.8; }
+        .flbanner41 .org-btn2 { min-width:140px; }
+        body.theme-dark .flbanner41, body.bi-dark .flbanner41 { background:#2a2109; border-color:#5b4a12; color:#fcd34d; }
         /* ===== MODULE-OVERRIDE-41 (end) ===== */
         /* ===== USER-MGMT-39b (begin): منوی عملیات + حذف ===== */
         .umenu39 { position:absolute; z-index:90; background:#fff; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 12px 32px rgba(2,8,20,.25); min-width:190px; overflow:hidden; }
@@ -3873,6 +3876,10 @@
                         <div class="org-usage" id="orgUsersWrap" style="margin-top:6px">
                             <table id="orgUsersTbl"></table>
                         </div>
+                        <div id="forceLogout41" class="flbanner41" role="status" hidden>
+                            <span id="forceLogout41Txt"></span>
+                            <button type="button" id="forceLogout41Btn" class="org-btn2">🚪 اجبار به خروج</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4544,6 +4551,19 @@ box.innerHTML = html;
                 if (inp41) inp41.disabled = !ov41.checked;
             });
         }
+        function showForceLogout41(username41) { /* MODULE-OVERRIDE-41: بنر «برای دیدن تغییرات، ورود مجدد» — فقط vendor و فقط با نشست زندهٔ هدف */
+            const box41 = document.getElementById('forceLogout41');
+            if (!box41) return;
+            const can41 = WEB_ROLE === 'vendor' || WEB_ROLE === 'owner'; /* T6: ادمین معمولی نمی‌بیند */
+            const u41 = (orgUsersList17a || []).find(function (x) { return x.username === username41; });
+            const live41 = u41 ? (Number(u41.sessions) || 0) : 0;
+            if (!can41 || !live41) { box41.hidden = true; return; }
+            const t41 = document.getElementById('forceLogout41Txt');
+            if (t41) t41.textContent = '⚠️ تغییرات اعمال شد؛ کاربر «' + username41 + '» برای دیدن آن باید خارج و دوباره وارد شود (' + fa(live41) + ' نشست زنده).';
+            const b41 = document.getElementById('forceLogout41Btn');
+            if (b41) b41.setAttribute('data-un', username41);
+            box41.hidden = false;
+        }
         function openModsModal39(username39) {
             const u39 = orgUsersList17a.find(function (x) { return x.username === username39; });
             if (!u39) return;
@@ -4600,8 +4620,10 @@ box.innerHTML = html;
                 orgMsg17a(j39.unrestricted
                     ? '✔ دسترسی «' + modsModal39User + '» بدون محدودیت شد (دسترسی کامل نقش).'
                     : '✔ دسترسی ماژولی «' + modsModal39User + '» ذخیره شد — از درخواست بعدی او اعمال می‌شود (' + fa((j39.modules || []).length) + ' ماژول)' + (j39.override ? ' — حالت اجبار: اتحاد با نقش' : '') + '.');
+                const target41 = modsModal39User;
                 closeModsModal39();
                 loadUsers17a();
+                showForceLogout41(target41); /* MODULE-OVERRIDE-41: بنر ورود مجدد + خروج اجباری اختیاری */
             } catch (e39) { orgMsg17a('خطا در ارتباط با سرور', true); }
             finally { btn39.disabled = false; }
         }
@@ -4609,6 +4631,22 @@ box.innerHTML = html;
             const s39 = document.getElementById('modsModal39Save'); if (s39) s39.addEventListener('click', saveModsModal39);
             const c39 = document.getElementById('modsModal39Cancel'); if (c39) c39.addEventListener('click', closeModsModal39);
             const o41 = document.getElementById('modsOv41'); if (o41) o41.addEventListener('change', applyModsOv41); /* MODULE-OVERRIDE-41 */
+            const fl41 = document.getElementById('forceLogout41Btn'); /* MODULE-OVERRIDE-41: خروج اجباری — فقط با تأیید صاحب سیستم */
+            if (fl41) fl41.addEventListener('click', async function () {
+                const un41 = fl41.getAttribute('data-un') || '';
+                if (!un41 || fl41.disabled) return;
+                if (!window.confirm('همهٔ نشست‌های زندهٔ «' + un41 + '» بسته شود؟ (اجبار به خروج — فقط صاحب سیستم)')) return;
+                fl41.disabled = true;
+                try {
+                    const r41 = await fetch('/api/admin/users/force-logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: un41 }) });
+                    const j41 = await r41.json();
+                    if (!r41.ok) { orgMsg17a(j41.error || 'خطا در اجبار به خروج.', true); return; }
+                    orgMsg17a('✔ ' + fa(j41.sessions_killed) + ' نشست زندهٔ «' + un41 + '» بسته شد — ورود بعدی او با دسترسی‌های تازه است.');
+                    const box41 = document.getElementById('forceLogout41'); if (box41) box41.hidden = true;
+                    loadUsers17a();
+                } catch (e41) { orgMsg17a('خطا در ارتباط با سرور', true); }
+                finally { fl41.disabled = false; }
+            });
             const m39 = document.getElementById('modsModal39'); if (m39) m39.addEventListener('click', function (e39) { if (e39.target === m39) closeModsModal39(); });
             document.addEventListener('keydown', function (e39) { if (e39.key === 'Escape' && !document.getElementById('modsModal39').hidden) closeModsModal39(); });
         })();
