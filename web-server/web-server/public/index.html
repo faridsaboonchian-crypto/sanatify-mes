@@ -4478,7 +4478,8 @@ box.innerHTML = html;
         function orgModChips39(u39) {
             const set39 = Array.isArray(u39.modules) ? u39.modules : [];
             if (!set39.length) return '<span class="ocp-note">همه (نقش)</span>';
-            return '<span class="mchips39">' + set39.slice(0, 3).map(function (m39) { return '<span class="chip">' + esc(ORG_MOD_SHORT_39[m39] || m39) + '</span>'; }).join('') + (set39.length > 3 ? '<span class="chip">+' + fa(set39.length - 3) + '</span>' : '') + '</span>';
+            const ov41c = u39.modules_override === true ? '<span class="chip" title="اجبار بر نقش — اتحاد: نقش ∪ ماژول‌ها (MODULE-OVERRIDE-41)">🔓</span>' : ''; /* MODULE-OVERRIDE-41 */
+            return ov41c + '<span class="mchips39">' + set39.slice(0, 3).map(function (m39) { return '<span class="chip">' + esc(ORG_MOD_SHORT_39[m39] || m39) + '</span>'; }).join('') + (set39.length > 3 ? '<span class="chip">+' + fa(set39.length - 3) + '</span>' : '') + '</span>';
         }
         function renderUsers17a(users17a) {
             orgUsersList17a = users17a || [];
@@ -4593,12 +4594,12 @@ box.innerHTML = html;
             }
             btn39.disabled = true;
             try {
-                const r39 = await fetch('/api/admin/users/modules', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: modsModal39User, moduleKeys: send39 }) });
+                const r39 = await fetch('/api/admin/users/modules', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: modsModal39User, moduleKeys: send39, override: ovOn41 && send39.length > 0 }) }); /* MODULE-OVERRIDE-41 */
                 const j39 = await r39.json();
                 if (!r39.ok) { orgMsg17a(j39.error || 'خطا در ذخیرهٔ دسترسی‌ها.', true); return; }
                 orgMsg17a(j39.unrestricted
                     ? '✔ دسترسی «' + modsModal39User + '» بدون محدودیت شد (دسترسی کامل نقش).'
-                    : '✔ دسترسی ماژولی «' + modsModal39User + '» ذخیره شد — از درخواست بعدی او اعمال می‌شود (' + fa((j39.modules || []).length) + ' ماژول).');
+                    : '✔ دسترسی ماژولی «' + modsModal39User + '» ذخیره شد — از درخواست بعدی او اعمال می‌شود (' + fa((j39.modules || []).length) + ' ماژول)' + (j39.override ? ' — حالت اجبار: اتحاد با نقش' : '') + '.');
                 closeModsModal39();
                 loadUsers17a();
             } catch (e39) { orgMsg17a('خطا در ارتباط با سرور', true); }
@@ -5017,10 +5018,25 @@ box.innerHTML = html;
             const m39 = WEB_USER && Array.isArray(WEB_USER.modules) ? WEB_USER.modules : null;
             return (m39 && m39.length) ? m39 : null;
         }
-        function effectiveView39(view39) { /* USER-MGMT-39a: ROLE_VIEW ∩ ماژول‌های مجاز کاربر */
+        function userModOverride39() { /* MODULE-OVERRIDE-41: حالت «اجبار بر نقش» — فقط نقش‌های غیرممتاز (تک‌منبع: /api/auth/me) */
+            if (WEB_ROLE === 'admin' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner') return false;
+            return !!(WEB_USER && WEB_USER.modules_override === true && userModRestrict39());
+        }
+        function allTabsForMods41(mods41) { /* MODULE-OVERRIDE-41: همهٔ تب‌های نگاشت‌شده به ماژول‌های داده‌شده — پیش از گیت لایسنس/hidden_tabs */
+            const out41 = [];
+            Object.keys(TAB_MODULE_15A).forEach(function (t41) {
+                const m41 = TAB_MODULE_15A[t41];
+                if (m41 && mods41.indexOf(m41) !== -1 && out41.indexOf(t41) === -1) out41.push(t41);
+            });
+            return out41;
+        }
+        function effectiveView39(view39) { /* USER-MGMT-39a: ROLE_VIEW ∩ ماژول‌ها — MODULE-OVERRIDE-41: با اجبار ⇒ اتحاد (نقش ∪ ماژول‌ها) */
             const r39 = userModRestrict39();
             if (!r39) return view39;
-            return (view39 || []).filter(function (t39) { const m39 = TAB_MODULE_15A[t39]; return !!m39 && r39.indexOf(m39) !== -1; });
+            const inter39 = (view39 || []).filter(function (t39) { const m39 = TAB_MODULE_15A[t39]; return !!m39 && r39.indexOf(m39) !== -1; });
+            if (!userModOverride39()) return inter39; /* رفتار 39a — بدون اجبار تیک‌ها فقط محدود می‌کنند (سازگاری کامل — T5) */
+            /* اجبار: اتحاد — سقف لایسنس/hidden_tabs در applyRoleUI/navFirstVisibleTab32 بعد از view اعمال می‌شود (اولویت مطلق — T3) */
+            return (view39 || []).concat(allTabsForMods41(r39).filter(function (t41) { return (view39 || []).indexOf(t41) === -1; }));
         }
         function navFirstVisibleTab32() {
             const view32 = effectiveView39(ROLE_VIEW[WEB_ROLE] || ['summary']); /* USER-MGMT-39a */
