@@ -4425,6 +4425,8 @@ box.innerHTML = html;
                 const bp46 = document.getElementById('billetPanel46'); if (bp46) bp46.style.display = ff46.billet_batch_entry === true ? '' : 'none';
                 const qr46 = document.getElementById('qcInDirectRow24'); if (qr46) qr46.style.display = ff46.qc_direct_incoming === true ? '' : 'none';
                 if (typeof qcInApplyMode24 === 'function') qcInApplyMode24();
+                /* ROLE-DUP-45 follow-up: دراپ‌داون نقش‌ها به‌محض رسیدن/به‌روزرسانی tenant بازسازی شود — wire-time قبل از tenant است و لیست stale می‌ماند (فیلتر ماژول/hidden_tabs)؛ نقش انتخاب‌شدهٔ فعلی حفظ می‌شود */
+                if (typeof orgFillRoleOptions17a === 'function') { const sel45t = document.getElementById('orgURole'); const prev45v = sel45t ? sel45t.value : ''; orgFillRoleOptions17a(prev45v || undefined); if (sel45t && prev45v && Array.from(sel45t.options).some((o) => o.value === prev45v)) sel45t.value = prev45v; }
                 if (TENANT_15A.name) {
                     const bf = document.querySelector('.brand-title .bt-full');
                     const bc = document.querySelector('.brand-title .bt-compact');
@@ -5208,7 +5210,7 @@ box.innerHTML = html;
                 if (!r46.ok) { if (msg46) msg46.textContent = j46.error || 'خطا'; return; }
                 document.getElementById('formBillet46').classList.add('hidden');
                 ['fbHeat46', 'fbUnit46'].forEach((id46) => { document.getElementById(id46).value = ''; }); document.getElementById('fbCount46').value = '1';
-                toast('بچ شمش ثبت شد — ' + fa(j46.added) + ' شمش، مجموع ' + fa(j46.total_kg) + ' کیلوگرم (هیت ' + heat46 + ').', 'ok');
+                alert('بچ شمش ثبت شد — ' + fa(j46.added) + ' شمش، مجموع ' + fa(j46.total_kg) + ' کیلوگرم (هیت ' + heat46 + ').'); /* FIX-46B: toast در finModule-priv است و اینجا (وایرینگ بیرونی) undefined — alert هم‌سان با هندلرهای همسایهٔ همین بخش */
                 await loadProduction(); lastOkAt = Date.now(); setLiveStatus(true);
             } catch (e46) { if (msg46) msg46.textContent = 'خطا در ارتباط با سرور'; }
         });
