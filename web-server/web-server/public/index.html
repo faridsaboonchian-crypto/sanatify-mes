@@ -4466,14 +4466,31 @@ box.innerHTML = html;
         /* ===== FIX-ORG-16b (end) ===== */
         /* ===== FEAT-ADMIN-17a (begin): مدیریت کاربران و نقش‌ها — فقط admin، بدون ویرایش فایل ===== */
         const ORG_ROLES_17A = [
-            { id: 'admin', fa: 'مدیر سامانه' }, { id: 'manager', fa: 'مدیر (فقط مشاهده)' }, { id: 'operator', fa: 'اپراتور' },
+            { id: 'admin', fa: 'مدیر سامانه' }, { id: 'manager', fa: 'ناظر سامانه (فقط مشاهده)' }, { id: 'operator', fa: 'اپراتور' }, /* ROLE-DUP-45: لیبل manager متمایز شد از viewer («بینندهٔ محض (فقط خلاصه)») — کلید دست‌نخورده */
             { id: 'supervisor', fa: 'سرپرست' }, { id: 'planner', fa: 'برنامه‌ریز' }, { id: 'warehouse', fa: 'انباردار' },
             { id: 'quality', fa: 'کنترل کیفیت (سابقه)' }, { id: 'qc', fa: 'کنترل کیفیت' }, { id: 'engineering', fa: 'مهندسی/تعمیرات' },
-            { id: 'finance', fa: 'مالی' }, { id: 'sales', fa: 'واحد فروش' }, { id: 'purchase', fa: 'واحد خرید' }, /* FEAT-SALES-21a + FEAT-PURCHASE-22a */ { id: 'viewer', fa: 'فقط مشاهده' }, { id: 'owner', fa: 'مالک سامانه' }, /* SEC-LIC-24 — ROLE-CLEANUP-44 */ { id: 'vendor', fa: 'مدیرعامل (CEO)' }, /* VENDOR-37 — ROLE-CLEANUP-44 */
+            { id: 'finance', fa: 'مالی' }, { id: 'sales', fa: 'واحد فروش' }, { id: 'purchase', fa: 'واحد خرید' }, /* FEAT-SALES-21a + FEAT-PURCHASE-22a */ { id: 'viewer', fa: 'بینندهٔ محض (فقط خلاصه)' }, { id: 'owner', fa: 'مالک سامانه' }, /* SEC-LIC-24 — ROLE-CLEANUP-44 */ { id: 'vendor', fa: 'مدیرعامل (CEO)' }, /* VENDOR-37 — ROLE-CLEANUP-44 */ /* ROLE-DUP-45: لیبل viewer متمایز شد از manager («ناظر سامانه (فقط مشاهده)») — کلیدها دست‌نخورده */
         ];
         let orgUserMode17a = 'add', orgUserEdit17a = '', orgUsersList17a = [];
         let orgTenantMods39 = []; /* USER-MGMT-39a: ماژول‌های فعال tenant از آخرین GET کاربران */
         function orgRoleFa17a(r) { const x = ORG_ROLES_17A.find(function (y) { return y.id === r; }); return x ? x.fa : r; }
+        /* ===== ROLE-DUP-45 (begin): دراپ‌داون فقط نقش‌های دارای حداقل یک تبِ قابل‌نمایش — (ROLE_VIEW ∩ ماژول‌های فعال tenant − hidden_tabs) ≠ ∅ — محاسبهٔ داینامیک، نه هاردکد؛ با فعال‌شدن ماژول، نقش خودکار selectable می‌شود ===== */
+        function roleVisibleTabs45(id45) {
+            const tabs45 = ROLE_VIEW[id45] || ['summary']; /* viewer و نقش‌های بی‌کلید = فقط خلاصه — همان fallback applyRoleUI */
+            return tabs45.filter(function (t45) { return moduleEnabled15a(t45) && !tenantTabHidden32(t45); });
+        }
+        function orgFillRoleOptions17a(curRole45) {
+            const sel45 = document.getElementById('orgURole'); if (!sel45) return;
+            const list45 = ORG_ROLES_17A.filter(function (r24) {
+                return r24.id !== 'admin' && ((r24.id !== 'owner' && r24.id !== 'vendor') || isOwner24()) && roleVisibleTabs45(r24.id).length > 0;
+            }).map(function (r) { return { id: r.id, fa: r.fa }; });
+            if (curRole45 && curRole45 !== 'admin') {
+                const has45 = list45.some(function (x) { return x.id === curRole45; });
+                if (!has45) list45.push({ id: curRole45, fa: (orgRoleFa17a(curRole45) || curRole45) + ' (ماژول فعال ندارد — حفظ نقش فعلی)' }); /* نقش فعلی کاربرِ در حال ویرایش که فعلاً غیرقابل‌انتخاب شده — بدون تغییر ناخواسته (الگوی ROLE-CLEANUP-44) */
+            }
+            sel45.innerHTML = list45.map(function (r) { return '<option value="' + esc(r.id) + '">' + esc(r.fa) + '</option>'; }).join('');
+        }
+        /* ===== ROLE-DUP-45 (end) ===== */
         function orgMsg17a(text, isErr) { const m = document.getElementById('orgUsersMsg'); if (!m) return; m.textContent = text || ''; m.classList.toggle('err', !!isErr); }
         function orgGenPw17a() {
             const cs = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -4487,7 +4504,7 @@ box.innerHTML = html;
             orgUserMode17a = 'add'; orgUserEdit17a = '';
             const u = document.getElementById('orgUUsername'); if (u) { u.value = ''; u.disabled = false; }
             const n = document.getElementById('orgUName'); if (n) n.value = '';
-            const r = document.getElementById('orgURole'); if (r) { const legacy44 = r.querySelector('option[value="admin"]'); if (legacy44) legacy44.remove(); /* ROLE-CLEANUP-44 */ r.value = 'viewer'; r.disabled = false; }
+            const r = document.getElementById('orgURole'); if (r) { const legacy44 = r.querySelector('option[value="admin"]'); if (legacy44) legacy44.remove(); /* ROLE-CLEANUP-44 */ orgFillRoleOptions17a(); /* ROLE-DUP-45: بازسازی با گیت نقشِ بی‌ماژول */ const first45 = r.querySelector('option[value="viewer"]') || r.querySelector('option'); r.value = first45 ? first45.value : 'viewer'; r.disabled = false; }
             const w = orgPwWrap17a(); if (w) w.style.display = '';
             const p = document.getElementById('orgUPass'); if (p) p.value = '';
             const aw = document.getElementById('orgUActiveWrap'); if (aw) aw.style.display = 'none';
@@ -4501,7 +4518,7 @@ box.innerHTML = html;
             const self17a = WEB_USER && WEB_USER.username === username;
             const ui = document.getElementById('orgUUsername'); if (ui) { ui.value = username; ui.disabled = true; }
             const n = document.getElementById('orgUName'); if (n) n.value = u.name || '';
-            const r = document.getElementById('orgURole'); if (r) { if (u.role === 'admin' && !r.querySelector('option[value="admin"]')) { const o44 = document.createElement('option'); o44.value = 'admin'; o44.textContent = 'مدیر سامانه (قدیمی)'; r.appendChild(o44); } /* ROLE-CLEANUP-44: نمایش نقش فعلی admin قدیمی — ساختنِ جدید ممکن نیست */ r.value = u.role || 'viewer'; r.disabled = !!self17a; }
+            const r = document.getElementById('orgURole'); if (r) { orgFillRoleOptions17a(u.role); /* ROLE-DUP-45: بازسازی داینامیک + حفظ نقش فعلی اگر غیرقابل‌انتخاب شده */ if (u.role === 'admin' && !r.querySelector('option[value="admin"]')) { const o44 = document.createElement('option'); o44.value = 'admin'; o44.textContent = 'مدیر سامانه (قدیمی)'; r.appendChild(o44); } /* ROLE-CLEANUP-44: نمایش نقش فعلی admin قدیمی — ساختنِ جدید ممکن نیست */ r.value = u.role || 'viewer'; r.disabled = !!self17a; }
             const w = orgPwWrap17a(); if (w) w.style.display = 'none'; /* رمز فقط با دکمهٔ 🔑 باز می‌شود */
             const p = document.getElementById('orgUPass'); if (p) p.value = '';
             const aw = document.getElementById('orgUActiveWrap');
@@ -4857,7 +4874,7 @@ box.innerHTML = html;
             }
             /* ===== FEAT-ADMIN-17a (begin): سیم‌کشی فرم کاربران ===== */
             const roleSel17a = document.getElementById('orgURole');
-            if (roleSel17a) roleSel17a.innerHTML = ORG_ROLES_17A.filter(function (r24) { return r24.id !== 'admin' && ((r24.id !== 'owner' && r24.id !== 'vendor') || isOwner24()); }).map(function (r) { return '<option value="' + r.id + '">' + esc(r.fa) + '</option>'; }).join(''); /* SEC-LIC-24 + VENDOR-37: نقش مدیرعامل فقط برای مدیرعامل + ROLE-CLEANUP-44: «مدیر سامانه» از انتخاب حذف (فقط برای ویرایش کاربر adminِ قدیمی موقتاً افزوده می‌شود) */
+            if (roleSel17a) orgFillRoleOptions17a(); /* ROLE-DUP-45: فیلتر داینامیک (ماژول فعال tenant − hidden_tabs)؛ هنگام باز شدن مودال دوباره با tenant واقعی بازسازی می‌شود */ /* SEC-LIC-24 + VENDOR-37 + ROLE-CLEANUP-44: admin حذف؛ owner/vendor فقط برای مدیرعامل */
             const genPw17a = document.getElementById('orgUGenPw');
             if (genPw17a) genPw17a.addEventListener('click', function () { const p = document.getElementById('orgUPass'); if (p) p.value = orgGenPw17a(); });
             const uCancel17a = document.getElementById('orgUserCancel');

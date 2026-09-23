@@ -1067,7 +1067,34 @@ function tenantPublicShape15c(cfg) {
 }
 // ===== FEAT-ADMIN-17a (begin): ثابت‌های نقش + خوانندهٔ فایل کاربران =====
 const ROLES_17A = ['admin', 'manager', 'operator', 'supervisor', 'planner', 'warehouse', 'quality', 'qc', 'engineering', 'finance', 'viewer', 'sales', 'purchase', 'owner', 'vendor']; /* همان کلیدهای ROLE_VIEW — + FEAT-SALES-21a/FEAT-PURCHASE-22a + SEC-LIC-24: مالک + VENDOR-37: مدیرعامل (CEO) (canonical؛ owner = نام قدیمی) */
-const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'مدیر (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'فقط مشاهده', sales: 'واحد فروش', purchase: 'واحد خرید', owner: 'مالک سامانه', vendor: 'مدیرعامل (CEO)' }; /* SEC-LIC-24: مالک + VENDOR-37: مدیرعامل (CEO) — ROLE-CLEANUP-44 */
+const ROLE_FA_17A = { admin: 'مدیر سامانه', manager: 'ناظر سامانه (فقط مشاهده)', operator: 'اپراتور', supervisor: 'سرپرست', planner: 'برنامه‌ریز', warehouse: 'انباردار', quality: 'کنترل کیفیت (سابقه)', qc: 'کنترل کیفیت', engineering: 'مهندسی/تعمیرات', finance: 'مالی', viewer: 'بینندهٔ محض (فقط خلاصه)', sales: 'واحد فروش', purchase: 'واحد خرید', owner: 'مالک سامانه', vendor: 'مدیرعامل (CEO)' }; /* SEC-LIC-24: مالک + VENDOR-37: مدیرعامل (CEO) — ROLE-CLEANUP-44 | ROLE-DUP-45: لیبل‌های نزدیک «مدیر (فقط مشاهده)»/«فقط مشاهده» متمایز شدند (دو کلید یکتا manager/viewer — کلیدها دست‌نخورده) */
+/* ===== ROLE-DUP-45 (begin): آینهٔ ROLE_VIEW/TAB_MODULE کلاینت (index.html) برای گارد سروری «نقش بی‌ماژول ساختنی نیست» — کلیدها = کلیدهای ROLES_17A (هیچ کلیدی اضافه/حذف نمی‌شود) ===== */
+const TAB_MODULE_45 = { summary: 'summary', analytics: 'analytics', production: 'production', waste: 'production', downtime: 'production', quality: 'quality', genealogy: 'production', balance: 'production', warehouse: 'inventory', maintenance: 'maintenance', planning: 'planning', finance: 'finance', sales: 'sales', purchase: 'purchase' }; /* = TAB_MODULE_15A کلاینت */
+const ROLE_VIEW_45 = {
+    admin: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance', 'sales', 'purchase'],
+    owner: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance', 'sales', 'purchase'],
+    vendor: ['summary', 'analytics', 'production', 'waste', 'downtime', 'quality', 'genealogy', 'balance', 'maintenance', 'warehouse', 'planning', 'finance', 'sales', 'purchase'],
+    manager: ['summary', 'analytics', 'planning', 'finance', 'sales', 'purchase', 'quality'],
+    operator: ['production', 'waste', 'downtime'],
+    supervisor: ['production', 'waste', 'downtime', 'maintenance', 'planning'],
+    planner: ['summary', 'analytics', 'planning'],
+    warehouse: ['warehouse', 'sales', 'purchase', 'quality'],
+    quality: ['quality'], qc: ['quality'],
+    engineering: ['downtime', 'maintenance', 'quality'],
+    finance: ['summary', 'warehouse', 'finance', 'sales', 'purchase'],
+    sales: ['sales'], purchase: ['purchase'],
+}; /* viewer عمداً غایب — fallback ['summary'] مثل applyRoleUI کلاینت */
+/* آیا نقش حداقل یک تبِ قابل‌نمایش دارد؟ (ماژول تب در active_modules tenant باشد و تب در hidden_tabs نباشد) — داینامیک؛ با فعال‌شدن ماژول، نقش خودکار ساختنی می‌شود */
+function roleHasVisibleTab45(role45, cfg45) {
+    const tabs45 = ROLE_VIEW_45[role45] || ['summary'];
+    const mods45 = Array.isArray(cfg45.active_modules) ? cfg45.active_modules : [];
+    const hid45 = Array.isArray(cfg45.hidden_tabs) ? cfg45.hidden_tabs : [];
+    return tabs45.some((t45) => {
+        const m45 = TAB_MODULE_45[t45];
+        return (!m45 || !mods45.length || mods45.indexOf(m45) !== -1) && hid45.indexOf(t45) === -1;
+    });
+}
+/* ===== ROLE-DUP-45 (end) ===== */
 function readUsers17a() {
     /* VENDOR-37: مسیر واحد بارگذاری — سخت‌گیرانه (.enc فقط) + مهاجرت یک‌باره + نرمال‌سازی owner→vendor */
     return auth.loadUsers37();
@@ -1408,6 +1435,9 @@ function appRequestHandler(req, res) {
                 /* ===== ROLE-CLEANUP-44 (begin): «مدیر سامانه» دیگر ساختنی نیست (فقط ساخت؛ sessionهای قدیمی admin نمی‌شکنند — fallback SEC-LIC-24 دست‌نخورده) ===== */
                 if (role17a === 'admin') return sendJson(res, { error: 'نقش «مدیر سامانه» برای ساخت کاربر جدید حذف شده است — از نقش‌های عملیاتی استفاده کنید (adminهای موجود در نصب‌های قدیمی همچنان فعال می‌مانند).', code: 'ROLE_RETIRED' }, 400);
                 /* ===== ROLE-CLEANUP-44 (end) ===== */
+                /* ===== ROLE-DUP-45 (begin): نقشِ بی‌ماژول ساختنی نیست — (ROLE_VIEW ∩ ماژول‌های فعال tenant − hidden_tabs) = ∅ ⇒ 400 — داینامیک؛ sessionهای موجود قدیمی نمی‌شکنند ===== */
+                if (!roleHasVisibleTab45(role17a, loadTenant15a())) return sendJson(res, { error: 'نقش «' + (ROLE_FA_17A[role17a] || role17a) + '» در لایسنسِ فعلی ماژولِ فعالی ندارد — ابتدا ماژول‌های مربوط را فعال یا hidden_tabs را کاهش دهید.', code: 'ROLE_NO_MODS' }, 400);
+                /* ===== ROLE-DUP-45 (end) ===== */
                 if (vendorRole37(role17a) && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «مدیرعامل (CEO)" فقط توسط خودِ مدیرعامل مجاز است.', code: 'OWNER_ONLY' }, 403); /* SEC-LIC-24 + VENDOR-37 */
                 if (role17a === 'admin' && !isOwnerReq24(req)) return sendJson(res, { error: 'ایجاد کاربر «admin» فقط توسط مدیرعامل (CEO) (vendor) مجاز است — admin نمی‌تواند admin بسازد.', code: 'VENDOR_ONLY' }, 403); /* VENDOR-37: ساخت admin فقط مدیرعامل (CEO) */
                 const polErr18p = auth.passwordPolicyError18P(password17a, username17a); /* HARDEN-18P: حداقل ۸ + پیچیدگی */
@@ -1475,6 +1505,9 @@ function appRequestHandler(req, res) {
                             const admins17a = users17a.filter((x) => x.role === 'admin' && x.active !== false).length;
                             if (admins17a <= 1) return sendJson(res, { error: 'حداقل یک مدیر فعال باید باقی بماند.' }, 400);
                         }
+                        /* ===== ROLE-DUP-45 (begin): تغییر نقش به نقشِ بی‌ماژول ممنوع — فقط وقتی نقش عوض می‌شود؛ ویرایش معمولی کاربران قدیمی با همان نقش سالم می‌ماند ===== */
+                        if (!roleHasVisibleTab45(role17a, loadTenant15a())) return sendJson(res, { error: 'نقش «' + (ROLE_FA_17A[role17a] || role17a) + '» در لایسنسِ فعلی ماژولِ فعالی ندارد — تغییر نقش به آن ممکن نیست.', code: 'ROLE_NO_MODS' }, 400);
+                        /* ===== ROLE-DUP-45 (end) ===== */
                         /* سقف نقش مقصد (فقط کاربران فعال شمرده می‌شوند) */
                         const capDst17a = Number((loadTenant15a().role_caps || {})[role17a]) || 0;
                         if (capDst17a > 0 && u17a.active !== false) {
