@@ -7543,7 +7543,7 @@ live.inventory_reservations.splice(idx, 1);
             /* QC-EDITABLE-43: مستر پارامترها + رنج‌ها — خواندن برای همهٔ نقش‌های QC_READ، نوشتن با endpointهای جدا */
             items: live.qc_master_43 || [], ranges: live.qc_master_rng_43 || [],
             bom_ref: (live.fin_bom || []).map((b) => ({ size: b.size, std_cost: finStdCostPerTon(b, live.fin_config || {}) })),
-            receipts_ref: (live.purchase_receipts || []).slice(0, 80).map((r) => ({ receipt_no: r.receipt_no, po_no: r.po_no, supplier_name: r.supplier_name, status: r.status, lines: (r.lines || []).map((l, i) => ({ i: i, kind: l.kind, item_name: l.item_name, heat_number: l.heat_number || '', qty: l.qty })), has_test: (live.qc_incoming_24 || []).some((t) => t.receipt_no === r.receipt_no) })),
+            receipts_ref: (live.purchase_receipts || []).slice(0, 80).map((r) => ({ receipt_no: r.receipt_no, po_no: r.po_no, supplier_name: r.supplier_name, status: r.status, lines: (r.lines || []).map((l, i) => ({ i: i, kind: l.kind, item_name: l.item_name, heat_number: l.heat_number || '', qty: l.qty, size: Number(l.size) || 0 })), has_test: (live.qc_incoming_24 || []).some((t) => t.receipt_no === r.receipt_no) })), /* QC-POLISH-47: +size خط رسید — hint رنج per سایز واقعی در فرم آزمون (فقط READ؛ مصرف‌کنندهٔ قبلی بی‌اثر) */
             kpi: kpi24a,
         });
     }
