@@ -877,7 +877,7 @@ function moduleForPath15a(pathname) {
     if (pathname === '/api/summary' || pathname.indexOf('/api/summary/') === 0) return 'summary';
     const PROD_15A = ['/api/production', '/api/waste', '/api/bundles', '/api/billets', '/api/downtime', '/api/genealogy', '/api/balance'];
     for (let i = 0; i < PROD_15A.length; i++) if (pathname === PROD_15A[i] || pathname.indexOf(PROD_15A[i] + '/') === 0) return 'production';
-    const ENTRY_15A = { '/api/entry/production': 'production', '/api/entry/waste': 'production', '/api/entry/downtime': 'production', '/api/entry/quality': 'quality', '/api/entry/maintenance': 'maintenance' };
+    const ENTRY_15A = { '/api/entry/production': 'production', '/api/entry/waste': 'production', '/api/entry/downtime': 'production', '/api/entry/quality': 'quality', '/api/entry/maintenance': 'maintenance', '/api/entry/billets': 'production' }; /* IMPACT-DECIDE-46: +بچ شمش زیر ماژول تولید */
     return ENTRY_15A[pathname] || null;
 }
 // مسیر فایل لوگو فقط داخل PUBLIC_DIR معتبر است (ضد path-traversal)
@@ -1205,6 +1205,11 @@ function appRequestHandler(req, res) {
             brand_colors: c15a.brand_colors || {}, active_modules: c15a.active_modules.slice(),
             demo_mode: !!c15a.demo_mode, /* FIX-UI-19d: حالت دمو — مخفیسازی کامل مالی/فروش/خرید در UI + گیت سرورساید */
             hidden_tabs: (Array.isArray(c15a.hidden_tabs) ? c15a.hidden_tabs : []).slice(), /* GO-LIVE-32: گیت دامنهٔ راه‌اندازی — فقط UI؛ پاس‌ترو سرراست */
+            feature_flags: { /* IMPACT-DECIDE-46: فقط پرچم‌های زیر-قابلیت — کل custom_settings افشا نمی‌شود */
+                qc_direct_incoming: !!(c15a.custom_settings && c15a.custom_settings.qc_direct_incoming === true),
+                billet_batch_entry: !!(c15a.custom_settings && c15a.custom_settings.billet_batch_entry === true),
+                mtc_heat_production: !!(c15a.custom_settings && c15a.custom_settings.mtc_heat_production === true),
+            },
             license: { expired: isLicenseExpired15a(c15a), expires_at: c15a.expires_at || '', invalid: !!(c15a && c15a.__lic_invalid_24) }, /* SEC-LIC-24 */
         } });
     }
@@ -1368,6 +1373,13 @@ function appRequestHandler(req, res) {
                 }
                 /* ===== FIX-ORG-16b (end) ===== */
                 if (b15c.custom_settings && typeof b15c.custom_settings === 'object' && !Array.isArray(b15c.custom_settings)) {
+                    /* ===== IMPACT-DECIDE-46 (begin): سوییچ‌های زیر-قابلیت لایسنس‌محور فقط مدیرعامل (CEO) — همان اولویتِ مطلق hidden_tabs؛ admin مشتری نمی‌تواند خودش قابلیتِ پنهان‌شده را برگرداند ===== */
+                    const FF46 = ['qc_direct_incoming', 'billet_batch_entry', 'mtc_heat_production'];
+                    if (FF46.some((f46) => b15c.custom_settings[f46] !== undefined) && !isOwnerReq24(req)) {
+                        auditLog(req, 'tenant.switch_owner_denied', { fields: FF46.filter((f46) => b15c.custom_settings[f46] !== undefined) });
+                        return sendJson(res, { error: 'تغییر سوییچ‌های زیر-قابلیت (ثبت مستقیم QC / بچ شمش / هیت تولید در MTC) فقط توسط مدیرعامل (CEO) مجاز است.', code: 'OWNER_ONLY' }, 403);
+                    }
+                    /* ===== IMPACT-DECIDE-46 (end) ===== */
                     cfg15c.custom_settings = Object.assign({}, cfg15c.custom_settings, b15c.custom_settings); /* ادغام سطح‌اول — allowed_origins از دست نرود */
                 }
                 if (b15c.logo_clear) {
@@ -1807,6 +1819,38 @@ function appRequestHandler(req, res) {
             } catch (e) {
                 return sendJson(res, { error: 'دادهٔ نامعتبر: ' + (e && e.message ? e.message : e) }, 400);
             }
+        });
+        return;
+    }
+    // ===== IMPACT-DECIDE-46: ثبت بچ شمش از فرم وبِ فعال (حلقهٔ ۴ نقشهٔ اثر) — فقط با سوییچ tenant billet_batch_entry؛ خواننده‌های موجود (میانگین وزن 1949/3312، KPI 4281، بالانس هیت 449) بدون تغییر کار می‌کنند چون رکورد per-شمش با همان فیلدها (heat_number/initial_weight_kg) ساخته می‌شود =====
+    if (req.method === 'POST' && pathname === '/api/entry/billets') {
+        const cs46b = (loadTenant15a() && loadTenant15a().custom_settings) || {};
+        if (cs46b.billet_batch_entry !== true) return sendJson(res, { error: 'ثبت بچ شمش در پیکربندی فعلی غیرفعال است — سوییچ billet_batch_entry در custom_settings tenant خاموش است.', code: 'SWITCH_OFF' }, 403);
+        if (!auth.requireRole(req, ['operator'])) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت بچ شمش فقط برای اپراتور/مدیریت مجاز است.' }, 403);
+        let raw46b = '';
+        req.on('data', (c) => { raw46b += c; if (raw46b.length > 100000) req.destroy(); });
+        req.on('end', () => {
+            try {
+                const b46b = sanitizeInput15b(JSON.parse(raw46b || '{}')) /* SEC-15b */;
+                const heat46b = String(b46b.heat_number || '').trim().slice(0, 40);
+                const unit46b = Number(b46b.unit_weight_kg);
+                const cnt46b = Math.max(1, Math.min(200, Math.round(Number(b46b.count) || 1)));
+                if (!heat46b) return sendJson(res, { error: 'کد هیت (Heat Number) برای بچ شمش الزامی است.' }, 400);
+                if (!Number.isFinite(unit46b) || unit46b <= 0 || unit46b > 500) return sendJson(res, { error: 'وزن هر شمش (کیلوگرم) باید عددی بین ۰٫۱ و ۵۰۰ باشد.' }, 400);
+                const live = readLive();
+                live.billets = Array.isArray(live.billets) ? live.billets : [];
+                const batch46b = 'web-b46-' + Date.now().toString(36);
+                const by46b = String((req.user && (req.user.name || req.user.username)) || '');
+                const now46b = new Date().toISOString();
+                for (let i = 0; i < cnt46b; i++) {
+                    live.billets.push({ id: batch46b + '-' + i, heat_number: heat46b, initial_weight_kg: Math.round(unit46b * 1000) / 1000, source: 'web', batch_id: batch46b, timestamp: now46b }); /* رکورد per-شمش — خواننده‌های موجود بدون تغییر */
+                }
+                live.generated_at = now46b;
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ بچ شمش انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'production.billet_batch', { heat: heat46b, unit_weight_kg: unit46b, count: cnt46b, total_kg: Math.round(unit46b * cnt46b * 1000) / 1000 });
+                return sendJson(res, { ok: true, added: cnt46b, total_kg: Math.round(unit46b * cnt46b * 1000) / 1000, batch_id: batch46b }, 201);
+            } catch (e46b) { return sendJson(res, { error: 'ثبت بچ شمش ناموفق: ' + ((e46b && e46b.message) || e46b) }, 400); }
         });
         return;
     }
@@ -5831,6 +5875,19 @@ live.inventory_reservations.splice(idx, 1);
     function qcHeatsOfSize24b(live, size) {
         const set = new Set();
         (live.rebar_bundles || []).forEach((b) => { if (b && String(b.rebar_size) === String(size) && b.heat_number) set.add(String(b.heat_number)); });
+        /* ===== IMPACT-DECIDE-46 (begin): سوییچ tenant mtc_heat_production — هیتِ ثبت‌شدهٔ تولید (production_logs) هم منبع هیت MTC/گارد حواله؛ حلقهٔ ۳ نقشهٔ اثر — تولید heat_number را از قبل می‌نویسد (server.js:4089) و این فقط خواندنِ معادل را اضافه می‌کند؛ بدون سوییچ رفتار سابق بایت‌به‌بایت ===== */
+        try {
+            const cs46 = (loadTenant15a() && loadTenant15a().custom_settings) || {};
+            if (cs46.mtc_heat_production === true) {
+                const sz46 = Number(size) || 0;
+                (live.production_logs || []).forEach((p) => {
+                    if (!p || !p.heat_number) return;
+                    const m46 = /^RB-(\d+)$/.exec(String(p.product_id || '')); /* همان الگوی استخراج سایز در 1849/1880/3250 */
+                    if (m46 && sz46 > 0 && Number(m46[1]) === sz46) set.add(String(p.heat_number));
+                });
+            }
+        } catch (e46a) { /* بی‌ضرر — بدون سوییچ رفتار سابق */ }
+        /* ===== IMPACT-DECIDE-46 (end) ===== */
         return set;
     }
     /* آیا برای این سایز NCR بازِ مسدودکننده وجود دارد؟ (Major/Critical یا اقدام رد) */
@@ -7597,15 +7654,32 @@ live.inventory_reservations.splice(idx, 1);
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = qcSeedGrades24a(qcEnsure24a(readLive()));
-                const receiptNo = String(b.receipt_no || '').trim().slice(0, 40);
-                const gr = (live.purchase_receipts || []).find((r) => r.receipt_no === receiptNo);
-                if (!gr) return sendJson(res, { error: 'رسید خرید با شماره «' + (receiptNo || '—') + '» یافت نشد — آزمون ورودی باید به رسید خرید (GRN) ارجاع داشته باشد.' }, 404);
+                /* ===== IMPACT-DECIDE-46 (begin): حالت ثبتِ مستقیم بدون GRN — فقط با سوییچ tenant qc_direct_incoming (حلقه‌های ۱+۲ نقشهٔ اثر)؛ زنجیرهٔ رسید خرید/مالی دست‌نخورده — هیچ رکورد رسیدی ساخته/دور زده نمی‌شود؛ دادهٔ معادل (تأمین‌کننده/تناژ/سایز) داخل رکورد آزمون ذخیره می‌شود ===== */
+                const cs46i = (loadTenant15a() && loadTenant15a().custom_settings) || {};
+                const direct46i = cs46i.qc_direct_incoming === true && b.direct === true;
+                /* ===== IMPACT-DECIDE-46 (end) ===== */
+                let receiptNo = String(b.receipt_no || '').trim().slice(0, 40);
+                let gr = null, line = null;
                 const lineIdx = b.line_index == null || b.line_index === '' ? 0 : Math.max(0, Math.round(Number(b.line_index) || 0));
-                const line = (gr.lines || [])[lineIdx];
-                if (!line) return sendJson(res, { error: 'ردیف ' + (lineIdx + 1) + ' در رسید «' + receiptNo + '» وجود ندارد.' }, 400);
-                const heat = String(b.heat_number || line.heat_number || '').trim().slice(0, 40);
+                let sup46 = '', po46 = '', item46 = '', kind46 = '', size46 = 0, qty46 = 0;
+                if (!direct46i) {
+                    gr = (live.purchase_receipts || []).find((r) => r.receipt_no === receiptNo);
+                    if (!gr) return sendJson(res, { error: 'رسید خرید با شماره «' + (receiptNo || '—') + '» یافت نشد — آزمون ورودی باید به رسید خرید (GRN) ارجاع داشته باشد.' }, 404);
+                    line = (gr.lines || [])[lineIdx];
+                    if (!line) return sendJson(res, { error: 'ردیف ' + (lineIdx + 1) + ' در رسید «' + receiptNo + '» وجود ندارد.' }, 400);
+                    sup46 = String(gr.supplier_name || ''); po46 = String(gr.po_no || ''); item46 = String(line.item_name || line.kind || ''); kind46 = String(line.kind || '');
+                    size46 = line.kind === 'rebar' ? (Number(line.size) || 0) : 0; qty46 = Number(line.qty) || 0;
+                } else {
+                    receiptNo = ''; /* IMPACT-DECIDE-46: ثبت مستقیم — هیچ رسیدی ارجاع نمی‌شود؛ شمارهٔ شبح GRN از کلاینت نادیده گرفته می‌شود */
+                    sup46 = String(b.supplier_name || '').trim().slice(0, 80);
+                    if (!sup46) return sendJson(res, { error: 'در ثبت مستقیم، نام تأمین‌کننده الزامی است (بدون رسید خرید GRN).' }, 400);
+                    size46 = Math.min(100, Math.max(0, Math.round(Number(b.size) || 0)));
+                    qty46 = Math.max(0, round2(Number(b.quantity_ton) || 0));
+                    item46 = 'شمش فولاد (ثبت مستقیم)'; kind46 = 'billet';
+                }
+                const heat = String(b.heat_number || (line && line.heat_number) || '').trim().slice(0, 40);
                 if (!heat) return sendJson(res, { error: 'کد هیت (Heat Number) برای آزمون ورودی الزامی است.' }, 400);
-                if ((live.qc_incoming_24 || []).some((t) => t.receipt_no === receiptNo && t.heat_number === heat && t.line_index === lineIdx)) return sendJson(res, { error: 'برای رسید ' + receiptNo + ' و هیت ' + heat + ' قبلاً آزمون ورودی ثبت شده است.' }, 409);
+                if ((live.qc_incoming_24 || []).some((t) => t.receipt_no === receiptNo && t.heat_number === heat && t.line_index === lineIdx)) return sendJson(res, { error: 'برای رسید ' + (receiptNo || 'ثبت مستقیم') + ' و هیت ' + heat + ' قبلاً آزمون ورودی ثبت شده است.' }, 409);
                 const gradeId = String(b.grade_id || '');
                 const grade = (live.qc_grades_24 || []).find((g) => g.id === gradeId);
                 if (!grade) return sendJson(res, { error: 'گرید انتخابی در مستر گرید یافت نشد.' }, 400);
@@ -7616,7 +7690,7 @@ live.inventory_reservations.splice(idx, 1);
                 ['ReH', 'Rm', 'A'].forEach((k) => { if (mech[k] != null && mech[k] !== '') m24a[k] = Number(mech[k]); });
                 m24a.bend = mech.bend === true || mech.bend === 1 || mech.bend === '1';
                 /* ===== QC-EDITABLE-43 (begin): مقادیر داینامیک مستر — فرم از آیتم‌های فعال تغذیه می‌شود ===== */
-                const size43 = line.kind === 'rebar' ? (Number(line.size) || 0) : 0;
+                const size43 = size46;
                 const items43 = qcActiveItems43(live);
                 const v43 = {};
                 ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => { if (c24a[el] != null) v43[el] = c24a[el]; });
@@ -7638,9 +7712,10 @@ live.inventory_reservations.splice(idx, 1);
                     id: 'inc24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                     test_no: qcNextNo24a(live, 'incoming', 'INC'),
                     date_jalali: finIsoToJalali(new Date().toISOString()),
-                    receipt_no: receiptNo, po_no: gr.po_no, supplier_name: gr.supplier_name, line_index: lineIdx,
-                    item_name: line.item_name || line.kind, kind: line.kind || '',
-                    heat_number: heat, size: size43, grade_id: grade.id, grade: grade.name, quantity_ton: Number(line.qty) || 0,
+                    receipt_no: receiptNo, po_no: po46, supplier_name: sup46, line_index: direct46i ? 0 : lineIdx, /* IMPACT-DECIDE-46: در ثبت مستقیم ردیفِ رسید بی‌معناست */
+                    item_name: item46, kind: kind46,
+                    heat_number: heat, size: size46, grade_id: grade.id, grade: grade.name, quantity_ton: qty46,
+                    direct_46: direct46i ? true : undefined, /* IMPACT-DECIDE-46: نشان ثبت مستقیم بدون GRN — برای شفافیت رکورد/گزارش */
                     chem: c24a, mech: m24a, values_43: v43, /* QC-EDITABLE-43: مقادیر per آیتم مستر */
                     method_chem: String(b.method_chem || 'اسپکترومتری').slice(0, 60), method_mech: String(b.method_mech || 'کشش — ISO 6892-1').slice(0, 60),
                     status: 'draft', notes: String(b.notes || '').slice(0, 400),
@@ -7651,7 +7726,7 @@ live.inventory_reservations.splice(idx, 1);
                 live.qc_incoming_24.push(rec);
                 if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ آزمون ورودی انجام نشد.');
                 cache.data = null; cache.at = 0;
-                auditLog(req, 'qcpro.incoming.register', { test_no: rec.test_no, receipt_no: receiptNo, heat: heat, grade: grade.name, overall: rec.eval.overall });
+                auditLog(req, 'qcpro.incoming.register', { test_no: rec.test_no, receipt_no: receiptNo, direct: direct46i ? true : undefined, supplier: direct46i ? sup46 : undefined, heat: heat, grade: grade.name, overall: rec.eval.overall });
                 return sendJson(res, { ok: true, record: Object.assign({}, rec, { eval: rec.eval }) }, 201);
             } catch (e) { return sendJson(res, { error: 'ثبت آزمون ورودی ناموفق: ' + e.message }, 400); }
         }).catch((e) => sendJson(res, { error: e.message }, 500));
