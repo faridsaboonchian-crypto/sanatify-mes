@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 
 <head>
@@ -2324,7 +2324,7 @@
             </div>
             <div class="panel">
                 <h2>⚠️ عدم انطباق (NCR — Non-Conformance Report)</h2>
-                <p class="note">per بچ/کارتن/رسید خرید <!-- POLYMER --> — نوع (فیزیکی/مکانیکی/ابعادی/ظاهری) + شدت (جزئی/عمده/بحرانی) + اقدام اصلاحی (دوباره‌کاری/ارفاق استفاده/رد). NCR بازِ عمده/بحرانی یا با اقدام رد → بندیل/هیت قابل فروش نیست (حواله ۴۰۹ NCR_OPEN). بستن با اقدام «رد» → قرنطینهٔ ردیف‌های فیزیکی + سند خودکار زیان ضایعات (۵۲۰۰۰۱) از موتور واحد مالی.</p>
+                <p class="note">per بچ/کارتن/رسید خرید <!-- POLYMER --> — نوع (فیزیکی/مکانیکی/ابعادی/ظاهری) + شدت (جزئی/عمده/بحرانی) + اقدام اصلاحی (دوباره‌کاری/ارفاق استفاده/رد). NCR بازِ عمده/بحرانی یا با اقدام رد → بچ/کارتن قابل فروش نیست (حواله ۴۰۹ NCR_OPEN). /* POLYMER */ بستن با اقدام «رد» → قرنطینهٔ ردیف‌های فیزیکی + سند خودکار زیان ضایعات (۵۲۰۰۰۱) از موتور واحد مالی.</p>
                 <div class="kpis" id="qcNcrKpis24"></div>
                 <div class="toolbar">
                     <button class="act" id="qcNcrAdd24" style="display:none">➕ ثبت عدم انطباق</button>
@@ -12583,7 +12583,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             kEl.innerHTML = [
                 { l: 'نرخ رد کل (ورودی)', v: (tot ? fa(Math.round(rej * 1000 / tot) / 10) : '۰') + '٪', c: rej ? 'red' : 'green' },
                 { l: 'NCR باز', v: fa((qcRep24.ncr_summary || {}).open || 0), c: (qcRep24.ncr_summary || {}).open ? 'red' : '' },
-                { l: 'MTC صادرشده', v: fa((qcRep24.mtc || []).length) },
+                { l: 'CoA صادرشده', v: fa((qcRep24.coa || qcRep24.mtc || []).length) }, /* POLYMER */
                 { l: 'بچ مسدود', /* POLYMER */ v: fa(((qcRep24.blocked_batches || qcRep24.blocked_heats) || []).length), c: ((qcRep24.blocked_batches || qcRep24.blocked_heats) || []).length ? 'red' : '' },
             ].map((k) => '<div class="kpi"><div class="kl">' + k.l + '</div><div class="kv ' + (k.c || '') + '">' + k.v + '</div></div>').join('');
         }
