@@ -11690,7 +11690,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     /* ارزیابی زندهٔ فرم آزمون ورودی — همان منطق سرور (per عنصر) */
     /* POLYMER */ function qcEvalLocal24(grade, phys, mech, skip43) { /* QC-EDITABLE-43: skip = آیتم‌های کلاسیک غیرفعال مستر */
         const rows = [];
-        ['MFI', 'DENS', 'MOIST'].forEach((el) => {
+        /* POLY-QC-48 */ ['MFI', 'DENS', 'MOIST', 'ASH', 'GF'].forEach((el) => {
             if (skip43 && skip43[el]) return;
             const sp = grade && grade.phys && grade.phys[el];
             const hasSpec = sp && (sp.min != null || sp.max != null);
@@ -11702,7 +11702,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             else if (hasSpec && sp.max != null && val > sp.max) { ok = false; why = 'بیشتر از حداکثر ' + sp.max; }
             rows.push({ label: el, val: val, min: hasSpec ? sp.min : null, max: hasSpec ? sp.max : null, ok: ok, why: why });
         });
-        /* POLYMER */ ['TS', 'IZOD', 'part_w'].forEach((k) => {
+        /* POLY-QC-48 */ ['TS', 'ELONG', 'IZOD', 'SHORE', 'VICAT'].forEach((k) => {
             if (skip43 && skip43[k]) return;
             const sp = grade && grade.mech && grade.mech[k];
             const val = qcNum24(mech[k]);
@@ -11794,8 +11794,8 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         return {
             name: qcEl24('qcGrName24').value.trim(),
             standard: qcEl24('qcGrStd24').value.trim(),
-            phys: { MFI: mm('qcGrMFImin24', 'qcGrMFImax24'), DENS: mm('qcGrDENSmin24', 'qcGrDENSmax24'), MOIST: mx('qcGrMOISTmax24') }, /* POLYMER */
-            mech: { TS: { min: qcNum24(qcEl24('qcGrTS24').value), max: null }, IZOD: { min: qcNum24(qcEl24('qcGrIZOD24').value), max: null } },
+            /* POLY-QC-48 */ phys: { MFI: mm('qcGrMFImin24', 'qcGrMFImax24'), DENS: mm('qcGrDENSmin24', 'qcGrDENSmax24'), MOIST: mx('qcGrMOISTmax24'), ASH: mx('qcGrASHmax24'), GF: mm('qcGrGFmin24', 'qcGrGFmax24') },
+            /* POLY-QC-48 */ mech: { TS: { min: qcNum24(qcEl24('qcGrTS24').value), max: null }, ELONG: { min: qcNum24(qcEl24('qcGrELONG24').value), max: null }, IZOD: { min: qcNum24(qcEl24('qcGrIZOD24').value), max: null }, SHORE: { min: qcNum24(qcEl24('qcGrSHORE24').value), max: null }, VICAT: { min: qcNum24(qcEl24('qcGrVICAT24').value), max: null } },
             notes: qcEl24('qcGrNotes24').value.trim(),
         };
     }
@@ -11913,14 +11913,14 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         const g = qcGradeById24(qcEl24('qcInGrade24') ? qcEl24('qcInGrade24').value : '');
         const box = qcEl24('qcInEval24'); if (!box) return;
         if (!g) { box.textContent = 'برای پیش‌نمایش ارزیابی، گرید را انتخاب کنید.'; return; }
-        /* POLYMER */ const phys = { MFI: qcEl24('qcInMFI24').value, DENS: qcEl24('qcInDENS24').value, MOIST: qcEl24('qcInMOIST24').value };
-        /* POLYMER */ const mech = { TS: qcEl24('qcInTS24').value, IZOD: qcEl24('qcInIZOD24').value, part_w: qcEl24('qcInPartW24') ? qcEl24('qcInPartW24').value : '' };
+        /* POLY-QC-48 */ const phys = { MFI: qcEl24('qcInMFI24').value, DENS: qcEl24('qcInDENS24').value, MOIST: qcEl24('qcInMOIST24').value, ASH: qcEl24('qcInASH24') ? qcEl24('qcInASH24').value : '', GF: qcEl24('qcInGF24') ? qcEl24('qcInGF24').value : '' };
+        /* POLY-QC-48 */ const mech = { TS: qcEl24('qcInTS24').value, ELONG: qcEl24('qcInELONG24') ? qcEl24('qcInELONG24').value : '', IZOD: qcEl24('qcInIZOD24').value, SHORE: qcEl24('qcInSHORE24') ? qcEl24('qcInSHORE24').value : '', VICAT: qcEl24('qcInVICAT24') ? qcEl24('qcInVICAT24').value : '' };
         const ev = qcEvalLocal24(g, phys, mech);
         box.innerHTML = '<b>پیش‌نمایش ارزیابی نسبت به گرید ' + esc(g.name) + ' (' + esc(g.standard || '') + '):</b> ' + (ev.overall === 'pass' ? '<span style="color:#15803d">مطابق ✓</span>' : '<span style="color:#b91c1c">مغایر ✗</span>') + ' — ' + esc(qcEvalText24(ev));
     }
     /* ---------- QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه ---------- */
     const qcOwner43 = () => { try { return isOwner24(); } catch (e43b) { return WEB_ROLE === 'vendor' || WEB_ROLE === 'owner' || !!(WEB_USER && WEB_USER.is_owner); } };
-    /* POLYMER */ const QC_CLASSIC_43 = { MFI: 1, DENS: 1, MOIST: 1, TS: 1, IZOD: 1, part_w: 1 };
+    /* POLY-QC-48 */ const QC_CLASSIC_43 = { MFI: 1, DENS: 1, MOIST: 1, ASH: 1, GF: 1, TS: 1, ELONG: 1, IZOD: 1, SHORE: 1, VICAT: 1 };
     const qcItems43 = () => (qcData24 && qcData24.items) || [];
     const qcRanges43 = () => (qcData24 && qcData24.ranges) || [];
     const qcDynMode43 = () => qcItems43().some((i) => i.active !== false);
@@ -11930,7 +11930,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         let r = qcRanges43().find((x) => x && x.item_key === key && x.grade_id === g.id && x.size != null && Number(x.size) === szN);
         if (!r) r = qcRanges43().find((x) => x && x.item_key === key && x.grade_id === g.id && x.size == null);
         if (r) return { min: r.min == null ? null : Number(r.min), max: r.max == null ? null : Number(r.max), src: 'master' };
-        /* POLYMER */ const kind43 = { MFI: 'phys', DENS: 'phys', MOIST: 'phys', TS: 'mech', IZOD: 'mech', part_w: 'mech' }[key];
+        /* POLY-QC-48 */ const kind43 = { MFI: 'phys', DENS: 'phys', MOIST: 'phys', ASH: 'phys', GF: 'phys', TS: 'mech', ELONG: 'mech', IZOD: 'mech', SHORE: 'mech', VICAT: 'mech' }[key];
         const spec = kind43 && g[kind43] ? g[kind43][key] : null;
         if (spec && (spec.min != null || spec.max != null)) return { min: spec.min == null ? null : Number(spec.min), max: spec.max == null ? null : Number(spec.max), src: 'grade' };
         return null;
@@ -12007,7 +12007,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         const line = rc && rc.lines ? rc.lines[Number(ls ? ls.value : 0) || 0] : null;
         return 0; /* POLYMER: سایز فولادی حذف شد — رنج فقط per گرید */
     }
-    const QC_CAT_FA_47 = { phys: 'فیزیکی', mech: 'مکانیکی', dim: 'ابعادی' }; /* QC-POLISH-47: گروه‌بندی صریح — مرز دسته‌ها در ترتیبِ مستر (بدون جابه‌جایی ترتیب) */
+    /* POLY-QC-48 */ const QC_CAT_FA_47 = { raw: 'مواد اولیه', mech: 'مکانیکی', dim: 'ابعادی/وزنی', vis: 'ظاهری/عملکردی' }; /* QC-POLISH-47: گروه‌بندی صریح */
     function qcRenderDyn43() {
         const box = qcEl24('qcInDyn43'); if (!box) return;
         const dyn = qcDynMode43();
@@ -12037,7 +12037,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         if (!g) { box.textContent = 'برای پیش‌نمایش ارزیابی، گرید را انتخاب کنید.'; return; }
         const v = qcDynCollect43();
         const skip43 = {}; qcItems43().forEach((i) => { if (i.active === false && QC_CLASSIC_43[i.key]) skip43[i.key] = 1; });
-        /* POLYMER */ const ev = qcEvalLocal24(g, { MFI: v.MFI, DENS: v.DENS, MOIST: v.MOIST }, { TS: v.TS, IZOD: v.IZOD, part_w: v.part_w }, skip43);
+        /* POLY-QC-48 */ const ev = qcEvalLocal24(g, { MFI: v.MFI, DENS: v.DENS, MOIST: v.MOIST, ASH: v.ASH, GF: v.GF }, { TS: v.TS, ELONG: v.ELONG, IZOD: v.IZOD, SHORE: v.SHORE, VICAT: v.VICAT }, skip43);
         const rows = ev.rows.slice();
         qcItems43().filter((i) => i.active !== false && !QC_CLASSIC_43[i.key]).forEach((it) => {
             const r = qcRangeFor43(it.key, g.id, (typeof qcInSizeCtx43 === 'function') ? qcInSizeCtx43() : 0); /* QC-POLISH-47: سایز واقعی — پیش‌نمایش = حکم سرور */ if (!r) return;
@@ -12129,8 +12129,8 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             const payload = {
                 receipt_no: qcEl24('qcInRcpt24').value, line_index: qcNum24(qcEl24('qcInLine24').value) || 0,
                 heat_number: qcEl24('qcInHeat24').value.trim(), grade_id: qcEl24('qcInGrade24').value,
-                /* POLYMER */ phys: { MFI: gval43('MFI'), DENS: gval43('DENS'), MOIST: gval43('MOIST') },
-                /* POLYMER */ mech: { TS: gval43('TS'), IZOD: gval43('IZOD'), part_w: gval43('part_w') },
+                /* POLY-QC-48 */ phys: { MFI: gval43('MFI'), DENS: gval43('DENS'), MOIST: gval43('MOIST'), ASH: gval43('ASH'), GF: gval43('GF') },
+                /* POLY-QC-48 */ mech: { TS: gval43('TS'), ELONG: gval43('ELONG'), IZOD: gval43('IZOD'), SHORE: gval43('SHORE'), VICAT: gval43('VICAT') },
                 values: dyn43 ? v43 : undefined, /* QC-EDITABLE-43: مقادیر per آیتم مستر */
                 notes: qcEl24('qcInNotes24').value.trim(),
                 direct46_field: undefined, /* IMPACT-DECIDE-46: در حالت مستقیم payload.direct=true زیر ست می‌شود */
@@ -12192,11 +12192,11 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
         on('qcGrXls24', 'click', () => {
             const rows = [];
             (((qcData24 && qcData24.grades) || [])).forEach((g) => {
-                /* POLYMER */ ['MFI', 'DENS', 'MOIST'].forEach((el) => {
+                /* POLY-QC-48 */ ['MFI', 'DENS', 'MOIST', 'ASH', 'GF'].forEach((el) => {
                     const sp = g.phys && g.phys[el]; if (!sp || (sp.min == null && sp.max == null)) return;
                     rows.push({ grade: g.name, std: g.standard, kind: 'فیزیکی', el: el, min: sp.min == null ? '' : sp.min, max: sp.max == null ? '' : sp.max, active: g.active !== false ? 'فعال' : 'غیرفعال' });
                 });
-                /* POLYMER */ ['TS', 'IZOD', 'part_w'].forEach((k) => {
+                /* POLY-QC-48 */ ['TS', 'ELONG', 'IZOD', 'SHORE', 'VICAT'].forEach((k) => {
                     const sp = g.mech && g.mech[k]; if (!sp || (sp.min == null && sp.max == null)) return;
                     rows.push({ grade: g.name, std: g.standard, kind: 'مکانیکی', el: k, min: sp.min == null ? '' : sp.min, max: sp.max == null ? '' : sp.max, active: g.active !== false ? 'فعال' : 'غیرفعال' });
                 });
