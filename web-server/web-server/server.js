@@ -1780,33 +1780,26 @@ function appRequestHandler(req, res) {
         req.on('end', () => {
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}')) /* SEC-15b */;
+                /* POLYMER: رکورد QC تزریق پلاستیک */
+                const funcTq = Number(b.function_test);
                 const rec = {
                     id: 'web-q-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
                     heat_number: String(b.heat_number || '').trim(),
-                    rebar_size: Number(b.rebar_size) || 0,
-                    yield_strength: Number(b.yield_strength) || 0,
-                    tensile_strength: Number(b.tensile_strength) || 0,
-                    elongation_percent: Number(b.elongation_percent) || 0,
-                    /* ===== FEAT-QC-3 (begin): فیلدهای اختیاری دستگاه تست کشش — سازگار با رکوردهای قدیمی ===== */
-                    sample_length_mm: Number(b.sample_length_mm) || 0,
-                    sample_weight_g: Number(b.sample_weight_g) || 0,
-                    nominal_diameter_mm: Number(b.nominal_diameter_mm) || 0,
-                    section_area_mm2: Number(b.section_area_mm2) || 0,
-                    yield_kgf: Number(b.yield_kgf) || 0,
-                    kg_per_m: Number(b.kg_per_m) || 0,
-                    rib_diameter_mm: Number(b.rib_diameter_mm) || 0,
-                    rib_height_mm: Number(b.rib_height_mm) || 0,
-                    nafi_diameter_mm: Number(b.nafi_diameter_mm) || 0, /* ===== FIX-QC-3b: قطر اندازه‌گیری‌شدهٔ نافی — فیلد اختیاری additive ===== */
-                    ratio_rm_reh: Number(b.ratio_rm_reh) || 0,
-                    /* ===== FEAT-QC-3 (end) ===== */
-                    bend_test_passed: Number(b.bend_test_passed) ? 1 : 0,
+                    product_id: String(b.product_id || '').trim(),
+                    machine_id: String(b.machine_id || '').trim(),
+                    shift_id: String(b.shift_id || '').trim(),
+                    part_weight_g: Number(b.part_weight_g) || 0,
+                    dim_check_passed: Number(b.dim_check_passed) ? 1 : 0,
                     visual_inspection: Number(b.visual_inspection) ? 1 : 0,
+                    visual_defect: String(b.visual_defect || '').trim(),
+                    color_match: Number(b.color_match) ? 1 : 0,
+                    function_test: (funcTq === 1 || funcTq === 0 || funcTq === -1) ? funcTq : -1,
                     operator_id: String(b.operator_id || (req.user && req.user.username) || '').trim(),
                     description: String(b.description || '').slice(0, 500),
                     timestamp: new Date().toISOString(),
                 };
-                if (!rec.heat_number || rec.rebar_size <= 0 || rec.yield_strength <= 0 || rec.tensile_strength <= 0) {
-                    return sendJson(res, { error: 'کد هیت، سایز میلگرد، ReH (تنش تسلیم) و Rm (مقاومت کششی) الزامی است.' }, 400);
+                if (!rec.heat_number || !rec.product_id || !rec.machine_id) {
+                    return sendJson(res, { error: 'کد بچ مواد، قطعه و دستگاه تزریق الزامی است.' }, 400);
                 }
                 const live = readLive();
                 live.quality_inspections = Array.isArray(live.quality_inspections) ? live.quality_inspections : [];
@@ -3338,13 +3331,16 @@ function appRequestHandler(req, res) {
         (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => { const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return; wasteKg += wasteKgOf26a(w); }); /* FIX-WASTE-26a: تناژ وزنی — legacy حذف از جمع */
         let prodKg = 0; Object.keys(sizes).forEach((k) => { prodKg += sizes[k].kg; });
         const wastePct = (prodKg + wasteKg) > 0 ? Math.min(20, wasteKg / (prodKg + wasteKg) * 100) : 3;
-        /* پذیرش QC (آستانه‌های A3: ReH≥400 / Rm≥600 / A≥14) */
+        /* پذیرش QC (پلیمر: ابعاد+ظاهری+رنگ+عملکرد؛ فولادی قدیمی: آستانه A3) */
         let qcPass = 0, qcAll = 0;
         (Array.isArray(live.quality_inspections) ? live.quality_inspections : []).forEach((q) => {
             const t = Date.parse(q.timestamp || ''); if (isNaN(t) || t < d90) return;
             qcAll++;
-            const reh = Number(q.yield_strength) || 0, rm = Number(q.tensile_strength) || 0, a = Number(q.elongation_percent) || 0;
-            if (reh >= 400 && rm >= 600 && a >= 14) qcPass++;
+            /* POLYMER: قبولی = ابعاد + ظاهری + رنگ + عملکرد ردنشده (رکورد فولادی قدیمی: آستانه A3) */
+            let passQ = false;
+            if (q.product_id) { passQ = Number(q.dim_check_passed) === 1 && Number(q.visual_inspection) === 1 && Number(q.color_match) === 1 && Number(q.function_test) !== 0; }
+            else { const reh = Number(q.yield_strength) || 0, rm = Number(q.tensile_strength) || 0, a = Number(q.elongation_percent) || 0; passQ = reh >= 400 && rm >= 600 && a >= 14; }
+            if (passQ) qcPass++;
         });
         const qcPassPct = qcAll ? qcPass / qcAll : 0.95;
         /* الگوی اختلال برق */
