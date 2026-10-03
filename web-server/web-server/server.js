@@ -7950,6 +7950,10 @@ live.inventory_reservations.splice(idx, 1);
                     invoice_no: exit ? (exit.invoice_no || '') : '',
                     customer_id: order.customer_id, customer_name: custName,
                     part: part, grade: gradeName, standard: grade24b ? grade24b.standard : '',
+                    /* POLY-QC-48: سربرگ پلیمری */
+                    drawing_no: String(b.drawing_no || '').trim().slice(0, 40), drawing_rev: String(b.drawing_rev || '').trim().slice(0, 10),
+                    machine_no: String(b.machine_no || '').trim().slice(0, 20), mold_no: String(b.mold_no || '').trim().slice(0, 20),
+                    shift: String(b.shift || '').trim().slice(0, 10),
                     weight_ton: weight, pieces: pieces, date_jalali: dj,
                     is_export: order.is_export === true,
                     batches: batches, tests: tests, test_source: tests[batches[0]] && tests[batches[0]].source,
