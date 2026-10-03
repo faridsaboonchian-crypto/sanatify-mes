@@ -2302,8 +2302,16 @@
                         <label>کد بچ (خالی = بچ‌های اخیر): <input id="qcMtcHeat24" style="width:150px" placeholder="B-1405-…"></label>
                     </div>
                     <div class="frow">
+                        <label>شماره نقشه/قطعه: <input id="qcMtcDraw24" style="width:130px" placeholder="مثلاً CT-200"></label>
+                        <label>ریویژن نقشه: <input id="qcMtcRev24" style="width:70px" placeholder="A"></label>
+                        <label>دستگاه تزریق: <input id="qcMtcMach24" style="width:100px" placeholder="IM-03"></label>
+                        <label>شماره قالب: <input id="qcMtcMold24" style="width:100px" placeholder="M-12"></label>
+                        <label>شیفت: <select id="qcMtcShift24" class="fsel" style="width:90px"><option value="">—</option><option value="1">شیفت ۱</option><option value="2">شیفت ۲</option><option value="3">شیفت ۳</option></select></label>
+                    </div>
+                    <div class="frow">
                         <label style="flex:1">یادداشت: <input id="qcMtcNotes24" placeholder="اختیاری"></label>
                     </div>
+                    <!-- POLY-QC-48: سربرگ پلیمری CoA -->
                     <div id="qcMtcReady24" class="note" style="flex:1 1 100%;margin:2px 0 0"></div>
                     <div class="toolbar">
                         <button class="act" id="qcMtcSave24" style="background:#15803d">صدور گواهی</button>
@@ -12234,7 +12242,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', qcWrapLoader24); else setTimeout(qcWrapLoader24, 0);
 })();
 // ===== FEAT-QC-PRO-24a (end) =====
-// ===== FEAT-QC-PRO-24b (begin): کلاینت MTC + NCR + گزارش‌ها + هشدارهای تب فروش =====
+// ===== FEAT-QC-PRO-24b (begin): کلاینت CoA + NCR + گزارش‌ها + هشدارهای تب فروش /* POLY-QC-48 */ =====
 (function () {
     let qcRep24 = null, qcMtcCurrent24 = null;
     const qe24 = (id) => document.getElementById(id);
@@ -12249,7 +12257,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             qcRenderMtc24(); qcRenderNcr24(); qcRenderReports24(); qcRenderSalesWarn24();
         } catch (e) { qcRenderMtc24(); }
     }
-    /* ---------- MTC ---------- */
+    /* ---------- CoA ---------- */ /* POLY-QC-48 */
     function qcRenderMtc24() {
         const el = qe24('tbl-qc-mtc24'); if (!el) return;
         const rows = (qcRep24 && (qcRep24.coa || qcRep24.mtc)) || []; /* POLYMER */
@@ -12298,7 +12306,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0e7490;padding-bottom:10px">' +
             '<div>' + logo + '</div><div style="text-align:center"><div style="font-size:20px;font-weight:800">گواهی انطباق (Certificate of Analysis)</div><div style="color:#555;font-size:12px">' + esc(m.cert_type || 'CoA — گواهی انطباق') /* POLYMER */ + (m.is_export ? ' — 🌍 صادراتی' : '') + '</div><div style="color:#555;font-size:12px">' + esc(t.name || '') + '</div></div>' +
             '<div style="text-align:left;font-size:12px">شماره گواهی: <b>' + esc(m.coa_no || m.mtc_no) + '</b> <!-- POLYMER --><br>شمارهٔ سفارش: ' + esc(m.order_no || '—') + (m.exit_no ? '<br>حوالهٔ خروج: ' + esc(m.exit_no) : '') + (m.invoice_no ? '<br>فاکتور: ' + esc(m.invoice_no) : '') + '<br>تاریخ: ' + toFaDigits(m.date_jalali || '') + '</div></div>' +
-            '<div style="display:flex;gap:12px;margin-top:12px"><div style="flex:1;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;line-height:1.9"><b>مشخصات محصول:</b><br>قطعه: <b>' + esc(m.part || m.size) + '</b> <!-- POLYMER --> — گرید: <b>' + esc(m.grade) + '</b><br>استاندارد مرجع: ' + esc(m.standard || '—') + '<br>وزن محموله: <b>' + qcTons24(m.weight_ton) + ' تن</b>' + (m.pieces ? ' — ' + fa(m.pieces) + ' بسته' : '') /* POLYMER */ + '<br>بچ (Batch): <b> <!-- POLYMER -->' + esc((heats || []).join('، ')) + '</b><br>مبنای نتایج: ' + esc(m.test_source || '—') + '</div>' +
+            '<div style="display:flex;gap:12px;margin-top:12px"><div style="flex:1;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;line-height:1.9"><b>مشخصات محصول:</b><br>قطعه: <b>' + esc(m.part || m.size) + '</b> <!-- POLY-QC-48 -->' + (m.drawing_no ? ' — نقشه: <b>' + esc(m.drawing_no) + '</b>' + (m.drawing_rev ? ' (Rev ' + esc(m.drawing_rev) + ')' : '') : '') + ' — گرید: <b>' + esc(m.grade) + '</b><br>استاندارد مرجع: ' + esc(m.standard || '—') + '<br>وزن محموله: <b>' + qcTons24(m.weight_ton) + ' تن</b>' + (m.pieces ? ' — ' + fa(m.pieces) + ' بسته' : '') + '<br>بچ/لات: <b>' + esc((heats || []).join('، ')) + '</b>' + (m.machine_no ? ' — دستگاه تزریق: <b>' + esc(m.machine_no) + '</b>' : '') + (m.mold_no ? ' — قالب: <b>' + esc(m.mold_no) + '</b>' : '') + (m.shift ? ' — شیفت: <b>' + esc(m.shift) + '</b>' : '') + '<br>مبنای نتایج: ' + esc(m.test_source || '—') + '</div>' +
             '<div style="width:170px;border:1px solid #cbd5e1;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#555">تأیید آنلاین (QR)</div><div id="mtcQrBox24' + (forPrint ? 'P' : '') + '" style="margin:6px auto"></div><div style="font-size:9.5px;word-break:break-all;direction:ltr;color:#475569">' + esc(vurl) + '</div><div style="font-size:10px;color:#475569;margin-top:4px">اثر انگشت: <span style="direction:ltr">' + esc((m.hash || '').slice(0, 16)) + '</span></div></div></div>' +
             '<div style="font-weight:800;margin:12px 0 4px">۱) خواص فیزیکی رزین <!-- POLYMER --> — ' + esc(m.test_source || '') + '</div>' +
             '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>بچ</th><th>' + Object.keys(elFa) /* POLYMER */.map((k) => k).join('</th><th>') + '</th></tr></thead><tbody>' + chemRows + '</tbody></table>' +
@@ -12526,7 +12534,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             const pw = 210, ph = 297, iw = pw - 16;
             const ih = canvas.height * iw / canvas.width;
             pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 8, 8, iw, Math.min(ih, ph - 16));
-            pdf.save(m.mtc_no + '-MTC.pdf');
+            pdf.save((m.coa_no || m.mtc_no) + '-CoA.pdf'); /* POLY-QC-48 */
             toast('PDF گواهی ' + m.mtc_no + ' ساخته شد.', 'ok');
         } catch (e) {
             alert('ساخت PDF ناموفق بود (' + e.message + '). در شبکهٔ بدون اینترنت از دکمهٔ «چاپ A4» و Save-as-PDF مرورگر استفاده کنید.');
@@ -12655,7 +12663,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
             const exitId = qe24('qcMtcExit24').value;
             if (!exitId) { qcMsg24b('qcMtcMsg24', 'انتخاب حواله الزامی است.', true); return; }
             try {
-                const r = await fetch('/api/qcpro/coa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exit_id: exitId, part: qe24('qcMtcPart24').value, batch_number: qe24('qcMtcHeat24').value.trim(), notes: qe24('qcMtcNotes24').value.trim() }) }); /* POLYMER */
+                /* POLY-QC-48 */ const r = await fetch('/api/qcpro/coa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exit_id: exitId, part: qe24('qcMtcPart24').value, batch_number: qe24('qcMtcHeat24').value.trim(), drawing_no: qe24('qcMtcDraw24').value.trim(), drawing_rev: qe24('qcMtcRev24').value.trim(), machine_no: qe24('qcMtcMach24').value.trim(), mold_no: qe24('qcMtcMold24').value.trim(), shift: qe24('qcMtcShift24').value, notes: qe24('qcMtcNotes24').value.trim() }) });
                 const j = await r.json();
                 if (!r.ok) { qcMsg24b('qcMtcMsg24', j.error || 'خطا', true); return; }
                 toast('گواهی ' + (j.record.coa_no || '') + ' صادر شد.', 'ok'); /* POLYMER */

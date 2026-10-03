@@ -7359,32 +7359,25 @@ live.inventory_reservations.splice(idx, 1);
         return live;
     }
     function qcNextNo24a(live, key, prefix) { live.qc_seq_24[key] = (Number(live.qc_seq_24[key]) || 0) + 1; return prefix + '-' + String(live.qc_seq_24[key]).padStart(5, '0'); }
-    /* POLYMER: گریدهای پیش‌فرض رزین تزریق پلاستیک — idempotent (فقط بار اول؛ _qc_seed_24a) */
-    /* مقادیر حدودی رایج‌اند؛ حتماً با دیتاشیت (TDS) تأمین‌کنندهٔ واقعی به‌روزرسانی شوند */
+    /* POLY-QC-48: گریدهای پلیمری تزریق پلاستیک (بست کمربندی / قطعات IKCO-SAIPA) — idempotent
+       حدود عددی عمداً خالی‌اند؛ از دیتاشیت (TDS) تأمین‌کنندهٔ واقعی پر شوند — هیچ عدد خیالی سید نمی‌شود */
     function qcSeedGrades24a(live) {
         qcEnsure24a(live);
-        if (live._qc_seed_24a) return live;
-        const mk24a = (name, standard, phys, mech, notes) => ({ id: 'gr24-' + String(name).toLowerCase().replace(/[^a-z0-9]/g, ''), name, standard, phys, mech, active: true, notes: notes || '', _seed: true });
+        /* مهاجرت: حذف گریدهای سیدشدهٔ فولادی/قدیمی (فقط _seed:true — دادهٔ کاربر دست‌نخورده) */
+        const STEEL_G = ['A3', 'A4', '5SP', 'B500B', 'A615', 'PP-HP550J', 'PE-HD500', 'ABS-SD150'];
+        live.qc_grades_24 = (live.qc_grades_24 || []).filter((g) => !(g && g._seed && STEEL_G.indexOf(g.name) !== -1));
+        if (live._qc_seed_48a) return live;
+        const mk48 = (name, standard, notes) => ({ id: 'gr48-' + String(name).toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, ''), name, standard, phys: {}, mech: {}, active: true, notes: notes || '', _seed: true });
         live.qc_grades_24.push(
-            mk24a('PP-HP550J', 'ISO 1133 / ISO 527',
-                { MFI: { min: 10, max: 14 }, DENS: { min: 0.895, max: 0.905 }, MOIST: { min: null, max: 0.1 } },
-                { TS: { min: 30, max: null }, IZOD: { min: 2.5, max: null } },
-                'پلی‌پروپیلن هموپلیمر تزریقی — پیش‌فرض؛ با دیتاشیت تأمین‌کننده به‌روزرسانی شود'),
-            mk24a('PE-HD500', 'ISO 1133 / ISO 1183',
-                { MFI: { min: 6, max: 10 }, DENS: { min: 0.945, max: 0.955 }, MOIST: { min: null, max: 0.1 } },
-                { TS: { min: 22, max: null }, IZOD: { min: 6, max: null } },
-                'پلی‌اتیلن سنگین تزریقی — پیش‌فرض؛ با دیتاشیت تأمین‌کننده به‌روزرسانی شود'),
-            mk24a('ABS-SD150', 'ISO 1133 / ISO 180',
-                { MFI: { min: 1.5, max: 3 }, DENS: { min: 1.03, max: 1.05 }, MOIST: { min: null, max: 0.15 } },
-                { TS: { min: 40, max: null }, IZOD: { min: 15, max: null } },
-                'ABS تزریقی — پیش‌فرض؛ با دیتاشیت تأمین‌کننده به‌روزرسانی شود')
+            mk48('PA6', 'ISO 1133 / ISO 527 / ISO 179', 'پلی‌آمید ۶ تزریقی — حدود از TDS تأمین‌کننده'),
+            mk48('PA66', 'ISO 1133 / ISO 527 / ISO 179', 'پلی‌آمید ۶۶ تزریقی — حدود از TDS تأمین‌کننده'),
+            mk48('PP-H', 'ISO 1133 / ISO 527', 'پلی‌پروپیلن هموپلیمر تزریقی — حدود از TDS تأمین‌کننده'),
+            mk48('PP-B', 'ISO 1133 / ISO 527', 'پلی‌پروپیلن بلوک کوپلیمر تزریقی — حدود از TDS تأمین‌کننده'),
+            mk48('POM', 'ISO 1133 / ISO 527', 'پلی‌استال تزریقی — حدود از TDS تأمین‌کننده'),
+            mk48('ABS', 'ISO 1133 / ISO 527', 'ABS تزریقی — حدود از TDS تأمین‌کننده'),
+            mk48('طبق نقشه مشتری (IKCO/SAIPA)', '—', 'گرید طبق نقشه/الزام مشتری — حدود از مستندات مشتری')
         );
-        /* مشخصات فنی پیش‌فرض قطعات تزریقی — وزن‌های نامی نمونه‌اند؛ با نقشهٔ قطعه به‌روزرسانی شوند */
-        const PARTW = { 'INJ-A': 12.5, 'INJ-B': 8.2, 'INJ-C': 25.0 };
-        Object.keys(PARTW).forEach((p) => {
-            live.qc_specs_24.push({ id: 'ps24-' + p.toLowerCase(), part: p, grade: 'PP-HP550J', nominal_weight_g: PARTW[p], tol_weight_percent: { min: -3, max: 3 }, dim_notes: '', active: true, _seed: true });
-        });
-        live._qc_seed_24a = { at: new Date().toISOString() };
+        live._qc_seed_48a = { at: new Date().toISOString() };
         return live;
     }
     /* ===== QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه =====
@@ -7392,20 +7385,46 @@ live.inventory_reservations.splice(idx, 1);
        در live.json (کنار داده، نه هاردکد). seed افزاینده و idempotent — عین ستون‌های
        ثابت فعلی (MFI/DENS/MOIST/TS/IZOD) + یک آیتم ابعادی (وزن قطعه)
        (فقط ثبت مقدار، بدون اثر بر pass/fail). */
-    /* POLYMER: کلیدهای پایهٔ آزمون پلیمر */
-    const QC_CLASSIC_KEYS_43 = { MFI: 'phys', DENS: 'phys', MOIST: 'phys', TS: 'mech', IZOD: 'mech' };
-    const QC_CAT_FA_43 = { phys: 'فیزیکی', mech: 'مکانیکی', dim: 'ابعادی' };
+    /* POLY-QC-48: کلیدهای پایهٔ آزمون پلیمر → بخش مشخصات گرید */
+    const QC_CLASSIC_KEYS_43 = { MFI: 'phys', DENS: 'phys', MOIST: 'phys', ASH: 'phys', GF: 'phys', TS: 'mech', ELONG: 'mech', IZOD: 'mech', SHORE: 'mech', VICAT: 'mech' };
+    const QC_CAT_FA_43 = { raw: 'مواد اولیه', mech: 'مکانیکی', dim: 'ابعادی/وزنی', vis: 'ظاهری/عملکردی' };
+    /* POLY-QC-48: مستر آزمایشگاه پلیمری — ۲۲ آیتم (بست کمربندی / قطعات تزریقی) */
     function qcSeedMaster43(live) {
         qcEnsure24a(live);
-        if (live._qc_seed_43) return live;
-        const mk43 = (key, label, category, unit, sort) => ({ id: 'it43-' + key, key: key, label: label, category: category, unit: unit, active: true, sort: sort, _seed: true });
-        /* POLYMER: آیتم‌های پایهٔ آزمون رزین/قطعهٔ تزریقی */
+        /* مهاجرت: حذف آیتم‌های سیدشدهٔ فولادی/قدیمی (فقط _seed:true) */
+        const STEEL_I = ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N', 'ReH', 'Rm', 'A', 'ratio', 'bend', 'dia_nom', 'kgm', 'MFI', 'DENS', 'MOIST', 'TS', 'IZOD', 'part_w'];
+        live.qc_master_43 = (live.qc_master_43 || []).filter((i) => !(i && i._seed && STEEL_I.indexOf(i.key) !== -1));
+        if (live._qc_seed_48b) return live;
+        const mk48 = (key, label, category, unit, std, sort) => ({ id: 'it48-' + key, key: key, label: label, category: category, unit: unit, std: std || '', active: true, sort: sort, _seed: true });
         live.qc_master_43.push(
-            mk43('MFI', 'شاخص جریان مذاب (MFI)', 'phys', 'g/10min', 1), mk43('DENS', 'چگالی (DENS)', 'phys', 'g/cm³', 2), mk43('MOIST', 'رطوبت (MOIST)', 'phys', '٪', 3),
-            mk43('TS', 'استحکام کششی (TS)', 'mech', 'MPa', 4), mk43('IZOD', 'مقاومت ضربه‌ای (IZOD)', 'mech', 'kJ/m²', 5),
-            mk43('part_w', 'وزن قطعه', 'dim', 'g', 6)
+            /* مواد اولیه */
+            mk48('MFI', 'شاخص جریان مذاب (MFI/MFR)', 'raw', 'g/10min', 'ISO 1133', 1),
+            mk48('DENS', 'چگالی', 'raw', 'g/cm³', 'ISO 1183', 2),
+            mk48('MOIST', 'رطوبت', 'raw', '٪', 'ISO 62', 3),
+            mk48('ASH', 'خاکستر/فیلر', 'raw', '٪', 'ISO 3451', 4),
+            mk48('GF', 'الیاف شیشه', 'raw', '٪', 'ISO 3451', 5),
+            /* مکانیکی */
+            mk48('TS', 'استحکام کششی', 'mech', 'MPa', 'ISO 527', 6),
+            mk48('ELONG', 'ازدیاد طول پارگی', 'mech', '٪', 'ISO 527', 7),
+            mk48('IZOD', 'ضربه شارپی شیاری', 'mech', 'kJ/m²', 'ISO 179', 8),
+            mk48('SHORE', 'سختی', 'mech', 'Shore D', 'ISO 868', 9),
+            mk48('VICAT', 'نقطه ویکات', 'mech', '°C', 'ISO 306', 10),
+            /* ابعادی/وزنی */
+            mk48('DIM_L', 'طول (طبق نقشه)', 'dim', 'mm', 'نقشه', 11),
+            mk48('DIM_W', 'عرض (طبق نقشه)', 'dim', 'mm', 'نقشه', 12),
+            mk48('DIM_T', 'ضخامت (طبق نقشه)', 'dim', 'mm', 'نقشه', 13),
+            mk48('DIM_C', 'بعد بحرانی (طبق نقشه)', 'dim', 'mm', 'نقشه', 14),
+            mk48('PART_W', 'وزن قطعه', 'dim', 'g', 'نقشه', 15),
+            /* ظاهری/عملکردی */
+            mk48('FLASH', 'پلیسه/فلش', 'vis', 'pass/fail', 'چشمی', 16),
+            mk48('SINK', 'ناکامل‌پرشدگی/سینکی', 'vis', 'pass/fail', 'چشمی', 17),
+            mk48('WARP', 'تاب‌برداشتگی', 'vis', 'pass/fail', 'چشمی', 18),
+            mk48('COLOR', 'تطبیق رنگ', 'vis', 'pass/fail', 'چشمی', 19),
+            mk48('CONTAM', 'آلودگی/ذرات سیاه', 'vis', 'pass/fail', 'چشمی', 20),
+            mk48('LOOP_F', 'نیروی کشش حلقه بست کمربندی', 'vis', 'N', 'IEC 62275', 21),
+            mk48('LOCK_F', 'نیروی قفل/باز شدن بست', 'vis', 'N', 'نقشه مشتری', 22)
         );
-        live._qc_seed_43 = { at: new Date().toISOString() };
+        live._qc_seed_48b = { at: new Date().toISOString() };
         return live;
     }
     function qcActiveItems43(live) { return (live.qc_master_43 || []).filter((i) => i && i.active !== false).sort((a, b) => (Number(a.sort) || 99) - (Number(b.sort) || 99)); }
@@ -7436,7 +7455,7 @@ live.inventory_reservations.splice(idx, 1);
             if (val == null || isNaN(val)) { ok = false; why = 'نتیجهٔ آزمون ثبت نشده'; }
             else if (rng.min != null && val < rng.min - 1e-9) { ok = false; why = 'کمتر از حداقل (' + rng.min + ')'; }
             else if (rng.max != null && val > rng.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر (' + rng.max + ')'; }
-            rows.push({ kind: it.category === 'phys' ? 'phys' : (it.category === 'mech' ? 'mech' : 'dim'), el: it.key, label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), val: val, min: rng.min, max: rng.max, ok: ok, why: why });
+            /* POLY-QC-48 */ rows.push({ kind: it.category === 'mech' ? 'mech' : (it.category === 'dim' ? 'dim' : 'phys'), el: it.key, label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), val: val, min: rng.min, max: rng.max, ok: ok, why: why });
         });
         return { rows: rows, overall: rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail' };
     }
@@ -7455,7 +7474,7 @@ live.inventory_reservations.splice(idx, 1);
        (فقط آیتم‌های فعال در نتیجهٔ کلی می‌شمارند)؛ بدون master، رفتار سابق بایت‌به‌بایت. */
     function qcEvalIncoming24a(grade, phys, mech, skip43) {
         const rows = [];
-        /* POLYMER */ const EL_FA_24A = { MFI: 'شاخص جریان مذاب (MFI)', DENS: 'چگالی (DENS)', MOIST: 'رطوبت (MOIST)' };
+        /* POLY-QC-48 */ const EL_FA_24A = { MFI: 'شاخص جریان مذاب (MFI)', DENS: 'چگالی', MOIST: 'رطوبت', ASH: 'خاکستر/فیلر', GF: 'الیاف شیشه' };
         Object.keys(EL_FA_24A).forEach((el) => {
             if (skip43 && skip43[el]) return; /* QC-EDITABLE-43: آیتم غیرفعال مستر */
             const spec = (grade && grade.phys && grade.phys[el]) || null;
@@ -7468,7 +7487,7 @@ live.inventory_reservations.splice(idx, 1);
             else if (hasSpec && spec.max != null && val > spec.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر استاندارد (' + spec.max + ')'; }
             rows.push({ kind: 'phys', el: el, label: EL_FA_24A[el], val: val, min: hasSpec ? spec.min : null, max: hasSpec ? spec.max : null, ok: ok, why: why });
         });
-        /* POLYMER */ const MECH_FA_24A = { TS: 'استحکام کششی TS (MPa)', IZOD: 'مقاومت ضربه‌ای IZOD (kJ/m²)' };
+        /* POLY-QC-48 */ const MECH_FA_24A = { TS: 'استحکام کششی', ELONG: 'ازدیاد طول پارگی', IZOD: 'ضربه شارپی شیاری', SHORE: 'سختی (Shore D)', VICAT: 'نقطه ویکات' };
         Object.keys(MECH_FA_24A).forEach((k) => {
             if (skip43 && skip43[k]) return; /* QC-EDITABLE-43: آیتم غیرفعال مستر */
             const spec = (grade && grade.mech && grade.mech[k]) || null;
@@ -7931,6 +7950,10 @@ live.inventory_reservations.splice(idx, 1);
                     invoice_no: exit ? (exit.invoice_no || '') : '',
                     customer_id: order.customer_id, customer_name: custName,
                     part: part, grade: gradeName, standard: grade24b ? grade24b.standard : '',
+                    /* POLY-QC-48: سربرگ پلیمری */
+                    drawing_no: String(b.drawing_no || '').trim().slice(0, 40), drawing_rev: String(b.drawing_rev || '').trim().slice(0, 10),
+                    machine_no: String(b.machine_no || '').trim().slice(0, 20), mold_no: String(b.mold_no || '').trim().slice(0, 20),
+                    shift: String(b.shift || '').trim().slice(0, 10),
                     weight_ton: weight, pieces: pieces, date_jalali: dj,
                     is_export: order.is_export === true,
                     batches: batches, tests: tests, test_source: tests[batches[0]] && tests[batches[0]].source,
