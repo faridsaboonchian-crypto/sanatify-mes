@@ -4149,6 +4149,11 @@
         const STATION_OPTIONS = Object.entries(STATIONS)
             .map(([v, l]) => '<option value="' + v + '">' + l + '</option>')
             .join('');
+        /* POLYMER: ایستگاه کشف ضایعات — فقط دستگاه‌های تزریق + آزمایشگاه (نه ایستگاه‌های فولادی) */
+        const WASTE_STATION_OPTIONS = ['inj-180t', 'inj-250t', 'inj-400t', 'quality_lab']
+            .filter((v) => STATIONS[v])
+            .map((v) => '<option value="' + v + '">' + STATIONS[v] + '</option>')
+            .join('');
 
         /* ===== FIX-PM-10a: حفظ انتخاب ایستگاه در بازسازی ===== */
         [
@@ -4160,7 +4165,7 @@
             const el = document.getElementById(id);
             if (el) {
                 const keep10a = el.value;
-                el.innerHTML = STATION_OPTIONS;
+                el.innerHTML = (id === 'fwStation') ? WASTE_STATION_OPTIONS : STATION_OPTIONS; /* POLYMER: فرم ضایعات فقط ایستگاه پلیمری */
                 if (keep10a && Array.from(el.options).some((o) => o.value === keep10a)) el.value = keep10a;
             }
         });
