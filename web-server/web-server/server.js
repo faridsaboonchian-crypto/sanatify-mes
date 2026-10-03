@@ -5861,47 +5861,39 @@ live.inventory_reservations.splice(idx, 1);
         return;
     }
 
-    // ===== FEAT-QC-PRO-24b (begin): ثابت‌ها و توابع NCR/MTC — قبل از هندلرهای فروش تا گارد حواله (qcExitBlock24b) بدون TDZ کار کند =====
-    const NCR_TYPE_FA_24B = { chem: 'شیمیایی', mech: 'مکانیکی', dim: 'ابعادی', visual: 'ظاهری' };
+    // ===== FEAT-QC-PRO-24b (begin): ثابت‌ها و توابع NCR/CoA — قبل از هندلرهای فروش تا گارد حواله (qcExitBlock24b) بدون TDZ کار کند ===== /* POLYMER */
+    const NCR_TYPE_FA_24B = { phys: 'فیزیکی', mech: 'مکانیکی', dim: 'ابعادی', visual: 'ظاهری' };
     const NCR_SEV_FA_24B = { minor: 'جزئی (Minor)', major: 'عمده (Major)', critical: 'بحرانی (Critical)' };
     const NCR_ACTION_FA_24B = { rework: 'دوباره‌کاری', concession: 'ارفاق استفاده', rejection: 'رد (Rejection)' };
-    const QC_MTC_W_24B = ['admin', 'qc'];
+    const QC_MTC_W_24B = ['admin', 'qc']; /* POLYMER: نقش صدور CoA */
     const QC_NCR_W_24B = ['admin', 'qc'];
-    /* هیت‌های میلگرد یک سایز از بندیل‌ها — برای گارد حواله */
-    function qcHeatsOfSize24b(live, size) {
+    /* POLYMER: بچ‌های تولید یک قطعه — برای گارد حواله و CoA */
+    /* POLYMER: بچ‌های تولید یک قطعه (از production_logs — heat_number = کد بچ) */
+    function qcBatchesOfPart24b(live, part) {
         const set = new Set();
-        (live.rebar_bundles || []).forEach((b) => { if (b && String(b.rebar_size) === String(size) && b.heat_number) set.add(String(b.heat_number)); });
-        /* ===== IMPACT-DECIDE-46 (begin): سوییچ tenant mtc_heat_production — هیتِ ثبت‌شدهٔ تولید (production_logs) هم منبع هیت MTC/گارد حواله؛ حلقهٔ ۳ نقشهٔ اثر — تولید heat_number را از قبل می‌نویسد (server.js:4089) و این فقط خواندنِ معادل را اضافه می‌کند؛ بدون سوییچ رفتار سابق بایت‌به‌بایت ===== */
-        try {
-            const cs46 = (loadTenant15a() && loadTenant15a().custom_settings) || {};
-            if (cs46.mtc_heat_production === true) {
-                const sz46 = Number(size) || 0;
-                (live.production_logs || []).forEach((p) => {
-                    if (!p || !p.heat_number) return;
-                    const m46 = /^RB-(\d+)$/.exec(String(p.product_id || '')); /* همان الگوی استخراج سایز در 1849/1880/3250 */
-                    if (m46 && sz46 > 0 && Number(m46[1]) === sz46) set.add(String(p.heat_number));
-                });
-            }
-        } catch (e46a) { /* بی‌ضرر — بدون سوییچ رفتار سابق */ }
-        /* ===== IMPACT-DECIDE-46 (end) ===== */
+        (live.production_logs || []).forEach((p) => {
+            if (!p || !p.heat_number) return;
+            if (part && String(p.product_id || '') !== String(part)) return;
+            set.add(String(p.heat_number));
+        });
         return set;
     }
-    /* آیا برای این سایز NCR بازِ مسدودکننده وجود دارد؟ (Major/Critical یا اقدام رد) */
-    function qcExitBlock24b(live, size) {
-        const heats = qcHeatsOfSize24b(live, size);
+    /* آیا برای این بچ‌ها/قطعه NCR بازِ مسدودکننده وجود دارد؟ (Major/Critical یا اقدام رد) */
+    function qcExitBlock24b(live, part, batches) {
         const blocking = (live.qc_ncr_24 || []).filter((n) => n && n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection'));
-        return blocking.find((n) => (n.heat_number && heats.has(String(n.heat_number))) || (!n.heat_number && n.size && String(n.size) === String(size))) || null;
+        return blocking.find((n) => (n.heat_number && batches.has(String(n.heat_number))) || (n.part && part && String(n.part) === String(part)) || null);
     }
-    /* نتایج آزمون یک هیت برای MTC — اولویت: آزمون ورودی تأییدشده ← QC آزمایشگاه (مکانیکی) ← null */
-    function qcTestForHeat24b(live, heat) {
-        const inc = (live.qc_incoming_24 || []).find((t) => t.status === 'approved' && String(t.heat_number) === String(heat));
-        const lab = (live.quality_inspections || []).filter((q) => String(q.heat_number || '') === String(heat)).slice(-1)[0] || null;
+    /* نتایج آزمون یک بچ برای CoA — اولویت: آزمون ورودی تأییدشده ← بازرسی QC تولید ← null */
+    function qcTestForBatch24b(live, batch) {
+        const inc = (live.qc_incoming_24 || []).find((t) => t.status === 'approved' && String(t.heat_number) === String(batch));
+        const lab = (live.quality_inspections || []).filter((q) => String(q.heat_number || '') === String(batch)).slice(-1)[0] || null;
         return {
-            chem: inc ? inc.chem : null,
-            mech: inc ? inc.mech : (lab ? { ReH: Number(lab.yield_strength) || 0, Rm: Number(lab.tensile_strength) || 0, A: Number(lab.elongation_percent) || 0, bend: !!Number(lab.bend_test_passed) } : null),
-            source: inc ? 'آزمون ورودی تأییدشده (اسپکترومتری/کشش)' : (lab ? 'آزمایشگاه QC تولید' : ''),
+            phys: inc ? inc.phys : null,
+            mech: inc ? inc.mech : null,
+            lab: lab ? { dim: Number(lab.dim_check_passed) || 0, visual: Number(lab.visual_inspection) || 0, color: Number(lab.color_match) || 0, func: Number(lab.function_test), weight_g: Number(lab.part_weight_g) || 0 } : null,
+            source: inc ? 'آزمون ورودی تأییدشده (MFI/فیزیکی)' : (lab ? 'بازرسی QC تولید' : ''),
             inc_test_no: inc ? inc.test_no : '',
-            values_43: inc ? (inc.values_43 || null) : null, /* QC-EDITABLE-43: مقادیر آیتم‌های مستر برای MTC */
+            values_43: inc ? (inc.values_43 || null) : null, /* QC-EDITABLE-43: مقادیر آیتم‌های مستر برای CoA */
         };
     }
     // ===== FEAT-QC-PRO-24b (helpers end) =====
@@ -5947,7 +5939,7 @@ live.inventory_reservations.splice(idx, 1);
                     customer_id: cust.id, customer_name: cust.name,
                     items: items, date_jalali: dj, due_date_jalali: ddj,
                     vat_rate: vatRate, status: 'draft', notes: String(b.notes || '').trim().slice(0, 300),
-                    is_export: b.is_export === true, /* FEAT-QC-PRO-24b: سفارش صادراتی — صدور MTC الزامی می‌شود (EN 10204 3.1) */
+                    is_export: b.is_export === true, /* FEAT-QC-PRO-24b: سفارش صادراتی — صدور CoA الزامی می‌شود (POLYMER) */
                     created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString(),
                     confirmed_at: null, cancelled_at: null,
                 };
@@ -6043,9 +6035,9 @@ live.inventory_reservations.splice(idx, 1);
                 const size = String(b.size || '').trim();
                 const line = (order.items || []).find((it) => String(it.size) === size);
                 if (!line) return sendJson(res, { error: 'سایز «' + size + '» در اقلام این سفارش نیست.' }, 400);
-                /* ===== FEAT-QC-PRO-24b (begin): گارد عدم انطباق باز (NCR) — بندیل/هیت دارای NCR باز (Major/Critical یا اقدام رد) حواله نمی‌شود ===== */
-                const ncrHit24b = qcExitBlock24b(live, size);
-                if (ncrHit24b) return sendJson(res, { error: 'حواله مجاز نیست: عدم انطباق باز (NCR ' + ncrHit24b.ncr_no + ' — ' + (NCR_SEV_FA_24B[ncrHit24b.severity] || ncrHit24b.severity) + ') روی ' + (ncrHit24b.heat_number ? 'هیت ' + ncrHit24b.heat_number : 'سایز ' + (ncrHit24b.size || size)) + ' ثبت شده است — ابتدا در کنترل کیفیت (QC-PRO) بسته شود.', code: 'NCR_OPEN', ncr_no: ncrHit24b.ncr_no }, 409);
+                /* ===== FEAT-QC-PRO-24b (begin): گارد عدم انطباق باز (NCR) — بچ/قطعه دارای NCR باز (Major/Critical یا اقدام رد) حواله نمی‌شود (POLYMER) ===== */
+                const ncrHit24b = qcExitBlock24b(live, size, qcBatchesOfPart24b(live, size));
+                if (ncrHit24b) return sendJson(res, { error: 'حواله مجاز نیست: عدم انطباق باز (NCR ' + ncrHit24b.ncr_no + ' — ' + (NCR_SEV_FA_24B[ncrHit24b.severity] || ncrHit24b.severity) + ') روی ' + (ncrHit24b.heat_number ? 'بچ ' + ncrHit24b.heat_number : 'قطعه ' + (ncrHit24b.part || size)) + ' ثبت شده است — ابتدا در کنترل کیفیت بسته شود.' /* POLYMER */, code: 'NCR_OPEN', ncr_no: ncrHit24b.ncr_no }, 409);
                 /* ===== FEAT-QC-PRO-24b (end) ===== */
                 const weight = round2(Number(finDigitsEn(b.weight_ton)) || 0);
                 if (!(weight > 0)) return sendJson(res, { error: 'وزن باسکول باید بزرگ‌تر از صفر باشد (تن).' }, 400);
@@ -6206,9 +6198,9 @@ live.inventory_reservations.splice(idx, 1);
                 /* اقلام فاکتور = حواله‌های واقعی فاکتورنشده (وزن باسکول) */
                 const openExits = (live.sales_exits || []).filter((e) => e.order_id === order.id && !e.invoice_no);
                 if (!openExits.length) return sendJson(res, { error: 'حوالهٔ خروج فاکتورنشده‌ای برای این سفارش نیست — ابتدا حواله ثبت کنید.' }, 409);
-                /* ===== FEAT-QC-PRO-24b: الزام MTC برای سفارش صادراتی (EN 10204 3.1) — فاکتور صادرات بدون گواهی کیفیت صادر نمی‌شود ===== */
-                if (order.is_export && !(live.qc_mtc_24 || []).some((m) => m.order_id === order.id)) {
-                    return sendJson(res, { error: 'سفارش صادراتی است — صدور گواهی کیفیت (MTC) الزامی است. ابتدا از پنل کنترل کیفیت حرفه‌ای، MTC این سفارش/حواله را صادر کنید.', code: 'MTC_REQUIRED' }, 409);
+                /* ===== FEAT-QC-PRO-24b: الزام CoA برای سفارش صادراتی — فاکتور صادرات بدون گواهی انطباق صادر نمی‌شود (POLYMER) ===== */
+                if (order.is_export && !(live.qc_coa_24 || []).some((m) => m.order_id === order.id)) { /* POLYMER */
+                    return sendJson(res, { error: 'سفارش صادراتی است — صدور گواهی انطباق (CoA) الزامی است. ابتدا از پنل کنترل کیفیت، CoA این سفارش/حواله را صادر کنید.', code: 'COA_REQUIRED' }, 409); /* POLYMER */
                 }
                 const bySize = {};
                 openExits.forEach((e) => {
@@ -7347,11 +7339,9 @@ live.inventory_reservations.splice(idx, 1);
     // quality_inspections موجود ساخته شده (بدون هیچ تغییری در آن ماژول) و
     // بدون وابستگی npm جدید. گریدهای پیش‌فرض از استانداردهای رسمی سید
     // می‌شوند و همهٔ مقادیر min/max با CRUD قابل ویرایش‌اند:
-    //   A3 → ISIRI 3132 (ReH≥400 / Rm≥600 / A≥14٪ / P,S≤0.045)
-    //   A4 → ISIRI 8202 (آج500: ReH≥500 / Rm≥650)
-    //   5SP → GOST 5781 A-II (ReH≥392 / Rm≥586 / A≥19٪)
-    //   B500B → DIN 488/EN 10080 (ReH≥500 / Rm/Re≥1.08 / Agt≥5٪)
-    //   A615-Gr60 → ASTM A615 (ReH≥420 / Rm≥620 / C≤0.30 Mn≤1.20)
+    //   PP-HP550J → پلی‌پروپیلن تزریقی (MFI 10-14 / چگالی 0.895-0.905)
+    //   PE-HD500 → پلی‌اتیلن سنگین تزریقی (MFI 6-10 / چگالی 0.945-0.955)
+    //   ABS-SD150 → ABS تزریقی (MFI 1.5-3 / چگالی 1.03-1.05)
     // نقش‌ها: qc ثبت+تأیید؛ warehouse فقط ثبت آزمون؛ engineering مشارکت
     // در گرید/مشخصات؛ manager/finance/sales فقط‌خواندن.
     // ================================================================
@@ -7369,57 +7359,51 @@ live.inventory_reservations.splice(idx, 1);
         return live;
     }
     function qcNextNo24a(live, key, prefix) { live.qc_seq_24[key] = (Number(live.qc_seq_24[key]) || 0) + 1; return prefix + '-' + String(live.qc_seq_24[key]).padStart(5, '0'); }
-    /* گریدهای پیش‌فرض استاندارد — idempotent (فقط بار اول؛ _qc_seed_24a) */
+    /* POLYMER: گریدهای پیش‌فرض رزین تزریق پلاستیک — idempotent (فقط بار اول؛ _qc_seed_24a) */
+    /* مقادیر حدودی رایج‌اند؛ حتماً با دیتاشیت (TDS) تأمین‌کنندهٔ واقعی به‌روزرسانی شوند */
     function qcSeedGrades24a(live) {
         qcEnsure24a(live);
         if (live._qc_seed_24a) return live;
-        const mk24a = (name, standard, chem, mech, diameters, notes) => ({ id: 'gr24-' + String(name).toLowerCase().replace(/[^a-z0-9]/g, ''), name, standard, chem, mech, diameters, active: true, notes: notes || '', _seed: true });
+        const mk24a = (name, standard, phys, mech, notes) => ({ id: 'gr24-' + String(name).toLowerCase().replace(/[^a-z0-9]/g, ''), name, standard, phys, mech, active: true, notes: notes || '', _seed: true });
         live.qc_grades_24.push(
-            mk24a('A3', 'ISIRI 3132',
-                { C: { min: null, max: 0.25 }, Mn: { min: 0.6, max: 1.6 }, Si: { min: 0.1, max: 0.6 }, P: { min: null, max: 0.045 }, S: { min: null, max: 0.045 }, Cu: { min: null, max: 0.4 }, N: { min: null, max: 0.012 } },
-                { ReH: { min: 400, max: null }, Rm: { min: 600, max: null }, A: { min: 14, max: null }, ratio: { min: 1.25, max: null }, bend: 'خمش 3d بدون ترک' },
-                [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32], 'میلگرد آج‌دار 400 — حداقل تسلیم ۴۰۰ و کشش ۶۰۰ مگاپاسکال (ISIRI 3132)'),
-            mk24a('A4', 'ISIRI 8202',
-                { C: { min: null, max: 0.22 }, Mn: { min: 0.7, max: 1.6 }, Si: { min: 0.15, max: 0.6 }, P: { min: null, max: 0.04 }, S: { min: null, max: 0.04 }, Cu: { min: null, max: 0.4 }, N: { min: null, max: 0.012 } },
-                { ReH: { min: 500, max: null }, Rm: { min: 650, max: null }, A: { min: 12, max: null }, ratio: { min: 1.2, max: null }, bend: 'خمش 3d' },
-                [10, 12, 14, 16, 18, 20, 22, 25, 28], 'میلگرد آج 500 (S500) — ISIRI 8202'),
-            mk24a('5SP', 'GOST 5781',
-                { C: { min: null, max: 0.3 }, Mn: { min: 0.5, max: 1.6 }, Si: { min: 0.15, max: 0.8 }, P: { min: null, max: 0.045 }, S: { min: null, max: 0.05 }, Cu: { min: null, max: 0.3 }, N: { min: null, max: 0.012 } },
-                { ReH: { min: 392, max: null }, Rm: { min: 586, max: null }, A: { min: 19, max: null }, ratio: { min: 1.15, max: null }, bend: 'خمش 3d' },
-                [8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 32], 'معادل A-II روسی — رایج بازار ایران'),
-            mk24a('B500B', 'DIN 488 / EN 10080',
-                { C: { min: null, max: 0.22 }, Mn: { min: 0.7, max: 1.6 }, Si: { min: 0.1, max: 0.6 }, P: { min: null, max: 0.04 }, S: { min: null, max: 0.04 }, Cu: { min: null, max: 0.4 }, N: { min: null, max: 0.012 } },
-                { ReH: { min: 500, max: null }, Rm: { min: 540, max: null }, A: { min: 8, max: null }, ratio: { min: 1.08, max: null }, bend: 'خمش و بازخم 3d' },
-                [8, 10, 12, 14, 16, 20, 25, 32], 'شکل‌پذیری بالا — Agt ≥ ۵٪ و نسبت Rm/ReH ≥ 1.08'),
-            mk24a('A615-Gr60', 'ASTM A615',
-                { C: { min: null, max: 0.3 }, Mn: { min: null, max: 1.2 }, Si: { min: null, max: 0.4 }, P: { min: null, max: 0.04 }, S: { min: null, max: 0.05 }, Cu: { min: null, max: 0.35 }, N: { min: null, max: 0.014 } },
-                { ReH: { min: 420, max: null }, Rm: { min: 620, max: null }, A: { min: 7, max: null }, ratio: { min: 1.15, max: null }, bend: 'bend test per ASTM A615' },
-                [10, 12, 14, 16, 18, 20, 22, 25, 28, 32], 'Grade 60 — ReH≥420 MPa (60 ksi)')
+            mk24a('PP-HP550J', 'ISO 1133 / ISO 527',
+                { MFI: { min: 10, max: 14 }, DENS: { min: 0.895, max: 0.905 }, MOIST: { min: null, max: 0.1 } },
+                { TS: { min: 30, max: null }, IZOD: { min: 2.5, max: null } },
+                'پلی‌پروپیلن هموپلیمر تزریقی — پیش‌فرض؛ با دیتاشیت تأمین‌کننده به‌روزرسانی شود'),
+            mk24a('PE-HD500', 'ISO 1133 / ISO 1183',
+                { MFI: { min: 6, max: 10 }, DENS: { min: 0.945, max: 0.955 }, MOIST: { min: null, max: 0.1 } },
+                { TS: { min: 22, max: null }, IZOD: { min: 6, max: null } },
+                'پلی‌اتیلن سنگین تزریقی — پیش‌فرض؛ با دیتاشیت تأمین‌کننده به‌روزرسانی شود'),
+            mk24a('ABS-SD150', 'ISO 1133 / ISO 180',
+                { MFI: { min: 1.5, max: 3 }, DENS: { min: 1.03, max: 1.05 }, MOIST: { min: null, max: 0.15 } },
+                { TS: { min: 40, max: null }, IZOD: { min: 15, max: null } },
+                'ABS تزریقی — پیش‌فرض؛ با دیتاشیت تأمین‌کننده به‌روزرسانی شود')
         );
-        /* مشخصات فنی پیش‌فرض سایزهای رایج A3 — تلرانس جرم طولی ±۴.۵٪ (ISO 6935-2) */
-        const W24A = { 8: 0.395, 10: 0.617, 12: 0.888, 14: 1.21, 16: 1.58, 18: 2.0, 20: 2.47, 22: 2.98, 25: 3.85, 28: 4.83, 32: 6.31 };
-        [10, 12, 14, 16, 18, 20, 22, 25].forEach((s) => {
-            live.qc_specs_24.push({ id: 'ps24-' + s + '-a3', size: s, grade: 'A3', std: 'ISIRI 3132', nominal_weight_kg_m: W24A[s], tol_diameter_mm: { min: -0.4, max: 0.4 }, tol_length_mm: { min: -50, max: 50 }, tol_weight_percent: { min: -4.5, max: 4.5 }, piece_length_m: 12, active: true, _seed: true });
+        /* مشخصات فنی پیش‌فرض قطعات تزریقی — وزن‌های نامی نمونه‌اند؛ با نقشهٔ قطعه به‌روزرسانی شوند */
+        const PARTW = { 'INJ-A': 12.5, 'INJ-B': 8.2, 'INJ-C': 25.0 };
+        Object.keys(PARTW).forEach((p) => {
+            live.qc_specs_24.push({ id: 'ps24-' + p.toLowerCase(), part: p, grade: 'PP-HP550J', nominal_weight_g: PARTW[p], tol_weight_percent: { min: -3, max: 3 }, dim_notes: '', active: true, _seed: true });
         });
         live._qc_seed_24a = { at: new Date().toISOString() };
         return live;
     }
     /* ===== QC-EDITABLE-43 (begin): مستر پارامترهای آزمایشگاه =====
-       آیتم‌ها با دسته (chem=شیمیایی/mech=مکانیکی/dim=ابعادی)، واحد و رنج per گرید×سایز
+       آیتم‌ها با دسته (phys=فیزیکی/mech=مکانیکی/dim=ابعادی)، واحد و رنج per گرید
        در live.json (کنار داده، نه هاردکد). seed افزاینده و idempotent — عین ستون‌های
-       ثابت فعلی (C..N / ReH/Rm/A) تا رفتار موجود حفظ شود + دو آیتم ابعادی بدون رنج
+       ثابت فعلی (MFI/DENS/MOIST/TS/IZOD) + یک آیتم ابعادی (وزن قطعه)
        (فقط ثبت مقدار، بدون اثر بر pass/fail). */
-    const QC_CLASSIC_KEYS_43 = { C: 'chem', Mn: 'chem', Si: 'chem', P: 'chem', S: 'chem', Cu: 'chem', N: 'chem', ReH: 'mech', Rm: 'mech', A: 'mech' };
-    const QC_CAT_FA_43 = { chem: 'شیمیایی', mech: 'مکانیکی', dim: 'ابعادی' };
+    /* POLYMER: کلیدهای پایهٔ آزمون پلیمر */
+    const QC_CLASSIC_KEYS_43 = { MFI: 'phys', DENS: 'phys', MOIST: 'phys', TS: 'mech', IZOD: 'mech' };
+    const QC_CAT_FA_43 = { phys: 'فیزیکی', mech: 'مکانیکی', dim: 'ابعادی' };
     function qcSeedMaster43(live) {
         qcEnsure24a(live);
         if (live._qc_seed_43) return live;
         const mk43 = (key, label, category, unit, sort) => ({ id: 'it43-' + key, key: key, label: label, category: category, unit: unit, active: true, sort: sort, _seed: true });
+        /* POLYMER: آیتم‌های پایهٔ آزمون رزین/قطعهٔ تزریقی */
         live.qc_master_43.push(
-            mk43('C', 'کربن (C)', 'chem', '٪', 1), mk43('Mn', 'منگنز (Mn)', 'chem', '٪', 2), mk43('Si', 'سیلیس (Si)', 'chem', '٪', 3),
-            mk43('P', 'فسفر (P)', 'chem', '٪', 4), mk43('S', 'گوگرد (S)', 'chem', '٪', 5), mk43('Cu', 'مس (Cu)', 'chem', '٪', 6), mk43('N', 'نیتروژن (N)', 'chem', '٪', 7),
-            mk43('ReH', 'تنش تسلیم (ReH)', 'mech', 'MPa', 8), mk43('Rm', 'مقاومت کششی (Rm)', 'mech', 'MPa', 9), mk43('A', 'ازدیاد طول (A)', 'mech', '٪', 10),
-            mk43('dia_nom', 'قطر اسمی بدنه', 'dim', 'mm', 11), mk43('kgm', 'وزن بر متر', 'dim', 'kg/m', 12)
+            mk43('MFI', 'شاخص جریان مذاب (MFI)', 'phys', 'g/10min', 1), mk43('DENS', 'چگالی (DENS)', 'phys', 'g/cm³', 2), mk43('MOIST', 'رطوبت (MOIST)', 'phys', '٪', 3),
+            mk43('TS', 'استحکام کششی (TS)', 'mech', 'MPa', 4), mk43('IZOD', 'مقاومت ضربه‌ای (IZOD)', 'mech', 'kJ/m²', 5),
+            mk43('part_w', 'وزن قطعه', 'dim', 'g', 6)
         );
         live._qc_seed_43 = { at: new Date().toISOString() };
         return live;
@@ -7452,15 +7436,15 @@ live.inventory_reservations.splice(idx, 1);
             if (val == null || isNaN(val)) { ok = false; why = 'نتیجهٔ آزمون ثبت نشده'; }
             else if (rng.min != null && val < rng.min - 1e-9) { ok = false; why = 'کمتر از حداقل (' + rng.min + ')'; }
             else if (rng.max != null && val > rng.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر (' + rng.max + ')'; }
-            rows.push({ kind: it.category === 'chem' ? 'chem' : (it.category === 'mech' ? 'mech' : 'dim'), el: it.key, label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), val: val, min: rng.min, max: rng.max, ok: ok, why: why });
+            rows.push({ kind: it.category === 'phys' ? 'phys' : (it.category === 'mech' ? 'mech' : 'dim'), el: it.key, label: it.label + (it.unit ? ' (' + it.unit + ')' : ''), val: val, min: rng.min, max: rng.max, ok: ok, why: why });
         });
         return { rows: rows, overall: rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail' };
     }
     /* ترکیب ارزیابی کلاسیک + مستر — رکورد بدون values_43 (قدیمی) فقط ارزیابی کلاسیک (سازگاری) */
-    function qcEvalCombined43(live, grade, size, chem, mech, values, hasValues43) {
+    function qcEvalCombined43(live, grade, size, phys, mech, values, hasValues43) {
         const skip43 = {};
         (live.qc_master_43 || []).forEach((i) => { if (i && i.active === false && QC_CLASSIC_KEYS_43[i.key]) skip43[i.key] = 1; });
-        const eb = qcEvalIncoming24a(grade, chem, mech, skip43);
+        const eb = qcEvalIncoming24a(grade, phys, mech, skip43);
         const rows = eb.rows.slice();
         if (hasValues43) rows.push.apply(rows, qcEvalMaster43(live, grade, size, values).rows);
         return { rows: rows, overall: rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail' };
@@ -7469,22 +7453,22 @@ live.inventory_reservations.splice(idx, 1);
     /* ارزیابی per عنصر/ویژگی نسبت به مشخصات گرید — pass/fail با دلیل */
     /* QC-EDITABLE-43: پارامتر اختیاری چهارم skip43 — کلیدهای کلاسیکِ غیرفعال‌شده در مستر را از ارزیابی حذف می‌کند
        (فقط آیتم‌های فعال در نتیجهٔ کلی می‌شمارند)؛ بدون master، رفتار سابق بایت‌به‌بایت. */
-    function qcEvalIncoming24a(grade, chem, mech, skip43) {
+    function qcEvalIncoming24a(grade, phys, mech, skip43) {
         const rows = [];
-        const EL_FA_24A = { C: 'کربن (C)', Mn: 'منگنز (Mn)', Si: 'سیلیس (Si)', P: 'فسفر (P)', S: 'گوگرد (S)', Cu: 'مس (Cu)', N: 'نیتروژن (N)' };
+        /* POLYMER */ const EL_FA_24A = { MFI: 'شاخص جریان مذاب (MFI)', DENS: 'چگالی (DENS)', MOIST: 'رطوبت (MOIST)' };
         Object.keys(EL_FA_24A).forEach((el) => {
             if (skip43 && skip43[el]) return; /* QC-EDITABLE-43: آیتم غیرفعال مستر */
-            const spec = (grade && grade.chem && grade.chem[el]) || null;
+            const spec = (grade && grade.phys && grade.phys[el]) || null;
             const hasSpec = !!(spec && (spec.min != null || spec.max != null));
-            const val = (chem && chem[el] != null && chem[el] !== '') ? Number(chem[el]) : null;
+            const val = (phys && phys[el] != null && phys[el] !== '') ? Number(phys[el]) : null;
             if (!hasSpec && val == null) return;
             let ok = true, why = '';
             if (val == null) { ok = false; why = 'نتیجهٔ آزمون ثبت نشده'; }
             else if (hasSpec && spec.min != null && val < spec.min - 1e-9) { ok = false; why = 'کمتر از حداقل استاندارد (' + spec.min + ')'; }
             else if (hasSpec && spec.max != null && val > spec.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر استاندارد (' + spec.max + ')'; }
-            rows.push({ kind: 'chem', el: el, label: EL_FA_24A[el], val: val, min: hasSpec ? spec.min : null, max: hasSpec ? spec.max : null, ok: ok, why: why });
+            rows.push({ kind: 'phys', el: el, label: EL_FA_24A[el], val: val, min: hasSpec ? spec.min : null, max: hasSpec ? spec.max : null, ok: ok, why: why });
         });
-        const MECH_FA_24A = { ReH: 'تنش تسلیم ReH (MPa)', Rm: 'مقاومت کششی Rm (MPa)', A: 'ازدیاد طول A (٪)' };
+        /* POLYMER */ const MECH_FA_24A = { TS: 'استحکام کششی TS (MPa)', IZOD: 'مقاومت ضربه‌ای IZOD (kJ/m²)' };
         Object.keys(MECH_FA_24A).forEach((k) => {
             if (skip43 && skip43[k]) return; /* QC-EDITABLE-43: آیتم غیرفعال مستر */
             const spec = (grade && grade.mech && grade.mech[k]) || null;
@@ -7496,7 +7480,6 @@ live.inventory_reservations.splice(idx, 1);
             else if (spec && spec.max != null && val > spec.max + 1e-9) { ok = false; why = 'بیشتر از حداکثر استاندارد (' + spec.max + ')'; }
             rows.push({ kind: 'mech', el: k, label: MECH_FA_24A[k], val: val, min: spec ? spec.min : null, max: spec ? spec.max : null, ok: ok, why: why });
         });
-        if (mech && mech.bend != null && mech.bend !== '') rows.push({ kind: 'mech', el: 'bend', label: 'تست خمش', val: mech.bend ? 1 : 0, min: null, max: null, ok: !!mech.bend, why: mech.bend ? '' : 'خمش مغایر (ترک/شکست)' });
         const overall = rows.length && rows.every((r) => r.ok) ? 'pass' : 'fail';
         return { rows: rows, overall: overall };
     }
@@ -7524,7 +7507,7 @@ live.inventory_reservations.splice(idx, 1);
         const incEval = (live.qc_incoming_24 || []).map((t) => {
             const g = (live.qc_grades_24 || []).find((x) => x.id === t.grade_id);
             const gr = (live.purchase_receipts || []).find((r) => r.receipt_no === t.receipt_no);
-            const ev = qcEvalCombined43(live, g, t.size, t.chem, t.mech, t.values_43, !!t.values_43); /* QC-EDITABLE-43: ترکیبی — رکورد قدیمی بدون values_43 = ارزیابی کلاسیک سابق */
+            const ev = qcEvalCombined43(live, g, t.size, t.phys, t.mech, t.values_43, !!t.values_43); /* QC-EDITABLE-43: ترکیبی — رکورد قدیمی بدون values_43 = ارزیابی کلاسیک سابق */
             return Object.assign({}, t, { grade_name: g ? g.name : (t.grade || '—'), grade_std: g ? g.standard : '', supplier_name: gr ? gr.supplier_name : (t.supplier_name || '—'), po_no: gr ? gr.po_no : (t.po_no || ''), eval: ev, status_fa: QC_IN_STATUS_FA_24A[t.status] || t.status });
         });
         const kpi24a = {
@@ -7551,21 +7534,19 @@ live.inventory_reservations.splice(idx, 1);
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = qcSeedGrades24a(qcEnsure24a(readLive()));
                 const name = String(b.name || '').trim().slice(0, 30);
-                if (!name) return sendJson(res, { error: 'نام گرید الزامی است (مثال: A3).' }, 400);
+                if (!name) return sendJson(res, { error: 'نام گرید الزامی است (مثال: PP-HP550J).' }, 400);
                 if ((live.qc_grades_24 || []).some((g) => g.name === name)) return sendJson(res, { error: 'گریدی با نام «' + name + '» قبلاً تعریف شده است — برای تغییر از ویرایش استفاده کنید.' }, 409);
-                const chem = b.chem && typeof b.chem === 'object' ? b.chem : {};
+                const phys = b.phys && typeof b.phys === 'object' ? b.phys : {};
                 const mech = b.mech && typeof b.mech === 'object' ? b.mech : {};
-                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
-                    const sp = chem[el] && typeof chem[el] === 'object' ? chem[el] : {};
-                    chem[el] = { min: sp.min == null || sp.min === '' ? null : Number(sp.min), max: sp.max == null || sp.max === '' ? null : Number(sp.max) };
+                ['MFI', 'DENS', 'MOIST'] /* POLYMER */.forEach((el) => {
+                    const sp = phys[el] && typeof phys[el] === 'object' ? phys[el] : {};
+                    phys[el] = { min: sp.min == null || sp.min === '' ? null : Number(sp.min), max: sp.max == null || sp.max === '' ? null : Number(sp.max) };
                 });
-                ['ReH', 'Rm', 'A', 'ratio'].forEach((k) => {
+                ['TS', 'IZOD'] /* POLYMER */.forEach((k) => {
                     const sp = mech[k] && typeof mech[k] === 'object' ? mech[k] : {};
                     mech[k] = { min: sp.min == null || sp.min === '' ? null : Number(sp.min), max: sp.max == null || sp.max === '' ? null : Number(sp.max) };
                 });
-                mech.bend = String(mech.bend || 'خمش 3d').slice(0, 60);
-                const dias = Array.isArray(b.diameters) ? b.diameters.map((d) => Math.round(Number(d) || 0)).filter((d) => d > 0) : [];
-                const rec = { id: 'gr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name, standard: String(b.standard || '').trim().slice(0, 60) || 'داخلی', chem: chem, mech: mech, diameters: dias, active: b.active === false ? false : true, notes: String(b.notes || '').slice(0, 300), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
+                const rec = { id: 'gr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name, standard: String(b.standard || '').trim().slice(0, 60) || 'داخلی', phys: phys, mech: mech, active: /* POLYMER */ b.active === false ? false : true, notes: String(b.notes || '').slice(0, 300), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
                 live.qc_grades_24.push(rec);
                 if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ گرید انجام نشد.');
                 cache.data = null; cache.at = 0;
@@ -7585,24 +7566,23 @@ live.inventory_reservations.splice(idx, 1);
                 const g = (live.qc_grades_24 || []).find((x) => x.id === String(b.id || ''));
                 if (!g) return sendJson(res, { error: 'گرید یافت نشد.' }, 404);
                 if (b.standard !== undefined) g.standard = String(b.standard || '').trim().slice(0, 60);
-                if (b.chem && typeof b.chem === 'object') {
-                    ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => {
-                        const sp = b.chem[el];
+                if (b.phys && typeof b.phys === 'object') {
+                    ['MFI', 'DENS', 'MOIST'] /* POLYMER */.forEach((el) => {
+                        const sp = b.phys[el];
                         if (!sp || typeof sp !== 'object') return;
-                        g.chem[el] = g.chem[el] || { min: null, max: null };
-                        if (sp.min !== undefined) g.chem[el].min = sp.min == null || sp.min === '' ? null : Number(sp.min);
-                        if (sp.max !== undefined) g.chem[el].max = sp.max == null || sp.max === '' ? null : Number(sp.max);
+                        g.phys[el] = g.phys[el] || { min: null, max: null };
+                        if (sp.min !== undefined) g.phys[el].min = sp.min == null || sp.min === '' ? null : Number(sp.min);
+                        if (sp.max !== undefined) g.phys[el].max = sp.max == null || sp.max === '' ? null : Number(sp.max);
                     });
                 }
                 if (b.mech && typeof b.mech === 'object') {
-                    ['ReH', 'Rm', 'A', 'ratio'].forEach((k) => {
+                    ['TS', 'IZOD'] /* POLYMER */.forEach((k) => {
                         const sp = b.mech[k];
                         if (!sp || typeof sp !== 'object') return;
                         g.mech[k] = g.mech[k] || { min: null, max: null };
                         if (sp.min !== undefined) g.mech[k].min = sp.min == null || sp.min === '' ? null : Number(sp.min);
                         if (sp.max !== undefined) g.mech[k].max = sp.max == null || sp.max === '' ? null : Number(sp.max);
                     });
-                    if (b.mech.bend !== undefined) g.mech.bend = String(b.mech.bend || '').slice(0, 60);
                 }
                 if (b.diameters !== undefined) g.diameters = Array.isArray(b.diameters) ? b.diameters.map((d) => Math.round(Number(d) || 0)).filter((d) => d > 0) : [];
                 if (b.notes !== undefined) g.notes = String(b.notes || '').slice(0, 300);
@@ -7618,26 +7598,27 @@ live.inventory_reservations.splice(idx, 1);
         return;
     }
 
+    /* POLYMER: مشخصات فنی قطعهٔ تزریقی (per قطعه×گرید) */
     if (req.method === 'POST' && pathname === '/api/qcpro/specs') {
         if (!auth.requireRole(req, QC_GRADE_W_24A)) return sendJson(res, { error: 'دسترسی غیرمجاز: مشخصات فنی محصول فقط برای qc/مهندسی/مدیر مجاز است.' }, 403);
         readBody(req).then((raw) => {
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = qcSeedGrades24a(qcEnsure24a(readLive()));
-                const size = Math.round(Number(b.size) || 0);
-                if (!(size >= 6 && size <= 50)) return sendJson(res, { error: 'سایز میلگرد باید بین ۶ تا ۵۰ باشد.' }, 400);
+                const part = String(b.part || '').trim().toUpperCase();
+                if (['INJ-A', 'INJ-B', 'INJ-C'].indexOf(part) === -1) return sendJson(res, { error: 'قطعه معتبر نیست (INJ-A / INJ-B / INJ-C).' }, 400);
                 const grade = String(b.grade || '').trim().slice(0, 30);
                 if (!grade) return sendJson(res, { error: 'گرید الزامی است.' }, 400);
-                const dup = (live.qc_specs_24 || []).find((s) => s.size === size && s.grade === grade && s.active !== false);
-                if (dup && !b.id) return sendJson(res, { error: 'مشخصات فنی سایز ' + size + ' گرید ' + grade + ' قبلاً ثبت شده است.' }, 409);
-                const tolD = b.tol_diameter_mm || {}, tolL = b.tol_length_mm || {}, tolW = b.tol_weight_percent || {};
-                const rec = { id: b.id ? String(b.id) : 'ps24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), size: size, grade: grade, std: String(b.std || '').trim().slice(0, 60) || 'ISIRI 3132', nominal_weight_kg_m: Number(b.nominal_weight_kg_m) || 0, tol_diameter_mm: { min: Number(tolD.min) || 0, max: Number(tolD.max) || 0 }, tol_length_mm: { min: Number(tolL.min) || 0, max: Number(tolL.max) || 0 }, tol_weight_percent: { min: Number(tolW.min) || 0, max: Number(tolW.max) || 0 }, piece_length_m: Number(b.piece_length_m) || 12, active: b.active === false ? false : true, notes: String(b.notes || '').slice(0, 300), updated_by: String((req.user && (req.user.name || req.user.username)) || ''), updated_at: new Date().toISOString() };
-                if (rec.nominal_weight_kg_m <= 0) return sendJson(res, { error: 'وزن نامی بر متر (kg/m) الزامی است.' }, 400);
-                if (dup && b.id === dup.id) live.qc_specs_24 = live.qc_specs_24.map((s) => (s.id === rec.id ? rec : s));
+                const dup = (live.qc_specs_24 || []).find((x) => x.part === part && x.grade === grade && x.active !== false);
+                if (dup && !b.id) return sendJson(res, { error: 'مشخصات فنی قطعه ' + part + ' گرید ' + grade + ' قبلاً ثبت شده است.' }, 409);
+                const tolW = b.tol_weight_percent || {};
+                const rec = { id: b.id ? String(b.id) : 'ps24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), part: part, grade: grade, nominal_weight_g: round2(Number(b.nominal_weight_g) || 0), tol_weight_percent: { min: Number(tolW.min) || 0, max: Number(tolW.max) || 0 }, dim_notes: String(b.dim_notes || '').slice(0, 300), active: b.active === false ? false : true, notes: String(b.notes || '').slice(0, 300), updated_by: String((req.user && (req.user.name || req.user.username)) || ''), updated_at: new Date().toISOString() };
+                if (rec.nominal_weight_g <= 0) return sendJson(res, { error: 'وزن نامی قطعه (g) الزامی است.' }, 400);
+                if (dup && b.id === dup.id) live.qc_specs_24 = live.qc_specs_24.map((x) => (x.id === rec.id ? rec : x));
                 else live.qc_specs_24.push(rec);
                 if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ مشخصات فنی انجام نشد.');
                 cache.data = null; cache.at = 0;
-                auditLog(req, 'qcpro.spec.upsert', { size: size, grade: grade });
+                auditLog(req, 'qcpro.spec.upsert', { part: part, grade: grade });
                 return sendJson(res, { ok: true, record: rec }, 201);
             } catch (e) { return sendJson(res, { error: 'ثبت مشخصات ناموفق: ' + e.message }, 400); }
         }).catch((e) => sendJson(res, { error: e.message }, 500));
@@ -7671,26 +7652,26 @@ live.inventory_reservations.splice(idx, 1);
                     if (!sup46) return sendJson(res, { error: 'در ثبت مستقیم، نام تأمین‌کننده الزامی است (بدون رسید خرید GRN).' }, 400);
                     size46 = Math.min(100, Math.max(0, Math.round(Number(b.size) || 0)));
                     qty46 = Math.max(0, round2(Number(b.quantity_ton) || 0));
-                    item46 = 'شمش فولاد (ثبت مستقیم)'; kind46 = 'billet';
+                    item46 = 'گرانول پلیمری (ثبت مستقیم)'; kind46 = 'resin'; /* POLYMER */
                 }
                 const heat = String(b.heat_number || (line && line.heat_number) || '').trim().slice(0, 40);
-                if (!heat) return sendJson(res, { error: 'کد هیت (Heat Number) برای آزمون ورودی الزامی است.' }, 400);
-                if ((live.qc_incoming_24 || []).some((t) => t.receipt_no === receiptNo && t.heat_number === heat && t.line_index === lineIdx)) return sendJson(res, { error: 'برای رسید ' + (receiptNo || 'ثبت مستقیم') + ' و هیت ' + heat + ' قبلاً آزمون ورودی ثبت شده است.' }, 409);
+                if (!heat) return sendJson(res, { error: 'کد بچ/لات مواد برای آزمون ورودی الزامی است.' }, 400);
+                if ((live.qc_incoming_24 || []).some((t) => t.receipt_no === receiptNo && t.heat_number === heat && t.line_index === lineIdx)) return sendJson(res, { error: 'برای رسید ' + (receiptNo || 'ثبت مستقیم') + ' و بچ ' + heat + ' قبلاً آزمون ورودی ثبت شده است.' }, 409);
                 const gradeId = String(b.grade_id || '');
                 const grade = (live.qc_grades_24 || []).find((g) => g.id === gradeId);
                 if (!grade) return sendJson(res, { error: 'گرید انتخابی در مستر گرید یافت نشد.' }, 400);
-                const chem = b.chem && typeof b.chem === 'object' ? b.chem : {};
+                const phys = b.phys && typeof b.phys === 'object' ? b.phys : {};
                 const mech = b.mech && typeof b.mech === 'object' ? b.mech : {};
                 const c24a = {}, m24a = {};
-                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => { if (chem[el] != null && chem[el] !== '') c24a[el] = Number(chem[el]); });
-                ['ReH', 'Rm', 'A'].forEach((k) => { if (mech[k] != null && mech[k] !== '') m24a[k] = Number(mech[k]); });
+                ['MFI', 'DENS', 'MOIST'] /* POLYMER */.forEach((el) => { if (phys[el] != null && phys[el] !== '') c24a[el] = Number(phys[el]); });
+                ['TS', 'IZOD'] /* POLYMER */.forEach((k) => { if (mech[k] != null && mech[k] !== '') m24a[k] = Number(mech[k]); });
                 m24a.bend = mech.bend === true || mech.bend === 1 || mech.bend === '1';
                 /* ===== QC-EDITABLE-43 (begin): مقادیر داینامیک مستر — فرم از آیتم‌های فعال تغذیه می‌شود ===== */
                 const size43 = size46;
                 const items43 = qcActiveItems43(live);
                 const v43 = {};
-                ['C', 'Mn', 'Si', 'P', 'S', 'Cu', 'N'].forEach((el) => { if (c24a[el] != null) v43[el] = c24a[el]; });
-                ['ReH', 'Rm', 'A'].forEach((k) => { if (m24a[k] != null) v43[k] = m24a[k]; });
+                ['MFI', 'DENS', 'MOIST'] /* POLYMER */.forEach((el) => { if (c24a[el] != null) v43[el] = c24a[el]; });
+                ['TS', 'IZOD'] /* POLYMER */.forEach((k) => { if (m24a[k] != null) v43[k] = m24a[k]; });
                 if (b.values && typeof b.values === 'object') {
                     items43.forEach((it) => {
                         const raw43 = b.values[it.key];
@@ -7699,7 +7680,7 @@ live.inventory_reservations.splice(idx, 1);
                         if (!isFinite(n43)) return;
                         v43[it.key] = n43;
                         const kk43 = QC_CLASSIC_KEYS_43[it.key]; /* آینه به مسیر قدیمی — سازگاری کامل ارزیابی/خوانندگان فعلی */
-                        if (kk43 === 'chem' && c24a[it.key] == null) c24a[it.key] = n43;
+                        if (kk43 === 'phys' && c24a[it.key] == null) c24a[it.key] = n43;
                         if (kk43 === 'mech' && m24a[it.key] == null) m24a[it.key] = n43;
                     });
                 }
@@ -7712,8 +7693,8 @@ live.inventory_reservations.splice(idx, 1);
                     item_name: item46, kind: kind46,
                     heat_number: heat, size: size46, grade_id: grade.id, grade: grade.name, quantity_ton: qty46,
                     direct_46: direct46i ? true : undefined, /* IMPACT-DECIDE-46: نشان ثبت مستقیم بدون GRN — برای شفافیت رکورد/گزارش */
-                    chem: c24a, mech: m24a, values_43: v43, /* QC-EDITABLE-43: مقادیر per آیتم مستر */
-                    method_chem: String(b.method_chem || 'اسپکترومتری').slice(0, 60), method_mech: String(b.method_mech || 'کشش — ISO 6892-1').slice(0, 60),
+                    phys: c24a, mech: m24a, values_43: v43, /* QC-EDITABLE-43: مقادیر per آیتم مستر */
+                    method_phys: String(b.method_phys || 'MFI — ISO 1133' /* POLYMER */).slice(0, 60), method_mech: String(b.method_mech || 'کشش — ISO 527' /* POLYMER */).slice(0, 60),
                     status: 'draft', notes: String(b.notes || '').slice(0, 400),
                     registered_by: String((req.user && (req.user.name || req.user.username)) || ''), registered_at: new Date().toISOString(),
                     decided_by: '', decided_at: null, quarantine_count: 0,
@@ -7775,13 +7756,13 @@ live.inventory_reservations.splice(idx, 1);
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = qcSeedMaster43(qcSeedGrades24a(qcEnsure24a(readLive())));
                 const key = String(b.key || '').trim().toLowerCase();
-                const keyUp43 = key.toUpperCase(); /* کلاسیک‌ها حساس به حروف‌اند (C/Mn/ReH/…) — تطبیق بی‌حساسیت برای گارد */
+                const keyUp43 = key.toUpperCase(); /* POLYMER: کلیدهای پایه (MFI/DENS/…) — تطبیق بی‌حساسیت برای گارد */
                 if (QC_CLASSIC_KEYS_43[key] || QC_CLASSIC_KEYS_43[keyUp43]) return sendJson(res, { error: 'کلید «' + keyUp43 + '» پارامتر پایهٔ سیستم است — برای تغییر آن از ویرایش همان پارامتر استفاده کنید.' }, 409);
                 if (!/^[a-z0-9_]{2,24}$/.test(key)) return sendJson(res, { error: 'کلید پارامتر باید ۲ تا ۲۴ نویسهٔ لاتین کوچک/عدد/زیرخط باشد.' }, 400);
                 if ((live.qc_master_43 || []).some((i) => i.key === key)) return sendJson(res, { error: 'پارامتری با کلید «' + key + '» قبلاً تعریف شده است.' }, 409);
                 const label = String(b.label || '').trim().slice(0, 60);
                 if (!label) return sendJson(res, { error: 'عنوان پارامتر الزامی است.' }, 400);
-                const category = ['chem', 'mech', 'dim'].indexOf(b.category) !== -1 ? b.category : 'dim';
+                const category = ['phys', 'mech', 'dim'].indexOf(b.category) !== -1 ? b.category : 'dim';
                 const rec = { id: 'it43-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), key: key, label: label, category: category, unit: String(b.unit || '').trim().slice(0, 20), active: b.active === false ? false : true, sort: Number(b.sort) || 90, notes: String(b.notes || '').slice(0, 200), created_by: String((req.user && (req.user.name || req.user.username)) || ''), created_at: new Date().toISOString() };
                 live.qc_master_43.push(rec);
                 if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ پارامتر انجام نشد.');
@@ -7802,7 +7783,7 @@ live.inventory_reservations.splice(idx, 1);
                 if (!it) return sendJson(res, { error: 'پارامتر یافت نشد.' }, 404);
                 if (b.label !== undefined) { const l = String(b.label).trim().slice(0, 60); if (!l) return sendJson(res, { error: 'عنوان پارامتر نمی‌تواند خالی باشد.' }, 400); it.label = l; }
                 if (b.unit !== undefined) it.unit = String(b.unit || '').trim().slice(0, 20); /* تغییر واحد — بدون migration */
-                if (b.category !== undefined && ['chem', 'mech', 'dim'].indexOf(b.category) !== -1 && !QC_CLASSIC_KEYS_43[it.key]) it.category = b.category;
+                if (b.category !== undefined && ['phys', 'mech', 'dim'].indexOf(b.category) !== -1 && !QC_CLASSIC_KEYS_43[it.key]) it.category = b.category;
                 if (b.active !== undefined) it.active = !!b.active; /* فعال/غیرفعال — غیرفعال از فرم و ارزیابی حذف می‌شود */
                 if (b.sort !== undefined) it.sort = Number(b.sort) || 90;
                 if (b.notes !== undefined) it.notes = String(b.notes || '').slice(0, 200);
@@ -7878,104 +7859,108 @@ live.inventory_reservations.splice(idx, 1);
     // ===== FEAT-QC-PRO-24a (end) =====
 
     // ================================================================
-    // ===== FEAT-QC-PRO-24b (begin): گواهی کیفیت (MTC طبق EN 10204 3.1)
+    // ===== FEAT-QC-PRO-24b (begin): گواهی انطباق (CoA) /* POLYMER */
     // + عدم انطباق (NCR) + گزارش‌های QC. کاملاً افزاینده — finPostDoc فقط
     // «فراخوانی» می‌شود (source «qc_ncr» — همان موتور واحد و idempotent).
-    // MTC: per حوالهٔ فروش/سفارش — Heat Number + آنالیز شیمیایی + مکانیکی
+    // CoA: per حوالهٔ فروش/سفارش — بچ تولید + نتایج آزمون /* POLYMER */
     // + VID تأیید آنلاین (GET عمومی /api/qcpro/mtc/verify/:vid با حداقل داده).
-    // الزام صادرات: سفارش صادراتی بدون MTC → فاکتور ۴۰۹ MTC_REQUIRED.
-    // NCR: بندیل/هیت/رسید با NCR باز (Major/Critical یا Rejection) → حواله ۴۰۹.
+    // الزام صادرات: سفارش صادراتی بدون CoA → فاکتور ۴۰۹ COA_REQUIRED. /* POLYMER */
+    // NCR: بچ/کارتن/رسید با NCR باز (Major/Critical یا Rejection) → حواله ۴۰۹. /* POLYMER */
     // بستن NCR با اقدام رد → قرنطینه + سند زیان ضایعات (۵۲۰۰۰۱/۱۱۰xxx).
     // ================================================================
     function qcEnsure24b(live) {
-        live.qc_mtc_24 = Array.isArray(live.qc_mtc_24) ? live.qc_mtc_24 : [];
+        live.qc_coa_24 = Array.isArray(live.qc_coa_24) ? live.qc_coa_24 : []; /* POLYMER: گواهی انطباق */
         live.qc_ncr_24 = Array.isArray(live.qc_ncr_24) ? live.qc_ncr_24 : [];
         if (live.qc_seq_24.mtc == null) live.qc_seq_24.mtc = 0;
         if (live.qc_seq_24.ncr == null) live.qc_seq_24.ncr = 0;
         return live;
     }
-    if (req.method === 'POST' && pathname === '/api/qcpro/mtc') {
-        if (!auth.requireRole(req, QC_MTC_W_24B)) return sendJson(res, { error: 'دسترسی غیرمجاز: صدور گواهی کیفیت (MTC) فقط برای کنترل کیفیت مجاز است.' }, 403);
+    /* POLYMER: صدور گواهی انطباق (CoA) — per حوالهٔ فروش/سفارش؛ بچ‌های تولید + نتایج آزمون */
+    if (req.method === 'POST' && pathname === '/api/qcpro/coa') {
+        if (!auth.requireRole(req, QC_MTC_W_24B)) return sendJson(res, { error: 'دسترسی غیرمجاز: صدور گواهی انطباق (CoA) فقط برای کنترل کیفیت مجاز است.' }, 403);
         readBody(req).then((raw) => {
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = qcEnsure24b(qcEnsure24a(invEnsure(readLive())));
-                let order = null, exit = null, size = '', weight = 0, pieces = 0, custName = '', cust = null, dj = '';
+                let order = null, exit = null, part = '', weight = 0, pieces = 0, custName = '', cust = null, dj = '';
                 const exits = (live.sales_exits || []);
                 if (b.exit_id) {
                     exit = exits.find((e) => e.id === String(b.exit_id) || e.exit_no === String(b.exit_id));
                     if (!exit) return sendJson(res, { error: 'حوالهٔ فروش یافت نشد.' }, 404);
-                    if ((live.qc_mtc_24 || []).some((m) => m.exit_no === exit.exit_no)) return sendJson(res, { error: 'برای حوالهٔ ' + exit.exit_no + ' قبلاً MTC صادر شده است (شماره: ' + ((live.qc_mtc_24 || []).find((m) => m.exit_no === exit.exit_no) || {}).mtc_no + ').' }, 409);
+                    if ((live.qc_coa_24 || []).some((m) => m.exit_no === exit.exit_no)) return sendJson(res, { error: 'برای حوالهٔ ' + exit.exit_no + ' قبلاً CoA صادر شده است (شماره: ' + ((live.qc_coa_24 || []).find((m) => m.exit_no === exit.exit_no) || {}).coa_no + ').' }, 409);
                     order = (live.sales_orders || []).find((o) => o.id === exit.order_id);
-                    size = String(exit.size); weight = Number(exit.weight_ton) || 0; pieces = Number(exit.pieces) || 0; dj = exit.date_jalali || finIsoToJalali(exit.created_at);
+                    part = String(b.part || exit.part || '').trim().toUpperCase();
+                    weight = Number(exit.weight_ton) || 0; pieces = Number(exit.pieces) || 0; dj = exit.date_jalali || finIsoToJalali(exit.created_at);
                 } else if (b.order_id) {
                     order = (live.sales_orders || []).find((o) => o.id === String(b.order_id) || o.order_no === String(b.order_id));
                     if (!order) return sendJson(res, { error: 'سفارش فروش یافت نشد.' }, 404);
-                    const covered = (live.qc_mtc_24 || []).filter((m) => m.order_id === order.id);
-                    const its = order.items || [];
-                    if (covered.length >= its.length) return sendJson(res, { error: 'برای همهٔ سایزهای این سفارش MTC صادر شده است.' }, 409);
-                    const done = its.map((i) => String(i.size)).filter((s) => !covered.some((m) => m.size === s));
-                    size = done[0]; weight = round2(((order.items || []).find((i) => String(i.size) === size) || {}).qty_ton || 0); dj = order.date_jalali || finIsoToJalali(order.created_at);
+                    const covered = (live.qc_coa_24 || []).filter((m) => m.order_id === order.id);
+                    if (covered.length) return sendJson(res, { error: 'برای این سفارش قبلاً CoA صادر شده است.' }, 409);
+                    part = String(b.part || '').trim().toUpperCase();
+                    dj = order.date_jalali || finIsoToJalali(order.created_at);
                 } else return sendJson(res, { error: 'انتخاب حواله (exit_id) یا سفارش (order_id) الزامی است.' }, 400);
                 if (!order) return sendJson(res, { error: 'سفارش حواله یافت نشد.' }, 404);
                 cust = (live.customers || []).find((c) => c.id === order.customer_id);
                 custName = (cust && cust.name) || order.customer_name || '—';
-                /* هیت‌های مرجع: بندیل‌های همین سایز + هیت حواله در صورت وجود (اختیاری بدنهٔ درخواست) */
-                let heats = b.heat_number ? [String(b.heat_number).trim().slice(0, 40)] : Array.from(qcHeatsOfSize24b(live, size));
-                if (!heats.length) return sendJson(res, { error: 'هیت مرجع برای سایز ' + size + ' یافت نشد — بندیل/کد هیت تولید ثبت نشده است.' }, 409);
-                if (heats.length > 6) heats = heats.slice(0, 6);
-                /* گرید و استاندارد: از بندیل/مشخصات فنی/پیش‌فرض گرید فعال */
-                const bundles = (live.rebar_bundles || []).filter((x) => String(x.rebar_size) === String(size));
-                const spec24b = (live.qc_specs_24 || []).find((s) => String(s.size) === String(size) && s.active !== false);
-                const gradeName = String(b.grade || (bundles[0] && bundles[0].rebar_grade) || (spec24b && spec24b.grade) || 'A3').trim();
+                /* بچ‌های مرجع: بچ اعلام‌شده یا بچ‌های اخیر تولید همین قطعه */
+                let batches = b.batch_number ? [String(b.batch_number).trim().slice(0, 40)] : Array.from(qcBatchesOfPart24b(live, part));
+                if (!batches.length) return sendJson(res, { error: 'بچ مرجع یافت نشد — تولیدی با کد بچ ثبت نشده است.' }, 409);
+                if (batches.length > 6) batches = batches.slice(0, 6);
+                if (!part) {
+                    const pl = (live.production_logs || []).find((p) => String(p.heat_number) === batches[0]);
+                    part = pl ? String(pl.product_id || '') : '';
+                }
+                /* گرید و مشخصات: از مشخصات فنی قطعه */
+                const spec24b = (live.qc_specs_24 || []).find((x) => String(x.part) === String(part) && x.active !== false);
+                const gradeName = String(b.grade || (spec24b && spec24b.grade) || '').trim();
                 const grade24b = (live.qc_grades_24 || []).find((g) => g.name === gradeName && g.active !== false) || (live.qc_grades_24 || []).find((g) => g.name === gradeName) || (live.qc_grades_24 || []).find((g) => g.active !== false);
-                /* نتایج آزمون per هیت — بدون نتیجهٔ واقعی، MTC صادر نمی‌شود (صحت گواهی) */
+                /* نتایج آزمون per بچ — بدون نتیجهٔ واقعی، CoA صادر نمی‌شود (صحت گواهی) */
                 const tests = {};
                 let missing = [];
-                heats.forEach((h) => { const t = qcTestForHeat24b(live, h); tests[h] = t; if (!t.chem || !t.mech) missing.push(h); });
-                if (missing.length) return sendJson(res, { error: 'برای هیت ' + missing.join(', ') + ' نتایج آزمون (شیمیایی/مکانیکی) کامل یافت نشد — ابتدا آزمون ورودی را ثبت و از QC تأیید کنید یا آزمایشگاه QC را تکمیل کنید.', missing: missing }, 409);
-                const mtcNo = qcNextNo24a(live, 'mtc', 'MTC');
-                const vid = 'MTCV' + crypto.createHash('sha1').update(mtcNo + '|' + Date.now() + '|' + Math.random()).digest('hex').slice(0, 10).toUpperCase();
-                /* QC-EDITABLE-43: snapshot آیتم‌های فعال + رنج مؤثر (گرید×سایز) هنگام صدور — چاپ/اکسل پایدار می‌ماند */
+                batches.forEach((h) => { const t = qcTestForBatch24b(live, h); tests[h] = t; if (!t.phys && !t.mech && !t.lab) missing.push(h); });
+                if (missing.length) return sendJson(res, { error: 'برای بچ ' + missing.join(', ') + ' نتیجهٔ آزمون یافت نشد — ابتدا آزمون ورودی مواد یا بازرسی QC تولید را ثبت و تأیید کنید.', missing: missing }, 409);
+                const coaNo = qcNextNo24a(live, 'coa', 'COA');
+                const vid = 'COAV' + crypto.createHash('sha1').update(coaNo + '|' + Date.now() + '|' + Math.random()).digest('hex').slice(0, 10).toUpperCase();
+                /* QC-EDITABLE-43: snapshot آیتم‌های فعال + رنج مؤثر هنگام صدور — چاپ/اکسل پایدار می‌ماند */
                 const items43m = qcActiveItems43(live);
-                const rng43m = items43m.map((it) => { const r43 = qcMasterRange43(live, it.key, grade24b || {}, size); return { key: it.key, min: r43 ? r43.min : null, max: r43 ? r43.max : null }; });
+                const rng43m = items43m.map((it) => { const r43 = qcMasterRange43(live, it.key, grade24b || {}, 0); return { key: it.key, min: r43 ? r43.min : null, max: r43 ? r43.max : null }; });
                 const rec = {
-                    id: 'mtc24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-                    mtc_no: mtcNo, verify_id: vid, cert_type: 'EN 10204 — Type 3.1',
+                    id: 'coa24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    coa_no: coaNo, verify_id: vid, cert_type: 'CoA — گواهی انطباق',
                     order_id: order.id, order_no: order.order_no, exit_no: exit ? exit.exit_no : '',
                     invoice_no: exit ? (exit.invoice_no || '') : '',
                     customer_id: order.customer_id, customer_name: custName,
-                    size: size, grade: gradeName, standard: grade24b ? grade24b.standard : '',
+                    part: part, grade: gradeName, standard: grade24b ? grade24b.standard : '',
                     weight_ton: weight, pieces: pieces, date_jalali: dj,
                     is_export: order.is_export === true,
-                    heat_numbers: heats, tests: tests, test_source: tests[heats[0]] && tests[heats[0]].source,
-                    items_43: items43m.map((i43) => ({ key: i43.key, label: i43.label, unit: i43.unit || '', category: i43.category || 'chem' })), /* QC-EDITABLE-43 */
+                    batches: batches, tests: tests, test_source: tests[batches[0]] && tests[batches[0]].source,
+                    items_43: items43m.map((i43) => ({ key: i43.key, label: i43.label, unit: i43.unit || '', category: i43.category || 'phys' })), /* QC-EDITABLE-43 */
                     rng_43: rng43m, /* QC-EDITABLE-43 */
-                    tol_weight_percent: spec24b ? spec24b.tol_weight_percent : null, piece_length_m: spec24b ? spec24b.piece_length_m : null,
+                    tol_weight_percent: spec24b ? spec24b.tol_weight_percent : null, nominal_weight_g: spec24b ? spec24b.nominal_weight_g : null,
                     issued_by: String((req.user && (req.user.name || req.user.username)) || ''), issued_at: new Date().toISOString(),
                     notes: String(b.notes || '').slice(0, 300),
                 };
-                rec.hash = crypto.createHash('sha256').update(JSON.stringify([mtcNo, vid, order.order_no, exit ? exit.exit_no : '', size, gradeName, weight, heats, rec.issued_by])).digest('hex').slice(0, 32);
-                live.qc_mtc_24.push(rec);
-                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ MTC انجام نشد.');
+                rec.hash = crypto.createHash('sha256').update(JSON.stringify([coaNo, vid, order.order_no, exit ? exit.exit_no : '', part, gradeName, weight, batches, rec.issued_by])).digest('hex').slice(0, 32);
+                live.qc_coa_24.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ CoA انجام نشد.');
                 cache.data = null; cache.at = 0;
-                auditLog(req, 'qcpro.mtc.issue', { mtc_no: mtcNo, exit_no: rec.exit_no, order_no: rec.order_no, heats: heats });
+                auditLog(req, 'qcpro.coa.issue', { coa_no: coaNo, exit_no: rec.exit_no, order_no: rec.order_no, batches: batches });
                 return sendJson(res, { ok: true, record: rec }, 201);
-            } catch (e) { return sendJson(res, { error: 'صدور MTC ناموفق: ' + e.message }, 400); }
+            } catch (e) { return sendJson(res, { error: 'صدور CoA ناموفق: ' + e.message }, 400); }
         }).catch((e) => sendJson(res, { error: e.message }, 500));
         return;
     }
 
-    /* تأیید آنلاین MTC — عمومی (مشتری/گمر QR را اسکن می‌کند) با حداقل دادهٔ امن */
+    /* POLYMER: تأیید آنلاین CoA — عمومی (مشتری QR را اسکن می‌کند) با حداقل دادهٔ امن */
     let QCV_M;
-    if (req.method === 'GET' && (QCV_M = pathname.match(/^\/api\/qcpro\/mtc\/verify\/([A-Za-z0-9]+)$/))) {
+    if (req.method === 'GET' && (QCV_M = pathname.match(/^\/api\/qcpro\/coa\/verify\/([A-Za-z0-9]+)$/))) {
         const live = qcEnsure24b(qcEnsure24a(readLive()));
-        const m = (live.qc_mtc_24 || []).find((x) => x.verify_id === QCV_M[1]);
+        const m = (live.qc_coa_24 || []).find((x) => x.verify_id === QCV_M[1]);
         if (!m) return sendJson(res, { ok: true, valid: false, message: 'گواهی یافت نشد — شمارهٔ تأیید نامعتبر است.' });
         return sendJson(res, {
-            ok: true, valid: true, mtc_no: m.mtc_no, cert_type: m.cert_type, tenant: (function () { try { return loadTenant15a().name || 'Sanatify'; } catch (e) { return 'Sanatify'; } })(),
-            customer: m.customer_name, order_no: m.order_no, exit_no: m.exit_no || '', size: m.size, grade: m.grade, standard: m.standard,
-            weight_ton: m.weight_ton, heat_numbers: m.heat_numbers, date_jalali: m.date_jalali, issued_at: m.issued_at, hash: m.hash,
+            ok: true, valid: true, coa_no: m.coa_no, cert_type: m.cert_type, tenant: (function () { try { return loadTenant15a().name || 'Sanatify'; } catch (e) { return 'Sanatify'; } })(),
+            customer: m.customer_name, order_no: m.order_no, exit_no: m.exit_no || '', part: m.part, grade: m.grade, standard: m.standard,
+            weight_ton: m.weight_ton, batches: m.batches, date_jalali: m.date_jalali, issued_at: m.issued_at, hash: m.hash,
         });
     }
 
@@ -7985,21 +7970,17 @@ live.inventory_reservations.splice(idx, 1);
             try {
                 const b = sanitizeInput15b(JSON.parse(raw || '{}'));
                 const live = qcEnsure24b(qcEnsure24a(readLive()));
-                const scope = ['bundle', 'heat', 'receipt'].indexOf(b.scope) !== -1 ? b.scope : 'heat';
-                const ntype = ['chem', 'mech', 'dim', 'visual'].indexOf(b.ntype) !== -1 ? b.ntype : 'visual';
+                const scope = ['batch', 'carton', 'receipt'].indexOf(b.scope) !== -1 ? b.scope : 'batch'; /* POLYMER */
+                const ntype = ['phys', 'mech', 'dim', 'visual'].indexOf(b.ntype) !== -1 ? b.ntype : 'visual'; /* POLYMER: phys=فیزیکی */
                 const severity = ['minor', 'major', 'critical'].indexOf(b.severity) !== -1 ? b.severity : 'minor';
                 const action = ['rework', 'concession', 'rejection'].indexOf(b.action) !== -1 ? b.action : 'rework';
                 const desc = String(b.description || '').trim();
                 if (desc.length < 5) return sendJson(res, { error: 'شرح عدم انطباق الزامی است (حداقل ۵ نویسه).' }, 400);
-                const rec = { id: 'ncr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ncr_no: qcNextNo24a(live, 'ncr', 'NCR'), date_jalali: finIsoToJalali(new Date().toISOString()), scope: scope, bundle_code: String(b.bundle_code || '').trim().slice(0, 40), heat_number: String(b.heat_number || '').trim().slice(0, 40), receipt_no: String(b.receipt_no || '').trim().slice(0, 40), size: String(b.size || '').trim().slice(0, 12), ntype: ntype, severity: severity, action: action, quantity_ton: round2(Number(b.quantity_ton) || 0), description: desc.slice(0, 500), status: 'open', opened_by: String((req.user && (req.user.name || req.user.username)) || ''), opened_at: new Date().toISOString(), closed_at: null, closed_by: '', corrective_action: '' };
-                if (rec.scope === 'heat' && !rec.heat_number) return sendJson(res, { error: 'برای NCR هیت، کد هیت الزامی است.' }, 400);
-                if (rec.scope === 'bundle' && !rec.bundle_code) return sendJson(res, { error: 'برای NCR بندیل، کد بندیل الزامی است.' }, 400);
+                const rec = { id: 'ncr24-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ncr_no: qcNextNo24a(live, 'ncr', 'NCR'), date_jalali: finIsoToJalali(new Date().toISOString()), scope: scope, carton_code: String(b.carton_code || '').trim().slice(0, 40), heat_number: String(b.heat_number || '').trim().slice(0, 40), receipt_no: String(b.receipt_no || '').trim().slice(0, 40), part: String(b.part || '').trim().slice(0, 12), /* POLYMER */ ntype: ntype, severity: severity, action: action, quantity_ton: round2(Number(b.quantity_ton) || 0), description: desc.slice(0, 500), status: 'open', opened_by: String((req.user && (req.user.name || req.user.username)) || ''), opened_at: new Date().toISOString(), closed_at: null, closed_by: '', corrective_action: '' };
+                if (rec.scope === 'batch' && !rec.heat_number) return sendJson(res, { error: 'برای NCR بچ، کد بچ/لات الزامی است.' }, 400); /* POLYMER */
+                if (rec.scope === 'carton' && !rec.carton_code) return sendJson(res, { error: 'برای NCR کارتن، کد کارتن الزامی است.' }, 400); /* POLYMER */
                 if (rec.scope === 'receipt' && !rec.receipt_no) return sendJson(res, { error: 'برای NCR رسید، شمارهٔ رسید خرید الزامی است.' }, 400);
-                /* پرکردن خودکار هیت/سایز/تناژ از بندیل یا رسید (برای گارد حواله و سند مالی) */
-                if (rec.scope === 'bundle') {
-                    const bd = (live.rebar_bundles || []).find((x) => String(x.bundle_code) === rec.bundle_code);
-                    if (bd) { rec.heat_number = rec.heat_number || String(bd.heat_number || ''); rec.size = rec.size || String(bd.rebar_size || ''); rec.quantity_ton = rec.quantity_ton || round2((Number(bd.net_weight_kg) || 0) / 1000); }
-                }
+                /* POLYMER: پرکردن خودکار بچ/مقدار از رسید (برای گارد حواله و سند مالی) */
                 if (rec.scope === 'receipt') {
                     const gr = (live.purchase_receipts || []).find((x) => x.receipt_no === rec.receipt_no);
                     if (gr) { rec.quantity_ton = rec.quantity_ton || round2((gr.lines || []).reduce((s, l) => s + (Number(l.qty) || 0), 0)); const hl = (gr.lines || []).find((l) => l.heat_number); rec.heat_number = rec.heat_number || (hl ? hl.heat_number : ''); }
@@ -8034,25 +8015,25 @@ live.inventory_reservations.splice(idx, 1);
                     (live.inventory_receipts || []).forEach((r) => {
                         if (!r || r.stock_status !== 'available') return;
                         const hit = (n.receipt_no && String(r.source_ref || '') === String(n.receipt_no)) ||
-                            (n.heat_number && (String(r.heat_number || '') === String(n.heat_number) || String(r.lot_no || '') === String(n.heat_number)) && (n.scope === 'heat' || n.scope === 'bundle'));
+                            (n.heat_number && (String(r.heat_number || '') === String(n.heat_number) || String(r.lot_no || '') === String(n.heat_number)) && (n.scope === 'batch' || n.scope === 'carton')); /* POLYMER */
                         if (hit) qrows.push(r);
                     });
                     qrows.forEach((r) => { r.stock_status = 'quarantine'; r.qc_note_24 = 'قرنطینه — NCR ' + n.ncr_no + ' (اقدام: رد)'; quarantined++; });
                     n.quarantine_count = quarantined;
                     if (!live._fin_v1) finSeed(live); /* اگر مالی هرگز seed نشده بود — همان مسیر رسمی (حساب‌های ۵۲۰۰۰۱/۱۱۰xxx) */
                     const finCfg24b = live.fin_config || {};
-                    const isProduct = n.scope === 'bundle' || (n.size && Number(n.size) > 0 && n.scope !== 'receipt');
+                    const isProduct = n.scope === 'carton' || (n.part && n.scope !== 'receipt'); /* POLYMER */
                     const invAccCode = isProduct ? '110003' : '110001';
                     const accBy24b = {}; (live.fin_accounts || []).forEach((a) => { accBy24b[a.code] = a; });
                     if (accBy24b['520001'] && accBy24b[invAccCode] && (Number(n.quantity_ton) || 0) > 0) {
                         let cost = 0;
                         if (isProduct) {
-                            const bom24b = (live.fin_bom || []).find((x) => String(x.size) === String(n.size));
+                            const bom24b = (live.fin_bom || []).find((x) => String(x.size) === String(n.part)); /* POLYMER: تطبیق با قطعه */
                             cost = bom24b ? finStdCostPerTon(bom24b, finCfg24b) : Math.round((Number(finCfg24b.billet_rial_per_kg) || 0) * 1.035 * 1000 + 110 * (Number(finCfg24b.energy_tariff_rial_per_kwh) || 0) + 2500000 + 4000000 + 350000);
                         } else cost = Math.round((Number(finCfg24b.billet_rial_per_kg) || 0) * 1000);
                         const amt = Math.round((Number(n.quantity_ton) || 0) * cost);
                         if (amt > 0) {
-                            const doc = finPostDoc(live, { source: 'qc_ncr', ref_module: 'quality', ref_id: 'ncr:' + n.ncr_no, date_jalali: n.date_jalali, desc: 'زیان ضایعات عدم انطباق — NCR ' + n.ncr_no + ' (' + NCR_TYPE_FA_24B[n.ntype] + ' / ' + NCR_SEV_FA_24B[n.severity] + ') — ' + n.quantity_ton + ' تن' + (n.heat_number ? ' — هیت ' + n.heat_number : ''), lines: [ { account_id: accBy24b['520001'].id, debit: amt, ref_id: n.ncr_no }, { account_id: accBy24b[invAccCode].id, credit: amt, ref_id: n.ncr_no } ], created_by: n.closed_by });
+                            const doc = finPostDoc(live, { source: 'qc_ncr', ref_module: 'quality', ref_id: 'ncr:' + n.ncr_no, date_jalali: n.date_jalali, desc: 'زیان ضایعات عدم انطباق — NCR ' + n.ncr_no + ' (' + NCR_TYPE_FA_24B[n.ntype] + ' / ' + NCR_SEV_FA_24B[n.severity] + ') — ' + n.quantity_ton + ' تن' + (n.heat_number ? ' — بچ ' + n.heat_number : ''), /* POLYMER */ lines: [ { account_id: accBy24b['520001'].id, debit: amt, ref_id: n.ncr_no }, { account_id: accBy24b[invAccCode].id, credit: amt, ref_id: n.ncr_no } ], created_by: n.closed_by });
                             docRef = doc && doc.doc && doc.doc.doc_no ? 'F-' + String(doc.doc.doc_no).padStart(5, '0') : '';
                         }
                     }
@@ -8087,30 +8068,27 @@ live.inventory_reservations.splice(idx, 1);
             (live.qc_ncr_24 || []).forEach((n) => { const k = keyFn(n) || '—'; m[k] = m[k] || { key: k, count: 0, open: 0, critical: 0 }; m[k].count++; if (n.status === 'open') m[k].open++; if (n.severity === 'critical') m[k].critical++; });
             return Object.keys(m).map((k) => m[k]).sort((a, b2) => b2.count - a.count);
         };
-        const bundlesGrade24b = {};
-        (live.rebar_bundles || []).forEach((x) => { bundlesGrade24b[String(x.bundle_code || '')] = x.rebar_grade || '—'; });
-        const ncr_by_grade = aggNcr24b((n) => (bundlesGrade24b[String(n.bundle_code || '')] || (n.size ? 'سایز ' + n.size : '—')));
-        const ncr_by_size = aggNcr24b((n) => (n.size ? 'سایز ' + n.size : '—'));
+        /* POLYMER */ const ncr_by_part = aggNcr24b((n) => (n.part ? 'قطعه ' + n.part : '—'));
         const ncr_by_month = aggNcr24b((n) => String(n.date_jalali || '').slice(0, 7));
-        const mtc = (live.qc_mtc_24 || []).slice().sort((a, b2) => String(b2.issued_at || '').localeCompare(String(a.issued_at || '')));
+        const coa = (live.qc_coa_24 || []).slice().sort((a, b2) => String(b2.issued_at || '').localeCompare(String(a.issued_at || ''))); /* POLYMER */
         return sendJson(res, {
             ok: true, today_jalali: finIsoToJalali(new Date().toISOString()),
             supplier_reject: supplier_reject,
             ncr_summary: { total: (live.qc_ncr_24 || []).length, open: (live.qc_ncr_24 || []).filter((n) => n.status === 'open').length, rejection: (live.qc_ncr_24 || []).filter((n) => n.action === 'rejection').length },
-            ncr_by_grade: ncr_by_grade, ncr_by_size: ncr_by_size, ncr_by_month: ncr_by_month,
+            ncr_by_part: ncr_by_part, ncr_by_month: ncr_by_month, /* POLYMER */
             ncr: (live.qc_ncr_24 || []).slice().sort((a, b2) => String(b2.opened_at || '').localeCompare(String(a.opened_at || ''))).map((n) => Object.assign({}, n, { ntype_fa: NCR_TYPE_FA_24B[n.ntype] || n.ntype, severity_fa: NCR_SEV_FA_24B[n.severity] || n.severity, action_fa: NCR_ACTION_FA_24B[n.action] || n.action })),
-            mtc: mtc,
-            /* بندیل‌های اخیر برای فرم NCR (نقش qc به /api/bundles دسترسی ندارد — مرجع فقط‌خواندنی همین‌جا) */
-            bundles_ref: (live.rebar_bundles || []).slice(-120).reverse().map((b) => ({ bundle_code: String(b.bundle_code || ''), heat_number: String(b.heat_number || ''), rebar_size: String(b.rebar_size || ''), rebar_grade: String(b.rebar_grade || ''), net_weight_kg: Number(b.net_weight_kg) || 0 })),
-            /* کاندیدهای صدور MTC — حواله‌های بدون گواهی + آمادگی آزمون (برای دراپ‌داون UI) */
-            mtc_candidates: (live.sales_exits || []).filter((e) => !(live.qc_mtc_24 || []).some((m) => m.exit_no === e.exit_no)).map((e) => {
+            coa: coa, /* POLYMER */
+            /* POLYMER: بچ‌های اخیر تولید برای فرم NCR — مرجع فقط‌خواندنی */
+            batches_ref: (live.production_logs || []).slice(-120).reverse().map((b) => ({ batch_no: String(b.heat_number || ''), part: String(b.product_id || ''), good_quantity: Number(b.good_quantity) || 0 })),
+            /* POLYMER: کاندیدهای صدور CoA — حواله‌های بدون گواهی + آمادگی آزمون (برای دراپ‌داون UI) */
+            coa_candidates: (live.sales_exits || []).filter((e) => !(live.qc_coa_24 || []).some((m) => m.exit_no === e.exit_no)).map((e) => { /* POLYMER */
                 const ord = (live.sales_orders || []).find((o) => o.id === e.order_id) || {};
-                const heatsE = Array.from(qcHeatsOfSize24b(live, String(e.size)));
-                const ready = heatsE.length > 0 && heatsE.every((h) => { const t = qcTestForHeat24b(live, h); return t.chem && t.mech; });
-                return { exit_id: e.id, exit_no: e.exit_no, order_id: e.order_id, order_no: e.order_no, customer_name: ord.customer_name || '—', size: e.size, weight_ton: e.weight_ton, date_jalali: e.date_jalali, is_export: ord.is_export === true, heats: heatsE.slice(0, 6), tests_ready: ready, has_bundle: heatsE.length > 0 };
+                const batchesE = Array.from(qcBatchesOfPart24b(live, ''));
+                const ready = batchesE.length > 0 && batchesE.every((h) => { const t = qcTestForBatch24b(live, h); return t.phys || t.mech || t.lab; });
+                return { exit_id: e.id, exit_no: e.exit_no, order_id: e.order_id, order_no: e.order_no, customer_name: ord.customer_name || '—', size: e.size, weight_ton: e.weight_ton, date_jalali: e.date_jalali, is_export: ord.is_export === true, batches: batchesE.slice(0, 6), tests_ready: ready, has_batch: batchesE.length > 0 }; /* POLYMER */
             }),
-            export_orders_without_mtc: (live.sales_orders || []).filter((o) => o.is_export === true && !(live.qc_mtc_24 || []).some((m) => m.order_id === o.id)).map((o) => ({ order_no: o.order_no, customer_name: o.customer_name, sizes: (o.items || []).map((i) => i.size) })),
-            blocked_heats: (function () { const s = new Set(); (live.qc_ncr_24 || []).forEach((n) => { if (n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection') && n.heat_number) s.add(String(n.heat_number)); }); return Array.from(s); })(),
+            export_orders_without_coa: (live.sales_orders || []).filter((o) => o.is_export === true && !(live.qc_coa_24 || []).some((m) => m.order_id === o.id)).map((o) => ({ order_no: o.order_no, customer_name: o.customer_name })), /* POLYMER */
+            blocked_batches: (function () { const s = new Set(); (live.qc_ncr_24 || []).forEach((n) => { if (n.status === 'open' && (n.severity === 'major' || n.severity === 'critical' || n.action === 'rejection') && n.heat_number) s.add(String(n.heat_number)); }); return Array.from(s); })(), /* POLYMER */
         });
     }
     // ===== FEAT-QC-PRO-24b (end) =====
