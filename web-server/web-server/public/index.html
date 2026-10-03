@@ -1985,13 +1985,17 @@
                             </label>
                             <label class="flbl">علت توقف:
                                 <select id="fdReason" class="fsel">
-                                    <option value="roll_change">تعویض غلتک / قفسه</option>
-                                    <option value="billet_jam">گیرش شمش در فیدر</option>
-                                    <option value="furnace_temp">اختلال دمای کوره</option>
-                                    <option value="shear_adjust">تنظیم قیچی برش</option>
-                                    <option value="mech_elec">خرابی مکانیکی / برقی</option>
-                                    <option value="electrical">خرابی برقی</option>
+                                    <option value="mold-change">تعویض قالب</option>
+                                    <option value="mold-setup">نصب و راه‌اندازی قالب</option>
+                                    <option value="mold-damage">آسیب / خرابی قالب</option>
+                                    <option value="machine-breakdown">خرابی دستگاه تزریق</option>
                                     <option value="hydraulic">خرابی هیدرولیک</option>
+                                    <option value="electrical">خرابی برقی</option>
+                                    <option value="mech_elec">خرابی مکانیکی / برقی</option>
+                                    <option value="cooling-issue">اختلال سیستم خنک‌کننده</option>
+                                    <option value="material-shortage">کمبود / تأخیر مواد اولیه</option>
+                                    <option value="power-outage">قطعی برق</option>
+                                    <option value="planned-pm">سرویس و نگهداری برنامه‌ریزی‌شده</option>
                                     <option value="other">سایر</option>
                                 </select>
                             </label>
@@ -2025,7 +2029,7 @@
                                 <input type="time" id="fdEndTime" class="fdate" />
                             </label>
                             <label class="flbl span2">توضیحات (اختیاری):
-                                <input type="text" id="fdDesc" placeholder="مثلاً: تعویض چرخ به‌دلیل ساییدگی" />
+                                <input type="text" id="fdDesc" placeholder="مثلاً: تعویض قالب به‌دلیل سایش" />
                             </label>
                         </div>
                     </fieldset>
@@ -4006,7 +4010,7 @@
         const groupFa = (n) => { if (n === null || n === undefined || n === '') return '-'; const s = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); return s.replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d))); };
         const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const toFaDigits = (s) => String(s == null ? '' : s).replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d)));
-        const REASON_FA = { 'roll_change': 'تعویض غلتک / قفسه', 'billet_jam': 'کوبیدگی شمش', 'furnace_temp': 'دمای کوره', 'shear_adjust': 'تنظیم قیچی', 'mech_elec': 'خرابی مکانیکی / برقی', 'crop-ends': 'کراپ دو سر', 'bearing': 'شکستگی بلبرینگ', 'roll': 'شکستگی/پوشش غلتک', 'shear_blade': 'تیغه قیچی', 'electrical': 'خرابی برقی', 'hydraulic': 'خرابی هیدرولیک', 'furnace': 'مشعل/نسوز کوره', 'leak-failed': 'عیب آزمون فشار (سابقه)', 'deformed-body': 'دفرمگی محصول', 'scratch-lining': 'خراش سطح', 'weld-defect': 'عیب جوش (سابقه)', 'seam-wheel-change': 'تعویض چرخ برش (سابقه)', 'paint-booth-cleaning': 'تمیزکاری ایستگاه (سابقه)', 'forming-adjust': 'تنظیم دستگاه شکل‌دهی (سابقه)', 'coil-feed-jam': 'گیرش شمش در فیدر (سابقه)', 'other': 'سایر', 'melt-temp': 'دمای نامناسب مذاب/سیلندر', 'mold-temp': 'دمای نامناسب قالب', 'inj-pressure': 'فشار یا سرعت تزریق نامناسب', 'material-moist': 'رطوبت گرانول/مواد', 'material-qc': 'کیفیت نامناسب مواد اولیه', 'mold-wear': 'سایش یا آسیب قالب', 'clamp-setup': 'تنظیم نبودن گیره/قالب' };
+        const REASON_FA = { 'roll_change': 'تعویض غلتک / قفسه', 'billet_jam': 'کوبیدگی شمش', 'furnace_temp': 'دمای کوره', 'shear_adjust': 'تنظیم قیچی', 'mech_elec': 'خرابی مکانیکی / برقی', 'crop-ends': 'کراپ دو سر', 'bearing': 'شکستگی بلبرینگ', 'roll': 'شکستگی/پوشش غلتک', 'shear_blade': 'تیغه قیچی', 'electrical': 'خرابی برقی', 'hydraulic': 'خرابی هیدرولیک', 'furnace': 'مشعل/نسوز کوره', 'leak-failed': 'عیب آزمون فشار (سابقه)', 'deformed-body': 'دفرمگی محصول', 'scratch-lining': 'خراش سطح', 'weld-defect': 'عیب جوش (سابقه)', 'seam-wheel-change': 'تعویض چرخ برش (سابقه)', 'paint-booth-cleaning': 'تمیزکاری ایستگاه (سابقه)', 'forming-adjust': 'تنظیم دستگاه شکل‌دهی (سابقه)', 'coil-feed-jam': 'گیرش شمش در فیدر (سابقه)', 'other': 'سایر', 'melt-temp': 'دمای نامناسب مذاب/سیلندر', 'mold-temp': 'دمای نامناسب قالب', 'inj-pressure': 'فشار یا سرعت تزریق نامناسب', 'material-moist': 'رطوبت گرانول/مواد', 'material-qc': 'کیفیت نامناسب مواد اولیه', 'mold-wear': 'سایش یا آسیب قالب', 'clamp-setup': 'تنظیم نبودن گیره/قالب', 'mold-change': 'تعویض قالب', 'mold-setup': 'نصب و راه‌اندازی قالب', 'mold-damage': 'آسیب / خرابی قالب', 'machine-breakdown': 'خرابی دستگاه تزریق', 'cooling-issue': 'اختلال سیستم خنک‌کننده', 'material-shortage': 'کمبود / تأخیر مواد اولیه', 'power-outage': 'قطعی برق', 'planned-pm': 'سرویس و نگهداری برنامه‌ریزی‌شده' };
         const reasonFa = (v) => REASON_FA[String(v || '')] || (v ? String(v) : '-');
         let WEB_USER = null;
         const STATIONS = { 'st-cut': 'برش شمش گرم', 'st-form': 'نورد گرم (شکل‌دهی)', 'st-weld': 'جوش/اتصال (سابقه)', 'st-seam': 'قیچی و برش', 'st-rib': 'آج‌زنی', 'st-test': 'آزمون کشش/خمش (QC)', 'st-lin': 'پوشش/ضدزنگ', 'st-pack': 'بسته‌بندی بندیل', 'st-ends': 'انقیاد سر بندیل', 'mach-forming-01': 'نورد گرم (شکل‌دهی) ۱', 'mach-forming-02': 'نورد گرم (شکل‌دهی) ۲', 'mach-weld-01': 'جوش/اتصال (سابقه)', 'mach-seamer-01': 'بسته‌بندی بندیل (سابقه) ۱', 'mach-seamer-02': 'بسته‌بندی بندیل (سابقه) ۲', 'mach-paint-01': 'پوشش/ضدزنگ', 'mach-feed-01': 'بارگذاری شمش', 'mach-test-01': 'آزمون کشش (QC)', 'inj-180t': 'دستگاه تزریق ۱۸۰ تن', 'inj-250t': 'دستگاه تزریق ۲۵۰ تن', 'inj-400t': 'دستگاه تزریق ۴۰۰ تن' };
@@ -4149,6 +4153,11 @@
         const STATION_OPTIONS = Object.entries(STATIONS)
             .map(([v, l]) => '<option value="' + v + '">' + l + '</option>')
             .join('');
+        /* POLYMER: ایستگاه توقف — فقط دستگاه‌های تزریق */
+        const DOWNTIME_STATION_OPTIONS = ['inj-180t', 'inj-250t', 'inj-400t']
+            .filter((v) => STATIONS[v])
+            .map((v) => '<option value="' + v + '">' + STATIONS[v] + '</option>')
+            .join('');
         /* POLYMER: ایستگاه کشف ضایعات — فقط دستگاه‌های تزریق + آزمایشگاه (نه ایستگاه‌های فولادی) */
         const WASTE_STATION_OPTIONS = ['inj-180t', 'inj-250t', 'inj-400t', 'quality_lab']
             .filter((v) => STATIONS[v])
@@ -4165,7 +4174,7 @@
             const el = document.getElementById(id);
             if (el) {
                 const keep10a = el.value;
-                el.innerHTML = (id === 'fwStation') ? WASTE_STATION_OPTIONS : STATION_OPTIONS; /* POLYMER: فرم ضایعات فقط ایستگاه پلیمری */
+                el.innerHTML = (id === 'fwStation') ? WASTE_STATION_OPTIONS : (id === 'fdStation') ? DOWNTIME_STATION_OPTIONS : STATION_OPTIONS; /* POLYMER: فرم ضایعات/توقفات فقط ایستگاه پلیمری */
                 if (keep10a && Array.from(el.options).some((o) => o.value === keep10a)) el.value = keep10a;
             }
         });
