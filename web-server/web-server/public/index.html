@@ -1782,11 +1782,11 @@
                     <option value="90">۹۰ روز</option>
                     <option value="all">همه</option>
                 </select></label>
-                <label>سایز میلگرد: <select id="biSize" class="fsel">
+                <label>محصول: <select id="biSize" class="fsel">
                     <option value="all">همه</option>
-                    <option value="8">۸</option><option value="10">۱۰</option><option value="12">۱۲</option><option value="14">۱۴</option><option value="16">۱۶</option><option value="18">۱۸</option><option value="20">۲۰</option><option value="22">۲۲</option><option value="25">۲۵</option><option value="28">۲۸</option><option value="32">۳۲</option><option value="5SP">گرید 5SP</option>
+                    <option value="INJ-A">قطعه تزریقی A</option><option value="INJ-B">قطعه تزریقی B</option><option value="INJ-C">قطعه تزریقی C</option>
                 </select></label>
-                <label>روند تناژ: <select id="biGran" class="fsel">
+                <label>روند تولید: <select id="biGran" class="fsel">
                     <option value="day" selected>روزانه</option>
                     <option value="week">هفتگی</option>
                 </select></label>
@@ -1794,17 +1794,17 @@
             </div>
             <div class="analytics-grid">
                 <div class="chart-card"><h3>📊 پارتو توقفات (دقیقه + ٪ تجمعی)</h3><div class="chart-container"><canvas id="bi-pareto-dt"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
-                <div class="chart-card"><h3>📊 پارتو ضایعات (تن + ٪ تجمعی)</h3><div class="chart-container"><canvas id="bi-pareto-ws"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
-                <div class="chart-card"><h3>🟢 روند تناژ سالم</h3><div class="chart-container"><canvas id="bi-ton"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>📊 پارتو ضایعات (عدد + ٪ تجمعی)</h3><div class="chart-container"><canvas id="bi-pareto-ws"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>🟢 روند تولید سالم (قطعه)</h3><div class="chart-container"><canvas id="bi-ton"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>♻️ روند راندمان مواد</h3><div class="chart-container"><canvas id="bi-yield"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>🗑️ روند درصد ضایعات</h3><div class="chart-container"><canvas id="bi-scrap"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>🔬 روند پذیرش QC</h3><div class="chart-container"><canvas id="bi-qc"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
-                <div class="chart-card"><h3>📏 توزیع تولید بر اساس سایز</h3><div class="chart-container"><canvas id="bi-size"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
+                <div class="chart-card"><h3>📏 توزیع تولید بر اساس محصول</h3><div class="chart-container"><canvas id="bi-size"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>🔄 مقایسه شیفت‌ها (قطعه سالم + توقف)</h3><div class="chart-container"><canvas id="bi-shift"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>🛠️ روند MTTR / MTBF (دقیقه)</h3><div class="chart-container"><canvas id="bi-mttr"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>🏭 ایستگاه‌های پرتوقف (Top 5)</h3><div class="chart-container"><canvas id="bi-stations"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
             </div>
-            <p class="note">فیلتر سایز فقط روی نمودارهای وابسته به سایز (تناژ، توزیع سایز، راندمان) اعمال می‌شود. MTBF بر مبنای ۷۲۰ دقیقه برنامه‌ریزی روزانه (دو شیفت ۱۲ساعته).</p>
+            <p class="note">فیلتر محصول فقط روی نمودارهای وابسته به محصول (تولید، توزیع محصول، راندمان) اعمال می‌شود. MTBF بر مبنای ۷۲۰ دقیقه برنامه‌ریزی روزانه (دو شیفت ۱۲ساعته).</p>
             <!-- ===== FEAT-BI-2 (end) ===== -->
             <div class="analytics-grid">
                 <div class="chart-card">
@@ -10104,7 +10104,7 @@ showRes();
             return { lab: b.lab, v: Math.round(v * 100) / 100 };
         });
     }
-    function biSizeOk(r) { if (biState.size === 'all') return true; /* FIX-FLT-4g: فیلتر گرید 5SP از طریق گرید میلگرد */ if (biState.size === '5SP') { const g = r.rebar_grade != null ? r.rebar_grade : r.grade; return g != null && String(g) === '5SP'; } const v = String(r.rebar_size == null ? (r.product_id == null ? '' : r.product_id) : r.rebar_size); return v === biState.size || v === ('RB-' + biState.size); }
+    function biSizeOk(r) { if (biState.size === 'all') return true; /* POLYMER-1: فیلتر محصول تزریقی */ const v = String(r.product_id == null ? '' : r.product_id); return v === biState.size; }
     function biTip(nums) {
         return {
             callbacks: {
@@ -10280,7 +10280,7 @@ showRes();
     function planFillProduct() {
         const sel = document.getElementById('plProduct'); if (!sel) return;
         const cur = sel.value;
-        const base = ['RB-8', 'RB-10', 'RB-12', 'RB-14', 'RB-16', 'RB-18', 'RB-20', 'RB-22', 'RB-25', 'RB-28', 'RB-32', '5SP'];
+        const base = ['INJ-A', 'INJ-B', 'INJ-C']; /* POLYMER-1: محصولات تزریقی جای سایزهای میلگرد */
         const legacy = [];
         (cache.production || []).forEach((r) => { const v = String(r.product_id || '').trim(); if (v && base.indexOf(v) === -1 && legacy.indexOf(v) === -1) legacy.push(v); });
         const ids = base.concat(legacy);
