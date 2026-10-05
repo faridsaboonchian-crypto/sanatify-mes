@@ -1745,8 +1745,9 @@
                         placeholder="۱۴۰۵/۰۵/۶" style="width:110px;text-align:center"></label>
                 <label>شیفت: <select id="filterShift">
                         <option value="all">همه</option>
-                        <option value="shift-morning-301">شیفت صبح</option>
-                        <option value="shift-night-302">شیفت شب</option>
+                        <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                        <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                     </select></label>
                 <label>محصول: <select id="filterProduct">
                         <option value="all">همه</option>
@@ -1804,7 +1805,7 @@
                 <div class="chart-card"><h3>🛠️ روند MTTR / MTBF (دقیقه)</h3><div class="chart-container"><canvas id="bi-mttr"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
                 <div class="chart-card"><h3>🏭 ایستگاه‌های پرتوقف (Top 5)</h3><div class="chart-container"><canvas id="bi-stations"></canvas></div><div class="bi-none hidden">داده‌ای در این بازه نیست</div></div>
             </div>
-            <p class="note">فیلتر محصول فقط روی نمودارهای وابسته به محصول (تولید، توزیع محصول، راندمان) اعمال می‌شود. MTBF بر مبنای ۷۲۰ دقیقه برنامه‌ریزی روزانه (دو شیفت ۱۲ساعته).</p>
+            <p class="note">فیلتر محصول فقط روی نمودارهای وابسته به محصول (تولید، توزیع محصول، راندمان) اعمال می‌شود. MTBF بر مبنای ۴۸۰ دقیقه برنامه‌ریزی هر شیفت (سه شیفت ۸ساعته).</p>
             <!-- ===== FEAT-BI-2 (end) ===== -->
             <div class="analytics-grid">
                 <div class="chart-card">
@@ -1843,8 +1844,9 @@
                             </label>
                             <label class="flbl">شیفت:
                                 <select id="fpShift" class="fsel">
-                                    <option value="shift-morning-301">شیفت صبح</option>
-                                    <option value="shift-night-302">شیفت شب</option>
+                                    <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                                    <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                                 </select>
                             </label>
                             <label class="flbl">دستگاه تزریق:
@@ -1949,8 +1951,9 @@
                             </label>
                             <label class="flbl">شیفت:
                                 <select id="fwShift" class="fsel">
-                                    <option value="shift-morning-301">شیفت صبح</option>
-                                    <option value="shift-night-302">شیفت شب</option>
+                                    <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                                    <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                                 </select>
                             </label>
                             <label class="flbl span2">توضیحات (اختیاری):
@@ -2007,8 +2010,9 @@
                             </label>
                             <label class="flbl">شیفت:
                                 <select id="fdShift" class="fsel">
-                                    <option value="shift-morning-301">شیفت صبح</option>
-                                    <option value="shift-night-302">شیفت شب</option>
+                                    <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                                    <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                                 </select>
                             </label>
                         </div>
@@ -2069,8 +2073,9 @@
                             </label>
                             <label class="flbl">شیفت:
                                 <select id="fqShift" class="fsel">
-                                    <option value="shift-morning-301">شیفت صبح</option>
-                                    <option value="shift-night-302">شیفت شب</option>
+                                    <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                                    <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                                 </select>
                             </label>
                         </div>
@@ -2731,8 +2736,9 @@
                         <label>تاریخ: <input type="text" inputmode="numeric" data-jp="emDate" id="emDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
                         <label>شیفت:
                             <select id="emShift" class="fsel">
-                                <option value="shift-morning-301">صبح</option>
-                                <option value="shift-night-302">شب</option>
+                                <option value="shift-morning-301">صبح (۷-۱۵)</option>
+<option value="shift-evening-303">عصر (۱۵-۲۲)</option>
+                                <option value="shift-night-302">شب (۲۲-۷)</option>
                             </select>
                         </label>
                         <label>خط:
@@ -2847,8 +2853,9 @@
                         <label>شمش موردنیاز: <input type="number" id="plBillets" min="0" step="1" style="width:90px"></label>
                         <label>خط/ایستگاه: <select id="plMachine" class="fsel"></select></label>
                         <label>شیفت: <select id="plShift" class="fsel">
-                            <option value="shift-morning-301">شیفت صبح</option>
-                            <option value="shift-night-302">شیفت شب</option>
+                            <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                            <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                         </select></label>
                         <label>اولویت: <select id="planPriority" class="fsel">
                             <option value="low">کم</option>
@@ -2873,8 +2880,9 @@
                         <label>ساعت شروع: <input type="time" id="plOutTime" value="08:00" style="width:110px"></label>
                         <label>مدت (ساعت): <input type="number" id="plOutHours" min="0.5" max="24" step="0.5" value="4" style="width:80px"></label>
                         <label>شیفت: <select id="plOutShift" class="fsel">
-                            <option value="shift-morning-301">شیفت صبح</option>
-                            <option value="shift-night-302">شیفت شب</option>
+                            <option value="shift-morning-301">شیفت صبح (۷-۱۵)</option>
+<option value="shift-evening-303">شیفت عصر (۱۵-۲۲)</option>
+                            <option value="shift-night-302">شیفت شب (۲۲-۷)</option>
                         </select></label>
                         <label>شرح: <input type="text" id="plOutNote" placeholder="مثلاً قطعی منطقه‌ای" style="min-width:170px"></label>
                         <button class="act" id="plOutSave">ثبت قطعی</button>
@@ -4214,7 +4222,7 @@ function buildFilterBar(tab) {
             const machines = [...new Set(rows.map((r) => r.machine_id).filter(Boolean))].sort();
             let h = '<div class="frow">';
             h += '<input type="text" class="fsearch" placeholder="جستجو در همه ستون‌ها..." value="' + esc(v.search) + '">';
-            if (HAS_SHIFT[tab]) h += '<select class="fsel" data-f="shift"><option value="all">همه شیفت‌ها</option><option value="shift-morning-301"' + (v.shift === 'shift-morning-301' ? ' selected' : '') + '>شیفت صبح</option><option value="shift-night-302"' + (v.shift === 'shift-night-302' ? ' selected' : '') + '>شیفت شب</option></select>';
+            if (HAS_SHIFT[tab]) h += '<select class="fsel" data-f="shift"><option value="all">همه شیفت‌ها</option><option value="shift-morning-301"' + (v.shift === 'shift-morning-301' ? ' selected' : '') + '>شیفت صبح (۷-۱۵)</option><option value="shift-evening-303"' + (v.shift === 'shift-evening-303' ? ' selected' : '') + '>شیفت عصر (۱۵-۲۲)</option><option value="shift-night-302"' + (v.shift === 'shift-night-302' ? ' selected' : '') + '>شیفت شب (۲۲-۷)</option></select>'; /* POLYMER-2: سه شیفت */
             if (HAS_MACHINE[tab]) h += '<select class="fsel" data-f="machine"><option value="all">همه ایستگاه‌ها</option>' + machines.map((m) => '<option value="' + esc(m) + '"' + (v.machine === m ? ' selected' : '') + '>' + esc(stationFa(m)) + '</option>').join('') + '</select>';
             h += '<label class="flbl">از تاریخ: ' + jalaliDateInputHTML(tab + '-from', v.from) + '</label>';
             h += '<label class="flbl">تا تاریخ: ' + jalaliDateInputHTML(tab + '-to', v.to) + '</label>';
@@ -4244,7 +4252,7 @@ function buildFilterBar(tab) {
         const feux1Rng = () => {
             const now = new Date();
             if (sumRange === 'all') return { from: null, to: null, days: null, label: 'کل دوره' };
-            if (sumRange === 'shift') { const h = now.getHours(); const morn = h >= 6 && h < 18; const from = new Date(now); from.setHours(morn ? 6 : 18, 0, 0, 0); if (!morn && h < 6) from.setDate(from.getDate() - 1); return { from: from, to: now, days: 0.5, label: morn ? 'شیفت صبح (امروز)' : 'شیفت شب' }; }
+            if (sumRange === 'shift') { const h = now.getHours(); let sh, shStart; if (h >= 7 && h < 15) { sh = 'morning'; shStart = 7; } else if (h >= 15 && h < 22) { sh = 'evening'; shStart = 15; } else { sh = 'night'; shStart = 22; } const from = new Date(now); from.setHours(shStart, 0, 0, 0); if (sh === 'night' && h < 7) from.setDate(from.getDate() - 1); const shFa = sh === 'morning' ? 'شیفت صبح (۷-۱۵)' : sh === 'evening' ? 'شیفت عصر (۱۵-۲۲)' : 'شیفت شب (۲۲-۷)'; return { from: from, to: now, days: 1/3, label: shFa + ' (امروز)' }; } /* POLYMER-2: سه شیفت ۸ساعته */
             if (sumRange === 'today') { const from = new Date(now); from.setHours(0, 0, 0, 0); return { from: from, to: now, days: 1, label: 'امروز' }; }
             if (sumRange === 'week') return { from: new Date(now.getTime() - 7 * 86400000), to: now, days: 7, label: '۷ روز اخیر' };
             return { from: new Date(now.getTime() - 30 * 86400000), to: now, days: 30, label: '۳۰ روز اخیر' };
@@ -4304,7 +4312,7 @@ function buildFilterBar(tab) {
                 { key: 'energy', l: 'میانگین انرژی', v: '-', c: 'gray', d: 'در انتظار دادهٔ کنتور انرژی' },
             ];
             flt3SummaryExport = kpis.map((x) => ({ k: x.l, v: String(x.v).replace(/<[^>]*>/g, '') })); box.innerHTML = kpis.map((k) => '<div class="kpi kpi2 ' + k.c + '"><div class="k">' + esc(k.l) + '</div><div class="v">' + k.v + '</div>' + (k.d ? '<div class="d">' + esc(k.d) + '</div>' : '') + (k.sp ? '<div class="sparkwrap"><canvas id="spark-' + k.key + '"></canvas></div>' : '') + '</div>').join('');
-            const note = document.getElementById('sumRangeNote'); if (note) note.textContent = 'بازه: ' + rng.label; if (note && (activeFilter.shift !== 'all' || activeFilter.product !== 'all')) note.textContent += ' | شیفت: ' + (activeFilter.shift === 'all' ? 'همه' : (activeFilter.shift === 'shift-morning-301' ? 'صبح' : 'شب')) + ' | محصول: ' + (activeFilter.product === 'all' ? 'همه' : productFa(activeFilter.product));
+            const note = document.getElementById('sumRangeNote'); if (note) note.textContent = 'بازه: ' + rng.label; if (note && (activeFilter.shift !== 'all' || activeFilter.product !== 'all')) note.textContent += ' | شیفت: ' + (activeFilter.shift === 'all' ? 'همه' : (activeFilter.shift === 'shift-morning-301' ? 'صبح' : activeFilter.shift === 'shift-evening-303' ? 'عصر' : 'شب')) + ' | محصول: ' + (activeFilter.product === 'all' ? 'همه' : productFa(activeFilter.product));
             const sparkDays = Math.min(14, Math.max(7, Math.round(days)));
             feux1Spark('good', feux1Buckets(pr, 'timestamp', (r) => Number(r.good_quantity) || 0, sparkDays), '#059669', null);
             feux1Spark('carton', feux1Buckets(pr, 'timestamp', (r) => Number(r.pallet_count) || 0, sparkDays), '#0e7490', null);
@@ -4342,7 +4350,7 @@ function buildFilterBar(tab) {
             charts.waste = new Chart(document.getElementById('chart-waste'), { type: 'bar', data: { labels: Object.keys(wsByReason), datasets: [{ label: 'تناژ ضایعات (تن)' /* FIX-WASTE-26a */, data: Object.values(wsByReason), backgroundColor: '#d97706', borderColor: '#d97706', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
             const pr = filterData(cache.production || [], 'production'); const prByShift = {};
             pr.forEach((r) => { const k = r.shift_id || 'نامشخص'; prByShift[k] = (prByShift[k] || 0) + (Number(r.good_quantity) || 0); });
-            const shiftNames = { 'shift-morning-301': 'شیفت صبح', 'shift-night-302': 'شیفت شب' };
+            const shiftNames = { 'shift-morning-301': 'شیفت صبح (۷-۱۵)', 'shift-evening-303': 'شیفت عصر (۱۵-۲۲)', 'shift-night-302': 'شیفت شب (۲۲-۷)' }; /* POLYMER-2 */
             if (charts.shift) charts.shift.destroy();
             charts.shift = new Chart(document.getElementById('chart-shift'), { type: 'bar', data: { labels: Object.keys(prByShift).map(k => shiftNames[k] || k), datasets: [{ label: 'تولید سالم', data: Object.values(prByShift), backgroundColor: '#059669', borderColor: '#059669', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: chrome.grid }, ticks: { color: chrome.tick } }, x: { grid: { display: false }, ticks: { color: chrome.tick } } } } });
             const prByDay = {};
@@ -10200,7 +10208,7 @@ showRes();
         })();
         // ۸) مقایسه شیفت‌ها
         (() => {
-            const sh = { 'shift-morning-301': { l: 'صبح', good: 0, min: 0 }, 'shift-night-302': { l: 'شب', good: 0, min: 0 } };
+            const sh = { 'shift-morning-301': { l: 'صبح', good: 0, min: 0 }, 'shift-evening-303': { l: 'عصر', good: 0, min: 0 }, 'shift-night-302': { l: 'شب', good: 0, min: 0 } }; /* POLYMER-2 */
             pr.forEach((r) => { const k = sh[r.shift_id] ? r.shift_id : null; if (k && biSizeOk(r)) sh[k].good += Number(r.good_quantity) || 0; });
             dt.forEach((r) => { const k = sh[r.shift_id] ? r.shift_id : null; if (k) sh[k].min += Number(r.duration_minutes) || 0; });
             const labels = Object.keys(sh).map((k) => sh[k].l);
@@ -10248,7 +10256,7 @@ showRes();
     const PLAN_PERIOD_FA = { day: 'روزانه', shift: 'شیفت', week: 'هفتگی' };
     const PLAN_PRIO_FA = { low: 'کم', medium: 'متوسط', high: 'زیاد' };
     const PLAN_SOURCE_FA = { manual: 'دستی', smart: 'هوشمند', ai: 'هوش مصنوعی' };
-    const PLAN_SHIFT_FA = { 'shift-morning-301': 'شیفت صبح', 'shift-night-302': 'شیفت شب' };
+    const PLAN_SHIFT_FA = { 'shift-morning-301': 'شیفت صبح (۷-۱۵)', 'shift-evening-303': 'شیفت عصر (۱۵-۲۲)', 'shift-night-302': 'شیفت شب (۲۲-۷)' }; /* POLYMER-2 */
     const planCache = { plans: [], suggestions: [], engine: '', aiConfigured: false, meta: null, outages: [], pattern: null };
     let planEditingId = null, planPrefillMeta = null, planChart = null;
 
@@ -10824,7 +10832,7 @@ showRes();
         t.innerHTML = '<thead><tr><th>تاریخ</th><th>شیفت</th><th>خط</th><th>kWh</th><th>انرژی/تن روز</th><th>توضیح</th><th>ثبت‌کننده</th></tr></thead><tbody>'
             + (logs.length ? logs.map((l) => {
                 const d = days.find((x) => x.date === l.iso_date);
-                return '<tr><td>' + toFaDigits(l.date_jalali || '') + '</td><td>' + (l.shift_id === 'shift-morning-301' ? 'صبح' : 'شب') + '</td><td>' + esc(l.line_fa || l.line || '—') + '</td><td><b>' + emFa(l.kwh) + '</b></td><td>' + (d && d.kwh_per_ton != null ? emFa(d.kwh_per_ton) : '—') + '</td><td>' + esc(l.note || '—') + '</td><td>' + esc(l.created_by || '—') + '</td></tr>';
+                return '<tr><td>' + toFaDigits(l.date_jalali || '') + '</td><td>' + (l.shift_id === 'shift-morning-301' ? 'صبح' : l.shift_id === 'shift-evening-303' ? 'عصر' : 'شب') + '</td><td>' + esc(l.line_fa || l.line || '—') + '</td><td><b>' + emFa(l.kwh) + '</b></td><td>' + (d && d.kwh_per_ton != null ? emFa(d.kwh_per_ton) : '—') + '</td><td>' + esc(l.note || '—') + '</td><td>' + esc(l.created_by || '—') + '</td></tr>';
             }).join('') : '<tr><td colspan="7">هنوز رکوردی ثبت نشده — با دکمهٔ «ثبت kWh» شروع کنید (نقش مهندسی/مدیر).</td></tr>') + '</tbody>';
     }
     function emPaintChart() {
