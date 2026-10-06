@@ -5563,14 +5563,15 @@ function appRequestHandler(req, res) {
 
                     const buf = Buffer.from(b64, 'base64');
 
-                    /* POLYMER-IMP-6: قفل ضد ایمپورت تکراری — هش فایل */
+                    /* POLYMER-IMP-6: قفل ضد ایمپورت تکراری — موقتاً غیرفعال در فاز تست */
                     const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
                     const live = invEnsure(readLive());
                     live.import_hashes = live.import_hashes || [];
+                    /* TODO: فعال‌سازی مجدد پس از اتمام تست — فرید اعلام می‌کند
                     const dupHash = live.import_hashes.find(h => h.hash === fileHash);
                     if (dupHash) {
                         return sendJson(res, { error: 'این فایل قبلاً ایمپورت شده است (' + (dupHash.date || '') + ' — ' + (dupHash.filename || '') + '). برای ایمپورت مجدد، ابتدا از بخش مدیریت فایل را حذف کنید.' }, 400);
-                    }
+                    } */
 
                     /* تشخیص فرمت و پارس — اول از روی محتوا، بعد از روی پسوند */
                     let sepidarSheets = null; /* [{name, rows}] */
