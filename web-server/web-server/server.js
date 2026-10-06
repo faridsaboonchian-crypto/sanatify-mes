@@ -5564,7 +5564,12 @@ function appRequestHandler(req, res) {
                     const textStart = buf.toString('utf8', 0, Math.min(buf.length, 2000));
                     const isSpreadsheetMl = textStart.indexOf('urn:schemas-microsoft-com:office:spreadsheet') >= 0 || textStart.indexOf('<Workbook') >= 0;
                     if (isSpreadsheetMl) {
-                        const parsed = impParseSpreadsheetMl32(buf.toString('utf8'));
+                        let parsed;
+                        try {
+                            parsed = impParseSpreadsheetMl32(buf.toString('utf8'));
+                        } catch (e) {
+                            return sendJson(res, { error: 'خطا در پارس SpreadsheetML: ' + e.message + ' (حجم فایل: ' + buf.length + ' بایت)' }, 400);
+                        }
                         if (impIsSepidar32(parsed)) {
                             sepidarSheets = parsed.sheets;
                         } else {
