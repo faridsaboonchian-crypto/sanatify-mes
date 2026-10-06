@@ -5518,6 +5518,41 @@ function appRequestHandler(req, res) {
                h14.indexOf('موجودي') >= 0;
     }
 
+    /* POLYMER-WH-4: گروه‌بندی هوشمند کالا بر اساس نام */
+    function invAutoCategory32(name32) {
+        const n = String(name32 || '');
+        if (/PACKING\s+(AIRMIX|DUCT)/i.test(n)) return 'قطعات خودرویی';
+        if (/COVER|DOOR|DUCT|BLOWER|HEATER|INTAKE|ADAPTOR|HOUSING|ELBOW|FOOT|RETAINER|HOLDER|CASE|ASM/i.test(n)) return 'قطعات خودرویی';
+        if (/گرانول|مستربچ/i.test(n)) return 'مواد اولیه';
+        if (/^PA[\s\d\.]/i.test(n) || /^PA6/i.test(n)) return 'مواد اولیه';
+        if (/^PP[\s\d\%]/i.test(n)) return 'مواد اولیه';
+        if (/^ABS/i.test(n)) return 'مواد اولیه';
+        if (/^PET/i.test(n)) return 'مواد اولیه';
+        if (/آسیابی/i.test(n)) return 'مواد آسیابی';
+        if (/بست|گوه/i.test(n)) return 'محصول نهایی';
+        return 'سایر';
+    }
+
+    /* POLYMER-WH-4: endpoint گروه‌بندی مجدد کالاهای موجود */
+    if (req.method === 'POST' && pathname === '/api/inventory/recategorize') {
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        }
+        const live = invEnsure(readLive());
+        let updated = 0;
+        const groups = {};
+        (live.inventory_items || []).forEach(item => {
+            const cat = invAutoCategory32(item.name);
+            if (item.category !== cat) {
+                item.category = cat;
+                updated++;
+            }
+            groups[cat] = (groups[cat] || 0) + 1;
+        });
+        invSave(live, req, 'inventory.recategorize', { updated });
+        return sendJson(res, { ok: true, updated, groups });
+    }
+
     if (
         req.method === 'POST' &&
         pathname === '/api/inventory/import'
@@ -5650,7 +5685,7 @@ function appRequestHandler(req, res) {
                                     id: 'itm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri + imp32,
                                     code: code,
                                     name: name,
-                                    category: 'سایر',
+                                    category: invAutoCategory32(name),
                                     unit: unit,
                                     reorder_point: Number(minStock) || 0, min_stock: Number(minStock) || 0, max_stock: Number(maxStock) || 0,
                                     batch_tracking: false,

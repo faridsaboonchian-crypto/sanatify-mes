@@ -3233,6 +3233,7 @@
 
                     <div class="frow">
                         <button class="act" id="impDoImport" disabled>✅ شروع ایمپورت</button>
+                        <button class="act" id="impRecategorize" style="background:#7c3aed;">🏷️ گروه‌بندی هوشمند کالاها</button>
                         <span id="impResult" style="font-size:13px;"></span>
                     </div>
 
@@ -7633,6 +7634,28 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                     resEl.textContent = '❌ خطای ارتباط: ' + e.message;
                 }
                 doBtn.disabled = false;
+            });
+
+            /* POLYMER-WH-4: دکمه گروه‌بندی هوشمند */
+            document.getElementById('impRecategorize')?.addEventListener('click', async () => {
+                const btn = document.getElementById('impRecategorize');
+                const resEl = document.getElementById('impResult');
+                btn.disabled = true;
+                resEl.textContent = '⏳ در حال گروه‌بندی...';
+                try {
+                    const resp = await fetch('/api/inventory/recategorize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    const out = await resp.json();
+                    if (out.ok) {
+                        const g = Object.entries(out.groups || {}).map(([k, v]) => k + ': ' + v).join('، ');
+                        resEl.textContent = '✅ ' + out.updated + ' کالا گروه‌بندی شد | ' + g;
+                        if (typeof refreshInventory === 'function') refreshInventory();
+                    } else {
+                        resEl.textContent = '❌ ' + (out.error || 'خطا');
+                    }
+                } catch (e) {
+                    resEl.textContent = '❌ خطای ارتباط: ' + e.message;
+                }
+                btn.disabled = false;
             });
         })();
 
