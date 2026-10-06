@@ -5464,6 +5464,53 @@ function appRequestHandler(req, res) {
         return Number.isFinite(n32) ? n32 : NaN;
     }
 
+    /* ---------- helper: parse SpreadsheetML (.xls XML — خروجی سپیدار) ---------- */
+    /* خروجی: { sheets: [{ name, rows: [[...]] }] } */
+    function impParseSpreadsheetMl32(xml32) {
+        /* حذف BOM */
+        if (xml32.charCodeAt(0) === 0xfeff) xml32 = xml32.slice(1);
+        var sheets32 = [];
+        var wsRe32 = /<Worksheet\s+ss:Name="([^"]+)"[^>]*>([\s\S]*?)<\/Worksheet>/g, wsM32;
+        while ((wsM32 = wsRe32.exec(xml32))) {
+            var name32 = wsM32[1].trim();
+            var tableM32 = /<Table[^>]*>([\s\S]*?)<\/Table>/.exec(wsM32[2]);
+            if (!tableM32) continue;
+            var rows32 = [];
+            var rowRe32 = /<Row[^>]*>([\s\S]*?)<\/Row>/g, rowM32;
+            while ((rowM32 = rowRe32.exec(tableM32[1]))) {
+                var cells32 = [];
+                var col32 = 0;
+                /* هم <Cell>...</Cell> و هم <Cell/> خودبسته */
+                var cellRe32 = /<Cell(?:\s+ss:Index="(\d+)")?[^>]*?(?:\/>|>([\s\S]*?)<\/Cell>)/g, cellM32;
+                while ((cellM32 = cellRe32.exec(rowM32[1]))) {
+                    if (cellM32[1]) col32 = parseInt(cellM32[1], 10) - 1;
+                    var val32 = '';
+                    if (cellM32[2]) {
+                        var dm32 = /<Data[^>]*>([\s\S]*?)<\/Data>/.exec(cellM32[2]);
+                        if (dm32) val32 = dm32[1].replace(/<[^>]+>/g, '').trim();
+                    }
+                    while (cells32.length < col32) cells32.push('');
+                    cells32.push(impXmlDec32(val32));
+                    col32++;
+                }
+                rows32.push(cells32);
+            }
+            if (rows32.length) sheets32.push({ name: name32, rows: rows32 });
+        }
+        if (!sheets32.length) throw new Error('شیت اکسل یافت نشد');
+        return { sheets: sheets32 };
+    }
+
+    /* ---------- helper: تشخیص فرمت سپیدار ---------- */
+    function impIsSepidar32(parsed32) {
+        if (!parsed32.sheets || !parsed32.sheets.length) return false;
+        var r0 = parsed32.sheets[0].rows[0] || [];
+        var h0 = String(r0[0] || ''), h1 = String(r0[1] || ''), h14 = String(r0[14] || '');
+        return (h0.indexOf('كد كالا') >= 0 || h0.indexOf('کد کالا') >= 0 || h0 === 'انبار') &&
+               h1.indexOf('عنوان كالا') >= 0 &&
+               h14.indexOf('موجودي') >= 0;
+    }
+
     if (
         req.method === 'POST' &&
         pathname === '/api/inventory/import'
@@ -5509,109 +5556,140 @@ function appRequestHandler(req, res) {
 
                     const buf = Buffer.from(b64, 'base64');
 
+                    /* تشخیص فرمت و پارس */
+                    let sepidarSheets = null; /* [{name, rows}] */
                     let rows;
-                    if (/\.xlsx$/i.test(filename)) {
+                    if (/\.xls$/i.test(filename) && !/\.xlsx$/i.test(filename)) {
+                        const parsed = impParseSpreadsheetMl32(buf.toString('utf8'));
+                        if (impIsSepidar32(parsed)) {
+                            sepidarSheets = parsed.sheets;
+                        } else {
+                            /* xls غیرسپیدار: فقط شیت اول */
+                            rows = parsed.sheets[0].rows;
+                        }
+                    } else if (/\.xlsx$/i.test(filename)) {
                         rows = impParseXlsx32(buf);
                     } else if (/\.csv$/i.test(filename)) {
                         rows = impParseCsv32(buf.toString('utf8'));
                     } else {
-                        return sendJson(res, { error: 'فرمت فایل پشتیبانی نمی‌شود. فقط xlsx و csv.' }, 400);
-                    }
-
-                    const mapping = b.mapping || {};
-                    const hasHeader = b.has_header !== false;
-                    const defWh = String(b.default_warehouse || '').trim();
-
-                    const colCode = Number(mapping.code);
-                    const colName = Number(mapping.name);
-                    const colQty = Number(mapping.quantity);
-                    const colUnit = Number(mapping.unit);
-                    const colWh = mapping.warehouse !== undefined && mapping.warehouse !== null && mapping.warehouse !== '' ? Number(mapping.warehouse) : -1;
-                    const colLot = mapping.lot !== undefined && mapping.lot !== null && mapping.lot !== '' ? Number(mapping.lot) : -1;
-
-                    if (!Number.isInteger(colCode) || colCode < 0 || !Number.isInteger(colName) || colName < 0 ||
-                        !Number.isInteger(colQty) || colQty < 0 || !Number.isInteger(colUnit) || colUnit < 0) {
-                        return sendJson(res, { error: 'نگاشت ستون‌ها ناقص است (کد، نام، مقدار و واحد الزامی).' }, 400);
+                        return sendJson(res, { error: 'فرمت فایل پشتیبانی نمی‌شود. فقط xls/xlsx/csv.' }, 400);
                     }
 
                     const live = invEnsure(readLive());
-                    const startIdx = hasHeader ? 1 : 0;
-
-                    let imported = 0, createdItems = 0;
+                    let imported = 0, createdItems = 0, skippedZero = 0;
                     const errors = [];
                     const seenCodes = {};
+                    const sheetSummary = [];
 
-                    for (let ri = startIdx; ri < rows.length; ri++) {
-                        const r = rows[ri] || [];
-                        const isEmpty = r.every(function (c) { return String(c || '').trim() === ''; });
-                        if (isEmpty) continue;
+                    /* تابع کمکی: ایمپورت یک دسته ردیف */
+                    function impRunRows32(rowList32, startIdx32, map32, whName32, sheetLabel32) {
+                        let imp32 = 0;
+                        for (let ri = startIdx32; ri < rowList32.length; ri++) {
+                            const r = rowList32[ri] || [];
+                            const isEmpty = r.every(function (c) { return String(c || '').trim() === ''; });
+                            if (isEmpty) continue;
 
-                        const code = String(r[colCode] || '').trim().toUpperCase();
-                        const name = String(r[colName] || '').trim();
-                        const qty = impNormNum32(r[colQty]);
-                        const unit = String(r[colUnit] || '').trim();
-                        const wh = colWh >= 0 ? String(r[colWh] || '').trim() : defWh;
-                        const lot = colLot >= 0 ? String(r[colLot] || '').trim() : '';
+                            const code = String(r[map32.code] || '').trim().toUpperCase();
+                            const name = String(r[map32.name] || '').trim();
+                            const qty = impNormNum32(r[map32.quantity]);
+                            const unit = String(r[map32.unit] || '').trim();
+                            const wh = whName32;
+                            const lot = '';
 
-                        const rowNo = ri + 1;
+                            const rowNo = ri + 1;
+                            const lbl32 = sheetLabel32 ? sheetLabel32 + ' ردیف ' + rowNo : 'ردیف ' + rowNo;
 
-                        if (!code) { errors.push({ row: rowNo, reason: 'کد کالا خالی است' }); continue; }
-                        if (!name) { errors.push({ row: rowNo, reason: 'نام کالا خالی است' }); continue; }
-                        if (!Number.isFinite(qty) || qty <= 0) { errors.push({ row: rowNo, reason: 'مقدار نامعتبر است' }); continue; }
-                        if (!unit) { errors.push({ row: rowNo, reason: 'واحد خالی است' }); continue; }
+                            if (!code) continue; /* ردیف جمع/خالی سپیدار رد می‌شود */
+                            if (!name) { errors.push({ row: lbl32, reason: 'نام کالا خالی است' }); continue; }
+                            if (!Number.isFinite(qty)) { errors.push({ row: lbl32, reason: 'مقدار نامعتبر است' }); continue; }
+                            if (!unit) { errors.push({ row: lbl32, reason: 'واحد خالی است' }); continue; }
 
-                        if (seenCodes[code]) { errors.push({ row: rowNo, reason: 'کد تکراری در فایل: ' + code }); continue; }
-                        seenCodes[code] = true;
+                            const ck32 = wh + '|' + code;
+                            if (seenCodes[ck32]) { errors.push({ row: lbl32, reason: 'کد تکراری در فایل: ' + code }); continue; }
+                            seenCodes[ck32] = true;
 
-                        let item = live.inventory_items.find(function (x) { return x.code === code; });
+                            let item = live.inventory_items.find(function (x) { return x.code === code; });
 
-                        if (!item) {
-                            item = {
-                                id: 'itm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri,
-                                code: code,
-                                name: name,
-                                category: 'سایر',
-                                unit: unit,
-                                reorder_point: 0, min_stock: 0, max_stock: 0,
-                                batch_tracking: false,
-                                active: true,
-                                description: 'ایجادشده از ایمپورت اکسل',
+                            if (!item) {
+                                item = {
+                                    id: 'itm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri + imp32,
+                                    code: code,
+                                    name: name,
+                                    category: 'سایر',
+                                    unit: unit,
+                                    reorder_point: 0, min_stock: 0, max_stock: 0,
+                                    batch_tracking: false,
+                                    active: true,
+                                    description: 'ایجادشده از ایمپورت سپیدار',
+                                    created_at: new Date().toISOString(),
+                                    created_by: String((req.user && req.user.username) || '')
+                                };
+                                live.inventory_items.push(item);
+                                createdItems++;
+                            }
+
+                            if (qty <= 0) { skippedZero++; continue; } /* موجودی صفر: فقط کالا تعریف می‌شود */
+
+                            const rec = {
+                                id: 'grn-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri + '_' + imp32,
+                                request_id: 'import-' + Date.now(),
+                                receipt_no: 'GRN-' + Date.now() + '-' + ri,
+                                item_id: item.id,
+                                quantity: qty,
+                                unit: item.unit,
+                                lot_no: lot,
+                                warehouse: wh,
+                                location: '',
+                                stock_status: 'available',
+                                receipt_type: 'opening_balance',
+                                supplier: 'ایمپورت سپیدار (' + filename + ')',
                                 created_at: new Date().toISOString(),
                                 created_by: String((req.user && req.user.username) || '')
                             };
-                            live.inventory_items.push(item);
-                            createdItems++;
+                            live.inventory_receipts.push(rec);
+                            imported++;
+                            imp32++;
                         }
-
-                        const rec = {
-                            id: 'grn-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri,
-                            request_id: 'import-' + Date.now(),
-                            receipt_no: 'GRN-' + Date.now() + '-' + ri,
-                            item_id: item.id,
-                            quantity: qty,
-                            unit: item.unit,
-                            lot_no: lot,
-                            warehouse: wh,
-                            location: '',
-                            stock_status: 'available',
-                            receipt_type: 'opening_balance',
-                            supplier: 'ایمپورت اکسل (' + filename + ')',
-                            created_at: new Date().toISOString(),
-                            created_by: String((req.user && req.user.username) || '')
-                        };
-                        live.inventory_receipts.push(rec);
-                        imported++;
+                        return imp32;
                     }
 
-                    invSave(live, req, 'inventory.import', { file: filename, imported: imported, created_items: createdItems, errors: errors.length });
+                    if (sepidarSheets) {
+                        /* حالت سپیدار: هر شیت = یک انبار، نگاشت ثابت */
+                        const sepMap32 = { code: 0, name: 1, quantity: 14, unit: 21 };
+                        sepidarSheets.forEach(function (sh32) {
+                            const n32 = impRunRows32(sh32.rows, 1, sepMap32, sh32.name, '«' + sh32.name + '»');
+                            sheetSummary.push({ warehouse: sh32.name, imported: n32 });
+                        });
+                    } else {
+                        /* حالت دستی: تک‌شیت با نگاشت کاربر */
+                        const mapping = b.mapping || {};
+                        const hasHeader = b.has_header !== false;
+                        const defWh = String(b.default_warehouse || '').trim() || 'انبار اصلی';
+
+                        const colCode = Number(mapping.code);
+                        const colName = Number(mapping.name);
+                        const colQty = Number(mapping.quantity);
+                        const colUnit = Number(mapping.unit);
+
+                        if (!Number.isInteger(colCode) || colCode < 0 || !Number.isInteger(colName) || colName < 0 ||
+                            !Number.isInteger(colQty) || colQty < 0 || !Number.isInteger(colUnit) || colUnit < 0) {
+                            return sendJson(res, { error: 'نگاشت ستون‌ها ناقص است (کد، نام، مقدار و واحد الزامی).' }, 400);
+                        }
+                        const startIdx = hasHeader ? 1 : 0;
+                        impRunRows32(rows, startIdx, { code: colCode, name: colName, quantity: colQty, unit: colUnit }, defWh, '');
+                    }
+
+                    invSave(live, req, 'inventory.import', { file: filename, imported: imported, created_items: createdItems, errors: errors.length, sheets: sheetSummary });
 
                     return sendJson(res, {
                         ok: true,
-                        total_rows: rows.length - startIdx,
                         imported: imported,
                         created_items: createdItems,
+                        skipped_zero: skippedZero,
                         error_count: errors.length,
-                        errors: errors.slice(0, 50)
+                        errors: errors.slice(0, 50),
+                        sheets: sheetSummary,
+                        sepidar_mode: !!sepidarSheets
                     });
 
                 } catch (e) {

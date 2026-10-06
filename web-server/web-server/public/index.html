@@ -3200,7 +3200,7 @@
                     </div>
 
                     <div class="frow" style="margin-bottom:10px;">
-                        <input type="file" id="impFile" accept=".xlsx,.csv" />
+                        <input type="file" id="impFile" accept=".xls,.xlsx,.csv" />
                         <label style="font-size:12px;">
                             <input type="checkbox" id="impHasHeader" checked /> ردیف اول عنوان ستون است
                         </label>
@@ -7482,6 +7482,7 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                 mapWrap.classList.add('hidden');
                 if (!f) return;
                 impFileName = f.name;
+                isSepidar32 = false;
                 const rd = new FileReader();
                 rd.onload = () => {
                     const dataUrl = String(rd.result || '');
@@ -7512,6 +7513,15 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                             mapWrap.classList.remove('hidden');
                             doBtn.disabled = false;
                         } catch (e) { resEl.textContent = 'خطا در خواندن فایل'; }
+                    } else if (/\.xls$/i.test(impFileName)) {
+                        isSepidar32 = true;
+                        /* xls سپیدار: تشخیص خودکار — نیازی به نگاشت دستی نیست */
+                        prevEl.innerHTML = '<div style="padding:10px;font-size:13px;">فایل سپیدار شناسایی شد: <b>' + impFileName + '</b><br>✅ ستون‌ها خودکار نگاشت می‌شوند (کد=۰، عنوان=۱، موجودی=۱۴، واحد=۲۱)<br>هر شیت = یک انبار. دکمه «شروع ایمپورت» را بزنید.</div>';
+                        prevWrap.classList.remove('hidden');
+                        mapWrap.classList.add('hidden');
+                        /* نگاشت خودکار سپیدار */
+                        doBtn.disabled = false;
+                        doBtn.onclick = null;
                     } else {
                         /* xlsx: پیش‌نمایش نداریم ولی نگاشت را با حدس پیش‌فرض باز می‌کنیم */
                         prevEl.innerHTML = '<div style="padding:10px;font-size:13px;">فایل اکسل انتخاب شد: <b>' + impFileName + '</b><br>پیش‌نمایش اکسل سمت سرور انجام می‌شود — ستون‌ها را دستی انتخاب کنید.</div>';
@@ -7542,6 +7552,7 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
 
             hasHeaderEl.addEventListener('change', () => { if (fileEl.files[0]) fileEl.dispatchEvent(new Event('change')); });
 
+            let isSepidar32 = false;
             doBtn.addEventListener('click', async () => {
                 const getMap = id => {
                     const v = document.getElementById(id).value;
@@ -7555,7 +7566,7 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                     warehouse: getMap('impMapWh'),
                     lot: getMap('impMapLot')
                 };
-                if (mapping.code < 0 || mapping.name < 0 || mapping.quantity < 0 || mapping.unit < 0) {
+                if (!isSepidar32 && (mapping.code < 0 || mapping.name < 0 || mapping.quantity < 0 || mapping.unit < 0)) {
                     resEl.textContent = '❌ ستون‌های کد، نام، مقدار و واحد الزامی است.';
                     return;
                 }
@@ -7580,8 +7591,12 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                         if (out.error_count) msg += ' — ' + out.error_count + ' خطا';
                         resEl.textContent = msg;
                         if (out.errors && out.errors.length) {
-                            resEl.textContent += ' | مثلاً ردیف ' + out.errors[0].row + ': ' + out.errors[0].reason;
+                            resEl.textContent += ' | مثلاً ' + out.errors[0].row + ': ' + out.errors[0].reason;
                         }
+                        if (out.sheets && out.sheets.length) {
+                            resEl.textContent += ' | ' + out.sheets.map(s => s.warehouse.trim() + ': ' + s.imported).join('، ');
+                        }
+                        if (out.skipped_zero) resEl.textContent += ' (' + out.skipped_zero + ' قلم با موجودی صفر فقط تعریف شد)';
                         if (typeof refreshInventory === 'function') refreshInventory();
                     } else {
                         resEl.textContent = '❌ ' + (out.error || 'خطای نامشخص');
