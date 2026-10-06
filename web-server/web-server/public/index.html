@@ -7264,12 +7264,12 @@ const itemId = sel ? sel.value : '';
 const txs = ((inventoryData && inventoryData.transactions) ? inventoryData.transactions : []).filter(function (t) { return !itemId || String(t.item_id) === String(itemId); });
 let html = '<thead><tr><th>نوع تراکنش</th><th>شماره سند</th><th>کالا</th><th>مقدار</th><th>انبار / مبدا</th><th>مقصد</th><th>لات / بچ</th><th>تاریخ</th></tr></thead><tbody>';
 if (!txs.length) html += '<tr><td colspan="8" class="empty">کارتکس خالی است.</td></tr>';
-txs.forEach(function (row) {
+else html += invPaginate(txs, 'cardex', function (row) {
 const docNo = row.receipt_no || row.issue_no || row.transfer_no || row.adjustment_no || '-';
 const location = row.warehouse ? (INV_WAREHOUSES[row.warehouse] || row.warehouse) : (row.from_warehouse ? (INV_WAREHOUSES[row.from_warehouse] || row.from_warehouse) : '-');
 const destination = row.destination ? row.destination : (row.to_warehouse ? (INV_WAREHOUSES[row.to_warehouse] || row.to_warehouse) : '-');
 const qty = (row.tx_type === 'adjustment') ? row.delta_quantity : row.quantity;
-html += '<tr><td>' + esc(INV_TX_FA[row.tx_type] || row.tx_type || '-') + '</td><td>' + esc(docNo) + '</td><td>' + esc(invItemName(row.item_id)) + '</td><td>' + invQty(qty) + '</td><td>' + esc(location) + '</td><td>' + esc(destination) + '</td><td>' + esc(row.lot_no || '-') + '</td><td>' + fmtDate(row.timestamp) + '</td></tr>';
+return '<tr><td>' + esc(INV_TX_FA[row.tx_type] || row.tx_type || '-') + '</td><td>' + esc(docNo) + '</td><td>' + esc(invItemName(row.item_id)) + '</td><td>' + invQty(qty) + '</td><td>' + esc(location) + '</td><td>' + esc(destination) + '</td><td>' + esc(row.lot_no || '-') + '</td><td>' + fmtDate(row.timestamp) + '</td></tr>';
 });
 table.innerHTML = html + '</tbody>';
 }
@@ -7282,6 +7282,42 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
             if (u === 'تن' || u === 'ton' || u === 'tons') return (Math.round(q * 1000) / 1000).toFixed(3);
             return null;
         }
+        /* POLYMER-PG-1: صفحه‌بندی جداول انبار */
+        const INV_PAGE_SIZE = 20;
+        const invPageState = {};
+        function invPaginate(rows, key, renderRow) {
+            const page = invPageState[key] || 1;
+            const total = rows.length;
+            const pages = Math.max(1, Math.ceil(total / INV_PAGE_SIZE));
+            const p = Math.min(page, pages);
+            invPageState[key] = p;
+            const start = (p - 1) * INV_PAGE_SIZE;
+            const slice = rows.slice(start, start + INV_PAGE_SIZE);
+            let html = slice.map(renderRow).join('');
+            if (total > INV_PAGE_SIZE) {
+                html += '<tr><td colspan="20" style="text-align:center;padding:10px;">' +
+                    '<span style="color:#666;font-size:12px;">صفحه ' + p + ' از ' + pages + ' (' + total + ' ردیف)</span> ' +
+                    (p > 1 ? '<button class="act" data-pg="' + key + '" data-pgo="-1" style="padding:4px 12px;font-size:11px;margin:0 4px;">◀ قبلی</button>' : '') +
+                    (p < pages ? '<button class="act" data-pg="' + key + '" data-pgo="1" style="padding:4px 12px;font-size:11px;margin:0 4px;">بعدی ▶</button>' : '') +
+                    '</td></tr>';
+            }
+            return html;
+        }
+        document.addEventListener('click', function (e) {
+            const b = e.target.closest('[data-pg]');
+            if (!b) return;
+            const key = b.dataset.pg;
+            invPageState[key] = (invPageState[key] || 1) + Number(b.dataset.pgo);
+            if (key === 'stock') invRenderStock();
+            else if (key === 'items') invRenderItems();
+            else if (key === 'tx') invRenderTx();
+            else if (key === 'cardex') invRenderCardex();
+        });
+        /* ریست صفحه هنگام تغییر فیلتر */
+        ['invWhFilter', 'invCatFilter', 'invStockSearch'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', () => { invPageState['stock'] = 1; });
+            document.getElementById(id)?.addEventListener('change', () => { invPageState['stock'] = 1; });
+        });
         function invRenderStock() {
             if (!inventoryData) return;
             const wh = (document.getElementById('invWhFilter') || {}).value || '';
@@ -7289,9 +7325,9 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
             const rows = (inventoryData.stockview || []).filter(x => (!wh || x.warehouse === wh) && (!cat || (x.category || '') === cat));
             let html = '<thead><tr><th>کد کالا</th><th>نام کالا</th><th>گروه</th><th>واحد</th><th>انبار</th><th>فیزیکی</th><th>مسدود</th><th>رزرو</th><th>قابل مصرف</th><th>تن (۳ رقم)</th><th>حداقل</th><th>نقطه سفارش</th><th>وضعیت</th></tr></thead><tbody>';
             if (!rows.length) html += '<tr><td colspan="13" class="empty">موجودی ثبت نشده است.</td></tr>';
-            rows.forEach(r => {
+            else html += invPaginate(rows, 'stock', r => {
                 const chip = r.status === 'low' ? '<span class="chip no">کمبود موجودی</span>' : r.status === 'warn' ? '<span class="chip wait">نزدیک نقطه سفارش</span>' : r.status === 'none' ? '<span class="chip none">بدون موجودی</span>' : '<span class="chip ok">موجودی کافی</span>';
-                html += '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.category || '-') + '</td><td>' + esc(r.unit) + '</td><td>' + esc(INV_WAREHOUSES[r.warehouse] || r.warehouse) + '</td><td>' + invQty(r.physical) + '</td><td>' + invQty(r.blocked) + '</td><td>' + invQty(r.reserved) + '</td><td>' + invQty(r.available) + '</td><td>' + (invTons(r.available, r.unit) !== null ? groupFa(invTons(r.available, r.unit)) : '-') + '</td><td>' + invQty(r.min_stock) + '</td><td>' + invQty(r.reorder_point) + '</td><td>' + chip + '</td></tr>';
+                return '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.category || '-') + '</td><td>' + esc(r.unit) + '</td><td>' + esc(INV_WAREHOUSES[r.warehouse] || r.warehouse) + '</td><td>' + invQty(r.physical) + '</td><td>' + invQty(r.blocked) + '</td><td>' + invQty(r.reserved) + '</td><td>' + invQty(r.available) + '</td><td>' + (invTons(r.available, r.unit) !== null ? groupFa(invTons(r.available, r.unit)) : '-') + '</td><td>' + invQty(r.min_stock) + '</td><td>' + invQty(r.reorder_point) + '</td><td>' + chip + '</td></tr>';
             });
             document.getElementById('tbl-inv-stock').innerHTML = html + '</tbody>';
         }
@@ -7300,8 +7336,8 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
             const items = inventoryData.items || [];
             let itemHtml = '<thead><tr><th>کد</th><th>نام</th><th>دسته</th><th>واحد</th><th>نقطه سفارش</th><th>حداقل</th><th>حداکثر</th><th>رهگیری بچ</th></tr></thead><tbody>';
             if (!items.length) itemHtml += '<tr><td colspan="8" class="empty">کالایی تعریف نشده است.</td></tr>';
-            items.forEach(item => {
-                itemHtml += '<tr><td>' + esc(item.code) + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.category) + '</td><td>' + esc(item.unit) + '</td><td>' + invQty(item.reorder_point) + '</td><td>' + invQty(item.min_stock) + '</td><td>' + invQty(item.max_stock) + '</td><td>' + (item.batch_tracking ? '<span class="chip ok">بله</span>' : 'خیر') + '</td></tr>';
+            else itemHtml += invPaginate(items, 'items', item => {
+                return '<tr><td>' + esc(item.code) + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.category) + '</td><td>' + esc(item.unit) + '</td><td>' + invQty(item.reorder_point) + '</td><td>' + invQty(item.min_stock) + '</td><td>' + invQty(item.max_stock) + '</td><td>' + (item.batch_tracking ? '<span class="chip ok">بله</span>' : 'خیر') + '</td></tr>';
             });
             document.getElementById('tbl-inv-items').innerHTML = itemHtml + '</tbody>';
         }
@@ -7324,8 +7360,7 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
             if (transactions.length === 0) {
                 txHtml += '<tr><td colspan="8">تراکنشی ثبت نشده است.</td></tr>';
             }
-
-            transactions.forEach(function (row) {
+            else txHtml += invPaginate(transactions, 'tx', function (row) {
                 const documentNo =
                     row.receipt_no ||
                     row.issue_no ||
@@ -7351,16 +7386,16 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                         ? row.delta_quantity
                         : row.quantity;
 
-                txHtml += '<tr>';
-                txHtml += '<td>' + esc(INV_TX_FA[row.tx_type] || row.tx_type || '-') + '</td>';
-                txHtml += '<td>' + esc(documentNo) + '</td>';
-                txHtml += '<td>' + esc(invItemName(row.item_id)) + '</td>';
-                txHtml += '<td>' + invQty(qty) + '</td>';
-                txHtml += '<td>' + esc(location) + '</td>';
-                txHtml += '<td>' + esc(destination) + '</td>';
-                txHtml += '<td>' + esc(row.lot_no || '-') + '</td>';
-                txHtml += '<td>' + fmtDate(row.timestamp) + '</td>';
-                txHtml += '</tr>';
+                return '<tr>' +
+                '<td>' + esc(INV_TX_FA[row.tx_type] || row.tx_type || '-') + '</td>' +
+                '<td>' + esc(documentNo) + '</td>' +
+                '<td>' + esc(invItemName(row.item_id)) + '</td>' +
+                '<td>' + invQty(qty) + '</td>' +
+                '<td>' + esc(location) + '</td>' +
+                '<td>' + esc(destination) + '</td>' +
+                '<td>' + esc(row.lot_no || '-') + '</td>' +
+                '<td>' + fmtDate(row.timestamp) + '</td>' +
+                '</tr>';
             });
 
             txHtml += '</tbody>';
