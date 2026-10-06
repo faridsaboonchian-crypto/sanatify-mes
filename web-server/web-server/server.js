@@ -5617,6 +5617,51 @@ function appRequestHandler(req, res) {
         return sendJson(res, { ok: true, stocktakes: live.inventory_stocktakes || [] });
     }
 
+    /* ===== POLYMER-WH-7: گزارش کالای راکد/کم‌گردش ===== */
+    if (req.method === 'GET' && pathname === '/api/inventory/deadstock') {
+        const live = invEnsure(readLive());
+        const url = new URL(req.url, 'http://localhost');
+        const days = Math.max(1, Number(url.searchParams.get('days')) || 90);
+        const cutoff = Date.now() - days * 24 * 3600 * 1000;
+
+        /* آخرین تراکنش هر کالا */
+        const lastTx = {};
+        const txLists = [
+            live.inventory_receipts || [],
+            live.inventory_issues || [],
+            live.inventory_transfers || [],
+            live.inventory_adjustments || []
+        ];
+        txLists.forEach(list => {
+            list.forEach(t => {
+                const iid = t.item_id;
+                if (!iid) return;
+                const ts = new Date(t.created_at || t.timestamp || 0).getTime();
+                if (!lastTx[iid] || ts > lastTx[iid]) lastTx[iid] = ts;
+            });
+        });
+
+        const items = (live.inventory_items || []).filter(x => x.active !== false);
+        const dead = [];
+        items.forEach(item => {
+            const agg = invAggWarehouse(live, item.id, undefined);
+            if (agg.physical <= 0) return; /* فقط اقلام دارای موجودی */
+            const lt = lastTx[item.id] || 0;
+            if (lt < cutoff) {
+                const daysIdle = lt ? Math.floor((Date.now() - lt) / (24 * 3600 * 1000)) : null;
+                dead.push({
+                    item_id: item.id, code: item.code, name: item.name,
+                    category: item.category, unit: item.unit,
+                    physical: agg.physical,
+                    last_tx: lt ? new Date(lt).toISOString().slice(0, 10) : null,
+                    days_idle: daysIdle
+                });
+            }
+        });
+        dead.sort((a, b) => (b.days_idle || 99999) - (a.days_idle || 99999));
+        return sendJson(res, { ok: true, days, count: dead.length, items: dead });
+    }
+
     /* جزئیات یک جلسه + خطوط */
     if (req.method === 'GET' && pathname.startsWith('/api/inventory/stocktake/')) {
         const live = invEnsure(readLive());

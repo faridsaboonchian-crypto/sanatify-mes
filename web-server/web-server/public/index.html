@@ -3137,6 +3137,10 @@
                             📋 انبارگردانی
                         </button>
 
+                        <button class="act" id="btnDeadStock" style="background:#b45309;">
+                            💤 کالای راکد
+                        </button>
+
                     </span>
                 </h2>
 
@@ -3271,6 +3275,20 @@
                             <button class="act" id="stkClose" style="background:#666;">بستن</button>
                             <span id="stkResult" style="font-size:13px;"></span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- POLYMER-WH-7: پنل کالای راکد -->
+                <div id="deadPanel" class="filters hidden" style="margin-top:12px;">
+                    <h3>💤 کالاهای راکد / کم‌گردش</h3>
+                    <p class="note">اقلامی که در بازه انتخابی هیچ تراکنشی نداشتند ولی موجودی دارند (سرمایه خوابیده).</p>
+                    <div class="frow">
+                        <label>بازه رکود (روز): <input id="deadDays" type="number" value="90" min="1" style="width:80px" /></label>
+                        <button class="act" id="deadLoad">🔍 نمایش</button>
+                        <span id="deadResult" style="font-size:13px;"></span>
+                    </div>
+                    <div class="tablewrap" style="max-height:350px;overflow:auto;margin-top:8px;">
+                        <table id="tbl-dead"></table>
                     </div>
                 </div>
 
@@ -7811,6 +7829,25 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
         document.getElementById('stkClose')?.addEventListener('click', () => {
             document.getElementById('stkDetail').classList.add('hidden');
             stkCurrentId = null;
+        });
+
+        /* ===== POLYMER-WH-7: کالای راکد ===== */
+        document.getElementById('btnDeadStock')?.addEventListener('click', () => {
+            document.getElementById('deadPanel').classList.toggle('hidden');
+        });
+        document.getElementById('deadLoad')?.addEventListener('click', async () => {
+            const days = Number(document.getElementById('deadDays').value) || 90;
+            const resEl = document.getElementById('deadResult');
+            resEl.textContent = '⏳ در حال بررسی...';
+            try {
+                const out = await (await fetch('/api/inventory/deadstock?days=' + days)).json();
+                if (!out.ok) { resEl.textContent = '❌ خطا'; return; }
+                resEl.textContent = '✅ ' + out.count + ' قلم راکد در ' + out.days + ' روز گذشته';
+                document.getElementById('tbl-dead').innerHTML = '<thead><tr><th>کد</th><th>نام کالا</th><th>گروه</th><th>واحد</th><th>موجودی</th><th>آخرین تراکنش</th><th>روز رکود</th></tr></thead><tbody>' +
+                    (out.items.length ? out.items.map(x =>
+                        '<tr><td>' + esc(x.code) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.category || '-') + '</td><td>' + esc(x.unit) + '</td><td>' + invQty(x.physical) + '</td><td>' + (x.last_tx || 'هیچ‌وقت') + '</td><td>' + (x.days_idle !== null ? x.days_idle : '—') + '</td></tr>'
+                    ).join('') : '<tr><td colspan="7" class="empty">موردی یافت نشد.</td></tr>') + '</tbody>';
+            } catch (e) { resEl.textContent = '❌ خطای ارتباط'; }
         });
 
         document
