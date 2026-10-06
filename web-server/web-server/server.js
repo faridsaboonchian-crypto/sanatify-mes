@@ -1948,13 +1948,39 @@ function appRequestHandler(req, res) {
         const prodDays35i = Object.keys(prodDaysSet35i).length;
         Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.pcsPerDay = s.pcs / s.days; delete s.daysMap; });
 
-        /* ۲) ضایعات ۳۰ روز (کیلوگرم) */
+        /* ۲) ضایعات — دوحالته: روزانه از روز اول + موتور ۳۰روزه پس از پر شدن */
         let wasteKg = 0;
+        const wasteDaysSet = {};
         (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => {
             const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return;
             wasteKg += wasteKgOf26a(w);
+            wasteDaysSet[dayOf(t)] = 1;
         });
-        const wastePct = 5; /* پیش‌فرض مهندسی تزریق پلاستیک */
+        const wasteDays = Object.keys(wasteDaysSet).length;
+        /* تولید ۳۰ روز اخیر (قطعه) برای محاسبه درصد */
+        let prodPcs30 = 0;
+        (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
+            const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < d30) return;
+            prodPcs30 += Number(p.good_quantity) || 0;
+        });
+        let wastePct, wasteMode;
+        if (wasteDays >= 30 && prodPcs30 > 0) {
+            /* موتور ۳۰روزه: درصد واقعی از داده کامل */
+            const avgWg = 0.005; /* میانگین وزن قطعه ~۵ گرم */
+            const wastePcsEq = wasteKg / avgWg;
+            wastePct = wastePcsEq / (prodPcs30 + wastePcsEq) * 100;
+            wasteMode = '30روزه';
+        } else if (wasteDays >= 1 && prodPcs30 > 0) {
+            /* حالت روزانه: از داده موجود (۱ تا ۲۹ روز) */
+            const avgWg = 0.005;
+            const wastePcsEq = wasteKg / avgWg;
+            wastePct = wastePcsEq / (prodPcs30 + wastePcsEq) * 100;
+            wasteMode = 'روزانه (' + wasteDays + ' روز)';
+        } else {
+            wastePct = 5; /* پیش‌فرض مهندسی تزریق پلاستیک */
+            wasteMode = 'پیش‌فرض مهندسی';
+        }
+        wastePct = Math.min(30, Math.max(0.5, Math.round(wastePct * 10) / 10));
 
         /* ۳) الگوی توقفات — سهم برق/برقی */
         let elecMin = 0, allDays = {};
@@ -2022,7 +2048,7 @@ function appRequestHandler(req, res) {
             if (elecPctDay > 1) reasons.push('کاهش ' + fa(Math.round(elecPctDay)) + '٪ ظرفیت به‌دلیل الگوی قطعی/اختلال برق');
             outageReasons.slice(0, 2).forEach((r) => reasons.push(r));
             pmReasons.slice(0, 2).forEach((r) => reasons.push(r));
-            reasons.push('نرخ ضایعات استاندارد تزریق پلاستیک: ' + fa(wastePct) + '٪ لحاظ شد');
+            reasons.push('نرخ ضایعات (' + wasteMode + '): ' + fa(wastePct) + '٪ لحاظ شد');
             if (capped !== null) reasons.push('سقف موجودی قابل‌مصرف گرانول انبار: ' + fa(Math.round(rawAvail)) + ' کیلوگرم');
             else if (rawAvail > 0) reasons.push('موجودی قابل‌مصرف گرانول: ' + fa(Math.round(rawAvail)) + ' کیلوگرم — محدودیتی نیست');
             else reasons.push('موجودی گرانول در انبار ثبت نشده؛ بر پایهٔ نرخ اسمی تخمین زده شد');
