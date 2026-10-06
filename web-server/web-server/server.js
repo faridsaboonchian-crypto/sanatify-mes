@@ -5735,6 +5735,24 @@ function appRequestHandler(req, res) {
         return sendJson(res, { ok: true, adjustments: adj });
     }
 
+    /* POLYMER-STK-2: لغو/حذف جلسه انبارگردانی */
+    if (req.method === 'POST' && pathname.endsWith('/cancel') && pathname.includes('/api/inventory/stocktake/')) {
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        }
+        const live = invEnsure(readLive());
+        const parts = pathname.split('/');
+        const id = parts[parts.length - 2];
+        const idx = (live.inventory_stocktakes || []).findIndex(x => x.id === id);
+        if (idx < 0) return sendJson(res, { error: 'یافت نشد.' }, 404);
+        const st = live.inventory_stocktakes[idx];
+        if (st.status === 'approved') return sendJson(res, { error: 'جلسه تأییدشده قابل لغو نیست.' }, 400);
+        live.inventory_stocktakes.splice(idx, 1);
+        live.inventory_stocktake_lines = (live.inventory_stocktake_lines || []).filter(l => l.stocktake_id !== id);
+        invSave(live, req, 'inventory.stocktake.cancel', { code: st.code });
+        return sendJson(res, { ok: true });
+    }
+
     if (
         req.method === 'POST' &&
         pathname === '/api/inventory/import'

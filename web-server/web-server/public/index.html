@@ -3273,6 +3273,7 @@
                             <button class="act" id="stkSaveCounts">💾 ثبت شمارش</button>
                             <button class="act" id="stkApprove" style="background:#15803d;">✅ تأیید و صدور اصلاح</button>
                             <button class="act" id="stkClose" style="background:#666;">بستن</button>
+                            <button class="act" id="stkCancel" style="background:#b91c1c;">🗑️ لغو جلسه</button>
                             <span id="stkResult" style="font-size:13px;"></span>
                         </div>
                     </div>
@@ -7759,9 +7760,17 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                 if (!out.ok || !out.stocktakes.length) { el.innerHTML = '<p class="note">جلسه‌ای ثبت نشده است.</p>'; return; }
                 const stFa = { counting: 'در حال شمارش', review: 'آماده بررسی', approved: 'تأییدشده' };
                 el.innerHTML = '<table border="1" cellpadding="6" style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr><th>کد</th><th>انبار</th><th>وضعیت</th><th>شمارش‌شده</th><th>تاریخ</th><th></th></tr></thead><tbody>' +
-                    out.stocktakes.map(s => '<tr><td>' + esc(s.code) + '</td><td>' + esc(s.warehouse || 'همه') + '</td><td>' + (stFa[s.status] || s.status) + '</td><td>' + (s.counted_count || 0) + '/' + (s.line_count || 0) + '</td><td>' + esc((s.created_at || '').slice(0, 10)) + '</td><td><button class="act" data-stk="' + s.id + '" style="padding:4px 10px;font-size:11px">مشاهده</button></td></tr>').join('') +
+                    out.stocktakes.map(s => '<tr><td>' + esc(s.code) + '</td><td>' + esc(s.warehouse || 'همه') + '</td><td>' + (stFa[s.status] || s.status) + '</td><td>' + (s.counted_count || 0) + '/' + (s.line_count || 0) + '</td><td>' + esc((s.created_at || '').slice(0, 10)) + '</td><td><button class="act" data-stk="' + s.id + '" style="padding:4px 10px;font-size:11px">مشاهده</button>' + (s.status !== 'approved' ? ' <button class="act" data-stkdel="' + s.id + '" style="padding:4px 10px;font-size:11px;background:#b91c1c;">لغو</button>' : '') + '</td></tr>').join('') +
                     '</tbody></table>';
                 el.querySelectorAll('[data-stk]').forEach(b => b.addEventListener('click', () => stkLoadDetail(b.dataset.stk)));
+                el.querySelectorAll('[data-stkdel]').forEach(b => b.addEventListener('click', async () => {
+                    if (!confirm('جلسه ' + b.closest('tr').cells[0].textContent + ' لغو و حذف شود؟')) return;
+                    try {
+                        const out = await (await fetch('/api/inventory/stocktake/' + b.dataset.stkdel + '/cancel', { method: 'POST' })).json();
+                        if (out.ok) { stkLoadList(); document.getElementById('stkDetail').classList.add('hidden'); }
+                        else alert(out.error || 'خطا');
+                    } catch (e) { alert('خطای ارتباط'); }
+                }));
             } catch (e) { el.innerHTML = '<p class="note">خطا در بارگذاری.</p>'; }
         }
         document.getElementById('stkCreate')?.addEventListener('click', async () => {
@@ -7829,6 +7838,17 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
         document.getElementById('stkClose')?.addEventListener('click', () => {
             document.getElementById('stkDetail').classList.add('hidden');
             stkCurrentId = null;
+        });
+        document.getElementById('stkCancel')?.addEventListener('click', async () => {
+            if (!stkCurrentId || !confirm('این جلسه انبارگردانی لغو و حذف شود؟')) return;
+            try {
+                const out = await (await fetch('/api/inventory/stocktake/' + stkCurrentId + '/cancel', { method: 'POST' })).json();
+                if (out.ok) {
+                    document.getElementById('stkDetail').classList.add('hidden');
+                    stkCurrentId = null;
+                    stkLoadList();
+                } else alert(out.error || 'خطا');
+            } catch (e) { alert('خطای ارتباط'); }
         });
 
         /* ===== POLYMER-WH-7: کالای راکد ===== */
