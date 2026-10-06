@@ -5563,6 +5563,15 @@ function appRequestHandler(req, res) {
 
                     const buf = Buffer.from(b64, 'base64');
 
+                    /* POLYMER-IMP-6: قفل ضد ایمپورت تکراری — هش فایل */
+                    const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
+                    const live = invEnsure(readLive());
+                    live.import_hashes = live.import_hashes || [];
+                    const dupHash = live.import_hashes.find(h => h.hash === fileHash);
+                    if (dupHash) {
+                        return sendJson(res, { error: 'این فایل قبلاً ایمپورت شده است (' + (dupHash.date || '') + ' — ' + (dupHash.filename || '') + '). برای ایمپورت مجدد، ابتدا از بخش مدیریت فایل را حذف کنید.' }, 400);
+                    }
+
                     /* تشخیص فرمت و پارس — اول از روی محتوا، بعد از روی پسوند */
                     let sepidarSheets = null; /* [{name, rows}] */
                     let rows;
@@ -5599,7 +5608,6 @@ function appRequestHandler(req, res) {
                         return sendJson(res, { error: 'فرمت فایل پشتیبانی نمی‌شود. فقط xls/xlsx/csv.' }, 400);
                     }
 
-                    const live = invEnsure(readLive());
                     let imported = 0, createdItems = 0, skippedZero = 0;
                     const errors = [];
                     const seenCodes = {};
@@ -5706,6 +5714,16 @@ function appRequestHandler(req, res) {
                     }
 
                     invSave(live, req, 'inventory.import', { file: filename, imported: imported, created_items: createdItems, errors: errors.length, sheets: sheetSummary });
+
+                    /* POLYMER-IMP-6: ثبت هش فایل برای جلوگیری از ایمپورت تکراری */
+                    live.import_hashes = live.import_hashes || [];
+                    live.import_hashes.push({
+                        hash: fileHash,
+                        filename: filename,
+                        date: new Date().toISOString(),
+                        imported: imported,
+                        by: String((req.user && req.user.username) || '')
+                    });
 
                     return sendJson(res, {
                         ok: true,
