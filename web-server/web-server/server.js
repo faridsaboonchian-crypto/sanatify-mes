@@ -5662,6 +5662,33 @@ function appRequestHandler(req, res) {
         return sendJson(res, { ok: true, days, count: dead.length, items: dead });
     }
 
+    /* ===== POLYMER-RESET-1: صفر کردن موجودی (حفظ مستر کالا) ===== */
+    if (req.method === 'POST' && pathname === '/api/inventory/reset') {
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        }
+        const live = invEnsure(readLive());
+        const counts = {
+            receipts: (live.inventory_receipts || []).length,
+            issues: (live.inventory_issues || []).length,
+            transfers: (live.inventory_transfers || []).length,
+            adjustments: (live.inventory_adjustments || []).length,
+            reservations: (live.inventory_reservations || []).length,
+            stocktakes: (live.inventory_stocktakes || []).length,
+            items_kept: (live.inventory_items || []).length
+        };
+        live.inventory_receipts = [];
+        live.inventory_issues = [];
+        live.inventory_transfers = [];
+        live.inventory_adjustments = [];
+        live.inventory_reservations = [];
+        live.inventory_stocktakes = [];
+        live.inventory_stocktake_lines = [];
+        live.import_hashes = [];
+        invSave(live, req, 'inventory.reset', counts);
+        return sendJson(res, { ok: true, cleared: counts });
+    }
+
     /* جزئیات یک جلسه + خطوط */
     if (req.method === 'GET' && pathname.startsWith('/api/inventory/stocktake/')) {
         const live = invEnsure(readLive());
@@ -5798,15 +5825,14 @@ function appRequestHandler(req, res) {
 
                     const buf = Buffer.from(b64, 'base64');
 
-                    /* POLYMER-IMP-6: قفل ضد ایمپورت تکراری — موقتاً غیرفعال در فاز تست */
+                    /* POLYMER-IMP-6: قفل ضد ایمپورت تکراری — فعال */
                     const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
                     const live = invEnsure(readLive());
                     live.import_hashes = live.import_hashes || [];
-                    /* TODO: فعال‌سازی مجدد پس از اتمام تست — فرید اعلام می‌کند
                     const dupHash = live.import_hashes.find(h => h.hash === fileHash);
                     if (dupHash) {
-                        return sendJson(res, { error: 'این فایل قبلاً ایمپورت شده است (' + (dupHash.date || '') + ' — ' + (dupHash.filename || '') + '). برای ایمپورت مجدد، ابتدا از بخش مدیریت فایل را حذف کنید.' }, 400);
-                    } */
+                        return sendJson(res, { error: 'این فایل قبلاً ایمپورت شده است (' + (dupHash.date || '').slice(0, 10) + ' — ' + (dupHash.filename || '') + ').' }, 400);
+                    }
 
                     /* تشخیص فرمت و پارس — اول از روی محتوا، بعد از روی پسوند */
                     let sepidarSheets = null; /* [{name, rows}] */

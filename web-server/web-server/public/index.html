@@ -3242,6 +3242,7 @@
                     <div class="frow">
                         <button class="act" id="impDoImport" disabled>✅ شروع ایمپورت</button>
                         <button class="act" id="impRecategorize" style="background:#7c3aed;">🏷️ گروه‌بندی هوشمند کالاها</button>
+                        <button class="act" id="impReset" style="background:#b91c1c;">🗑️ صفر کردن موجودی</button>
                         <span id="impResult" style="font-size:13px;"></span>
                     </div>
 
@@ -7745,6 +7746,21 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                 btn.disabled = false;
             });
         })();
+
+        /* POLYMER-RESET-1: دکمه صفر کردن موجودی */
+        document.getElementById('impReset')?.addEventListener('click', async () => {
+            if (!confirm('⚠️ همه رسیدها، حواله‌ها، انتقال‌ها و اصلاحات پاک می‌شود!\nمستر کالا (نام/کد/گروه) حفظ می‌شود.\n\nادامه می‌دهید؟')) return;
+            if (!confirm('آخرین تأیید: واقعاً می‌خواهید موجودی صفر شود؟')) return;
+            const resEl = document.getElementById('impResult');
+            resEl.textContent = '⏳ در حال صفر کردن...';
+            try {
+                const out = await (await fetch('/api/inventory/reset', { method: 'POST' })).json();
+                if (out.ok) {
+                    resEl.textContent = '✅ صفر شد — ' + out.cleared.receipts + ' رسید، ' + out.cleared.issues + ' حواله پاک شد. ' + out.cleared.items_kept + ' کالا حفظ شد.';
+                    if (typeof refreshInventory === 'function') refreshInventory();
+                } else resEl.textContent = '❌ ' + (out.error || 'خطا');
+            } catch (e) { resEl.textContent = '❌ خطای ارتباط'; }
+        });
 
         /* ===== POLYMER-STK-1: انبارگردانی ===== */
         let stkCurrentId = null;
