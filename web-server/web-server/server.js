@@ -5556,10 +5556,14 @@ function appRequestHandler(req, res) {
 
                     const buf = Buffer.from(b64, 'base64');
 
-                    /* تشخیص فرمت و پارس */
+                    /* تشخیص فرمت و پارس — اول از روی محتوا، بعد از روی پسوند */
                     let sepidarSheets = null; /* [{name, rows}] */
                     let rows;
-                    if (/\.xls$/i.test(filename) && !/\.xlsx$/i.test(filename)) {
+                    const head8 = buf.slice(0, 8).toString('utf8');
+                    const isZip = buf[0] === 0x50 && buf[1] === 0x4b; /* PK */
+                    const textStart = buf.toString('utf8', 0, Math.min(buf.length, 2000));
+                    const isSpreadsheetMl = textStart.indexOf('urn:schemas-microsoft-com:office:spreadsheet') >= 0 || textStart.indexOf('<Workbook') >= 0;
+                    if (isSpreadsheetMl) {
                         const parsed = impParseSpreadsheetMl32(buf.toString('utf8'));
                         if (impIsSepidar32(parsed)) {
                             sepidarSheets = parsed.sheets;
@@ -5567,7 +5571,15 @@ function appRequestHandler(req, res) {
                             /* xls غیرسپیدار: فقط شیت اول */
                             rows = parsed.sheets[0].rows;
                         }
-                    } else if (/\.xlsx$/i.test(filename)) {
+                    } else if (/\.xls$/i.test(filename) && !/\.xlsx$/i.test(filename)) {
+                        const parsed = impParseSpreadsheetMl32(buf.toString('utf8'));
+                        if (impIsSepidar32(parsed)) {
+                            sepidarSheets = parsed.sheets;
+                        } else {
+                            /* xls غیرسپیدار: فقط شیت اول */
+                            rows = parsed.sheets[0].rows;
+                        }
+                    } else if (isZip || /\.xlsx$/i.test(filename)) {
                         rows = impParseXlsx32(buf);
                     } else if (/\.csv$/i.test(filename)) {
                         rows = impParseCsv32(buf.toString('utf8'));
