@@ -3124,6 +3124,10 @@
                             خروجی گردش 📊
                         </button>
 
+                        <button class="act" id="btnInventoryImport" style="display:none">
+                            📥 ایمپورت اکسل
+                        </button>
+
                     </span>
                 </h2>
 
@@ -3186,6 +3190,48 @@
                 <!-- ================================================= -->
                 <!-- RECEIPT -->
                 <!-- ================================================= -->
+
+                <!-- POLYMER-IMP-1: مودال ایمپورت اکسل موجودی -->
+                <div class="filters hidden" id="invImportForm" style="border:2px solid #4a90d9;">
+
+                    <div class="frow" style="margin-bottom:10px;">
+                        <strong>📥 ایمپورت موجودی از اکسل/CSV</strong>
+                        <span style="font-size:12px;color:#666;">(خروجی راهکاران، سپیدار یا هر فایل اکسل)</span>
+                    </div>
+
+                    <div class="frow" style="margin-bottom:10px;">
+                        <input type="file" id="impFile" accept=".xlsx,.csv" />
+                        <label style="font-size:12px;">
+                            <input type="checkbox" id="impHasHeader" checked /> ردیف اول عنوان ستون است
+                        </label>
+                    </div>
+
+                    <div id="impPreviewWrap" class="hidden" style="margin-bottom:10px;">
+                        <div style="font-size:13px;margin-bottom:5px;"><strong>پیش‌نمایش (۸ ردیف اول):</strong></div>
+                        <div id="impPreview" style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid #ddd;"></div>
+                    </div>
+
+                    <div id="impMappingWrap" class="hidden" style="margin-bottom:10px;">
+                        <div style="font-size:13px;margin-bottom:5px;"><strong>نگاشت ستون‌ها:</strong></div>
+                        <div class="frow">
+                            <label>کد کالا: <select id="impMapCode" class="fsel"></select></label>
+                            <label>نام کالا: <select id="impMapName" class="fsel"></select></label>
+                            <label>مقدار: <select id="impMapQty" class="fsel"></select></label>
+                            <label>واحد: <select id="impMapUnit" class="fsel"></select></label>
+                        </div>
+                        <div class="frow">
+                            <label>انبار (اختیاری): <select id="impMapWh" class="fsel"></select></label>
+                            <label>شماره لات (اختیاری): <select id="impMapLot" class="fsel"></select></label>
+                            <label>انبار پیش‌فرض: <input id="impDefWh" placeholder="انبار اصلی" style="width:120px;" /></label>
+                        </div>
+                    </div>
+
+                    <div class="frow">
+                        <button class="act" id="impDoImport" disabled>✅ شروع ایمپورت</button>
+                        <span id="impResult" style="font-size:13px;"></span>
+                    </div>
+
+                </div>
 
                 <div class="filters hidden" id="invReceiptForm">
 
@@ -6688,7 +6734,8 @@ if (bw)
                 'btnInventoryReceipt',
                 'btnInventoryIssue',
                 'btnInventoryTransfer',
-                'btnInventoryAdjust'
+                'btnInventoryAdjust',
+                'btnInventoryImport'
 
             ].forEach(id => {
 
@@ -7382,6 +7429,169 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                         .classList
                         .toggle('hidden')
             );
+
+
+        /* ===== POLYMER-IMP-1: ایمپورت اکسل موجودی ===== */
+        (function () {
+            const btnImp = document.getElementById('btnInventoryImport');
+            const formImp = document.getElementById('invImportForm');
+            if (!btnImp || !formImp) return;
+
+            btnImp.addEventListener('click', () => formImp.classList.toggle('hidden'));
+
+            const fileEl = document.getElementById('impFile');
+            const hasHeaderEl = document.getElementById('impHasHeader');
+            const prevWrap = document.getElementById('impPreviewWrap');
+            const prevEl = document.getElementById('impPreview');
+            const mapWrap = document.getElementById('impMappingWrap');
+            const doBtn = document.getElementById('impDoImport');
+            const resEl = document.getElementById('impResult');
+
+            let impFileName = '', impBase64 = '';
+
+            /* حدس نگاشت از روی عنوان ستون */
+            function guessCol(headers, keys) {
+                for (let i = 0; i < headers.length; i++) {
+                    const h = String(headers[i] || '');
+                    for (const k of keys) if (h.indexOf(k) >= 0) return i;
+                }
+                return -1;
+            }
+
+            function fillMapSelect(selId, nCols, guessed) {
+                const sel = document.getElementById(selId);
+                sel.innerHTML = '';
+                const none = document.createElement('option');
+                none.value = ''; none.textContent = '—';
+                sel.appendChild(none);
+                for (let i = 0; i < nCols; i++) {
+                    const o = document.createElement('option');
+                    o.value = String(i);
+                    o.textContent = 'ستون ' + (i + 1);
+                    sel.appendChild(o);
+                }
+                if (guessed >= 0) sel.value = String(guessed);
+            }
+
+            /* خواندن فایل سمت کاربر فقط برای پیش‌نمایش (پارس اصلی سمت سرور) */
+            fileEl.addEventListener('change', () => {
+                const f = fileEl.files && fileEl.files[0];
+                resEl.textContent = '';
+                doBtn.disabled = true;
+                prevWrap.classList.add('hidden');
+                mapWrap.classList.add('hidden');
+                if (!f) return;
+                impFileName = f.name;
+                const rd = new FileReader();
+                rd.onload = () => {
+                    const dataUrl = String(rd.result || '');
+                    impBase64 = dataUrl.split(',')[1] || '';
+                    /* پیش‌نمایش ساده: فقط CSV را سمت کاربر نشان بده؛ xlsx را سرور پارس می‌کند */
+                    if (/\.csv$/i.test(impFileName)) {
+                        try {
+                            let txt = decodeURIComponent(escape(atob(impBase64)));
+                            if (txt.charCodeAt(0) === 0xfeff) txt = txt.slice(1);
+                            const lines = txt.split(/\r?\n/).filter(l => l.trim() !== '').slice(0, 8);
+                            const delim = (lines[0].match(/;/g) || []).length > (lines[0].match(/,/g) || []).length ? ';' : ',';
+                            const rows = lines.map(l => l.split(delim));
+                            let html = '<table border="1" cellpadding="4" style="border-collapse:collapse;font-size:12px;direction:rtl;">';
+                            rows.forEach((r, ri) => {
+                                html += '<tr>' + r.map(c => ri === 0 && hasHeaderEl.checked ? '<th style="background:#eef;">' + c + '</th>' : '<td>' + c + '</td>').join('') + '</tr>';
+                            });
+                            html += '</table>';
+                            prevEl.innerHTML = html;
+                            prevWrap.classList.remove('hidden');
+                            const nCols = Math.max(...rows.map(r => r.length));
+                            const headers = hasHeaderEl.checked ? rows[0] : rows[0].map((_, i) => 'ستون ' + (i + 1));
+                            fillMapSelect('impMapCode', nCols, guessCol(headers, ['کد', 'code']));
+                            fillMapSelect('impMapName', nCols, guessCol(headers, ['نام', 'شرح', 'name']));
+                            fillMapSelect('impMapQty', nCols, guessCol(headers, ['مقدار', 'تعداد', 'موجودی', 'qty', 'quantity']));
+                            fillMapSelect('impMapUnit', nCols, guessCol(headers, ['واحد', 'unit']));
+                            fillMapSelect('impMapWh', nCols, guessCol(headers, ['انبار', 'warehouse']));
+                            fillMapSelect('impMapLot', nCols, guessCol(headers, ['لات', 'بچ', 'lot', 'batch']));
+                            mapWrap.classList.remove('hidden');
+                            doBtn.disabled = false;
+                        } catch (e) { resEl.textContent = 'خطا در خواندن فایل'; }
+                    } else {
+                        /* xlsx: پیش‌نمایش نداریم ولی نگاشت را با حدس پیش‌فرض باز می‌کنیم */
+                        prevEl.innerHTML = '<div style="padding:10px;font-size:13px;">فایل اکسل انتخاب شد: <b>' + impFileName + '</b><br>پیش‌نمایش اکسل سمت سرور انجام می‌شود — ستون‌ها را دستی انتخاب کنید.</div>';
+                        prevWrap.classList.remove('hidden');
+                        for (let i = 0; i < 10; i++) {
+                            /* ۱۰ ستون فرضی برای انتخاب */
+                        }
+                        ['impMapCode', 'impMapName', 'impMapQty', 'impMapUnit', 'impMapWh', 'impMapLot'].forEach(id => {
+                            const sel = document.getElementById(id);
+                            sel.innerHTML = '<option value="">—</option>';
+                            for (let i = 0; i < 12; i++) {
+                                const o = document.createElement('option');
+                                o.value = String(i); o.textContent = 'ستون ' + (i + 1);
+                                sel.appendChild(o);
+                            }
+                        });
+                        /* حدس‌های رایج ترتیب ستون */
+                        document.getElementById('impMapCode').value = '0';
+                        document.getElementById('impMapName').value = '1';
+                        document.getElementById('impMapQty').value = '2';
+                        document.getElementById('impMapUnit').value = '3';
+                        mapWrap.classList.remove('hidden');
+                        doBtn.disabled = false;
+                    }
+                };
+                rd.readAsDataURL(f);
+            });
+
+            hasHeaderEl.addEventListener('change', () => { if (fileEl.files[0]) fileEl.dispatchEvent(new Event('change')); });
+
+            doBtn.addEventListener('click', async () => {
+                const getMap = id => {
+                    const v = document.getElementById(id).value;
+                    return v === '' ? -1 : parseInt(v, 10);
+                };
+                const mapping = {
+                    code: getMap('impMapCode'),
+                    name: getMap('impMapName'),
+                    quantity: getMap('impMapQty'),
+                    unit: getMap('impMapUnit'),
+                    warehouse: getMap('impMapWh'),
+                    lot: getMap('impMapLot')
+                };
+                if (mapping.code < 0 || mapping.name < 0 || mapping.quantity < 0 || mapping.unit < 0) {
+                    resEl.textContent = '❌ ستون‌های کد، نام، مقدار و واحد الزامی است.';
+                    return;
+                }
+                doBtn.disabled = true;
+                resEl.textContent = '⏳ در حال ایمپورت...';
+                try {
+                    const resp = await fetch('/api/inventory/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            filename: impFileName,
+                            content_base64: impBase64,
+                            has_header: hasHeaderEl.checked,
+                            mapping: mapping,
+                            default_warehouse: document.getElementById('impDefWh').value || 'انبار اصلی'
+                        })
+                    });
+                    const out = await resp.json();
+                    if (out.ok) {
+                        let msg = '✅ تمام شد: ' + out.imported + ' ردیف ایمپورت شد';
+                        if (out.created_items) msg += ' (' + out.created_items + ' کالای جدید ساخته شد)';
+                        if (out.error_count) msg += ' — ' + out.error_count + ' خطا';
+                        resEl.textContent = msg;
+                        if (out.errors && out.errors.length) {
+                            resEl.textContent += ' | مثلاً ردیف ' + out.errors[0].row + ': ' + out.errors[0].reason;
+                        }
+                        if (typeof refreshInventory === 'function') refreshInventory();
+                    } else {
+                        resEl.textContent = '❌ ' + (out.error || 'خطای نامشخص');
+                    }
+                } catch (e) {
+                    resEl.textContent = '❌ خطای ارتباط: ' + e.message;
+                }
+                doBtn.disabled = false;
+            });
+        })();
 
 
         document

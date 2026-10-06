@@ -5310,6 +5310,326 @@ function appRequestHandler(req, res) {
 
 
     // ================================================================
+    // EXCEL/CSV IMPORT — ایمپورت موجودی از اکسل (خروجی راهکاران/سپیدار)
+    // POLYMER-IMP-1: پارسر خالص Node بدون وابستگی خارجی
+    // ================================================================
+
+    /* ---------- helper: xml entity decode ---------- */
+    function impXmlDec32(s32) {
+        return String(s32 || '')
+            .replace(/&#(\d+);/g, function (_, n32) { return String.fromCharCode(parseInt(n32, 10)); })
+            .replace(/&#x([0-9a-fA-F]+);/g, function (_, n32) { return String.fromCharCode(parseInt(n32, 16)); })
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'");
+    }
+
+    /* ---------- helper: minimal ZIP reader ---------- */
+    function impZipRead32(buf32) {
+        var files32 = {};
+        var eocd32 = -1;
+        var maxS32 = Math.min(buf32.length, 65558);
+        for (var i32 = buf32.length - 22; i32 >= buf32.length - maxS32; i32--) {
+            if (buf32.readUInt32LE(i32) === 0x06054b50) { eocd32 = i32; break; }
+        }
+        if (eocd32 < 0) throw new Error('فایل xlsx معتبر نیست (EOCD یافت نشد)');
+        var cdCount32 = buf32.readUInt16LE(eocd32 + 10);
+        var cdOff32 = buf32.readUInt32LE(eocd32 + 16);
+        var p32 = cdOff32;
+        for (var n32 = 0; n32 < cdCount32; n32++) {
+            if (buf32.readUInt32LE(p32) !== 0x02014b50) throw new Error('ساختار zip خراب است');
+            var method32 = buf32.readUInt16LE(p32 + 10);
+            var compSize32 = buf32.readUInt32LE(p32 + 20);
+            var fnLen32 = buf32.readUInt16LE(p32 + 28);
+            var exLen32 = buf32.readUInt16LE(p32 + 30);
+            var coLen32 = buf32.readUInt16LE(p32 + 32);
+            var lhOff32 = buf32.readUInt32LE(p32 + 42);
+            var name32 = buf32.toString('utf8', p32 + 46, p32 + 46 + fnLen32);
+            var lfn32 = buf32.readUInt16LE(lhOff32 + 26);
+            var lex32 = buf32.readUInt16LE(lhOff32 + 28);
+            var dOff32 = lhOff32 + 30 + lfn32 + lex32;
+            var comp32 = buf32.slice(dOff32, dOff32 + compSize32);
+            var raw32;
+            if (method32 === 8) raw32 = zlib.inflateRawSync(comp32);
+            else if (method32 === 0) raw32 = comp32;
+            else throw new Error('متد فشرده‌سازی پشتیبانی نمی‌شود');
+            files32[name32] = raw32;
+            p32 += 46 + fnLen32 + exLen32 + coLen32;
+        }
+        return files32;
+    }
+
+    /* ---------- helper: parse xlsx buffer -> 2D array ---------- */
+    function impParseXlsx32(buf32) {
+        var files32 = impZipRead32(buf32);
+        var shared32 = [];
+        if (files32['xl/sharedStrings.xml']) {
+            var ssXml32 = files32['xl/sharedStrings.xml'].toString('utf8');
+            var siRe32 = /<si>([\s\S]*?)<\/si>/g, siM32;
+            while ((siM32 = siRe32.exec(ssXml32))) {
+                var tRe32 = /<t[^>]*>([\s\S]*?)<\/t>/g, tM32, txt32 = '';
+                while ((tM32 = tRe32.exec(siM32[1]))) txt32 += tM32[1];
+                shared32.push(impXmlDec32(txt32));
+            }
+        }
+        var wb32 = files32['xl/workbook.xml'].toString('utf8');
+        var shM32 = /<sheet[^>]*r:id="([^"]+)"/.exec(wb32);
+        var sheetPath32 = 'xl/worksheets/sheet1.xml';
+        if (shM32 && files32['xl/_rels/workbook.xml.rels']) {
+            var rels32 = files32['xl/_rels/workbook.xml.rels'].toString('utf8');
+            var tM32b = new RegExp('<Relationship[^>]*Id="' + shM32[1] + '"[^>]*Target="([^"]+)"').exec(rels32);
+            if (tM32b) sheetPath32 = 'xl/' + tM32b[1].replace(/^\//, '');
+        }
+        if (!files32[sheetPath32]) {
+            var k32 = Object.keys(files32).find(function (x32) { return x32.indexOf('xl/worksheets/sheet') === 0; });
+            if (!k32) throw new Error('شیت اکسل یافت نشد');
+            sheetPath32 = k32;
+        }
+        var xml32 = files32[sheetPath32].toString('utf8');
+        var rows32 = [];
+        var rowRe32 = /<row[^>]*>([\s\S]*?)<\/row>/g, rm32, autoR32 = 0;
+        var rNumRe32 = /r="(\d+)"/;
+        while ((rm32 = rowRe32.exec(xml32))) {
+            var rAttr32 = rNumRe32.exec(rm32[0]);
+            var rNum32 = rAttr32 ? parseInt(rAttr32[1], 10) : ++autoR32;
+            var cells32 = {}, maxC32 = -1;
+            var cRe32 = /<c([^>]*?)(?:>([\s\S]*?)<\/c>|\/>)/g, cm32;
+            while ((cm32 = cRe32.exec(rm32[1]))) {
+                var attrs32 = cm32[1], cIn32 = cm32[2] || '';
+                var rcM32 = /r="([A-Z]+)\d+"/.exec(attrs32);
+                if (!rcM32) continue;
+                var cIdx32 = 0;
+                for (var ci32 = 0; ci32 < rcM32[1].length; ci32++) cIdx32 = cIdx32 * 26 + (rcM32[1].charCodeAt(ci32) - 64);
+                cIdx32--;
+                if (cIdx32 > maxC32) maxC32 = cIdx32;
+                var tMt32 = /t="([^"]+)"/.exec(attrs32);
+                var t32 = tMt32 ? tMt32[1] : 'n';
+                var val32 = '';
+                if (t32 === 's') {
+                    var vMs32 = /<v>(-?\d+)<\/v>/.exec(cIn32);
+                    if (vMs32) val32 = shared32[parseInt(vMs32[1], 10)] || '';
+                } else if (t32 === 'inlineStr') {
+                    var vMi32 = /<t[^>]*>([\s\S]*?)<\/t>/.exec(cIn32);
+                    if (vMi32) val32 = impXmlDec32(vMi32[1]);
+                } else {
+                    var vMn32 = /<v>([\s\S]*?)<\/v>/.exec(cIn32);
+                    if (vMn32) val32 = impXmlDec32(vMn32[1]);
+                }
+                cells32[cIdx32] = val32;
+            }
+            var arr32 = [];
+            for (var ai32 = 0; ai32 <= maxC32; ai32++) arr32.push(cells32[ai32] !== undefined ? cells32[ai32] : '');
+            while (rows32.length < rNum32 - 1) rows32.push([]);
+            rows32[rNum32 - 1] = arr32;
+        }
+        return rows32;
+    }
+
+    /* ---------- helper: parse CSV text -> 2D array ---------- */
+    function impParseCsv32(text32) {
+        if (text32.charCodeAt(0) === 0xfeff) text32 = text32.slice(1);
+        var firstLn32 = (text32.split(/\r?\n/)[0] || '');
+        var semi32 = (firstLn32.match(/;/g) || []).length;
+        var comma32 = (firstLn32.match(/,/g) || []).length;
+        var DEL32 = semi32 > comma32 ? ';' : ',';
+        var rows32 = [], row32 = [], cur32 = '', inQ32 = false;
+        for (var i32 = 0; i32 < text32.length; i32++) {
+            var ch32 = text32[i32];
+            if (inQ32) {
+                if (ch32 === '"') {
+                    if (text32[i32 + 1] === '"') { cur32 += '"'; i32++; }
+                    else inQ32 = false;
+                } else cur32 += ch32;
+            } else {
+                if (ch32 === '"') inQ32 = true;
+                else if (ch32 === DEL32) { row32.push(cur32); cur32 = ''; }
+                else if (ch32 === '\n') { row32.push(cur32); rows32.push(row32); row32 = []; cur32 = ''; }
+                else if (ch32 === '\r') { /* skip */ }
+                else cur32 += ch32;
+            }
+        }
+        if (cur32 !== '' || row32.length) { row32.push(cur32); rows32.push(row32); }
+        return rows32;
+    }
+
+    /* ---------- helper: normalize number (FA digits, separators) ---------- */
+    function impNormNum32(s32) {
+        var t32 = String(s32 || '')
+            .replace(/[۰-۹]/g, function (d32) { return String(d32.charCodeAt(0) - 1776); })
+            .replace(/[٠-٩]/g, function (d32) { return String(d32.charCodeAt(0) - 1632); })
+            .replace(/[٫]/g, '.')
+            .replace(/[٬,]/g, '').replace(/[\s\u200c]/g, '').trim();
+        var n32 = Number(t32);
+        return Number.isFinite(n32) ? n32 : NaN;
+    }
+
+    if (
+        req.method === 'POST' &&
+        pathname === '/api/inventory/import'
+    ) {
+
+        if (
+            !auth.requireRole(
+                req,
+                ['warehouse']
+            )
+        ) {
+
+            return sendJson(
+                res,
+                {
+                    error:
+                        'دسترسی غیرمجاز: ایمپورت موجودی فقط برای انباردار یا مدیر سیستم است.'
+                },
+                403
+            );
+        }
+
+
+        readBody(req)
+            .then(body => {
+
+                try {
+
+                    const b =
+                        JSON.parse(body || '{}');
+
+                    const filename =
+                        String(b.filename || '');
+
+                    const b64 =
+                        String(b.content_base64 || '');
+
+                    if (!b64)
+                        return sendJson(res, { error: 'فایل ارسال نشده است.' }, 400);
+
+                    if (b64.length > 15 * 1024 * 1024)
+                        return sendJson(res, { error: 'حجم فایل بیش از حد مجاز است (حداکثر ~۱۱ مگابایت).' }, 400);
+
+                    const buf = Buffer.from(b64, 'base64');
+
+                    let rows;
+                    if (/\.xlsx$/i.test(filename)) {
+                        rows = impParseXlsx32(buf);
+                    } else if (/\.csv$/i.test(filename)) {
+                        rows = impParseCsv32(buf.toString('utf8'));
+                    } else {
+                        return sendJson(res, { error: 'فرمت فایل پشتیبانی نمی‌شود. فقط xlsx و csv.' }, 400);
+                    }
+
+                    const mapping = b.mapping || {};
+                    const hasHeader = b.has_header !== false;
+                    const defWh = String(b.default_warehouse || '').trim();
+
+                    const colCode = Number(mapping.code);
+                    const colName = Number(mapping.name);
+                    const colQty = Number(mapping.quantity);
+                    const colUnit = Number(mapping.unit);
+                    const colWh = mapping.warehouse !== undefined && mapping.warehouse !== null && mapping.warehouse !== '' ? Number(mapping.warehouse) : -1;
+                    const colLot = mapping.lot !== undefined && mapping.lot !== null && mapping.lot !== '' ? Number(mapping.lot) : -1;
+
+                    if (!Number.isInteger(colCode) || colCode < 0 || !Number.isInteger(colName) || colName < 0 ||
+                        !Number.isInteger(colQty) || colQty < 0 || !Number.isInteger(colUnit) || colUnit < 0) {
+                        return sendJson(res, { error: 'نگاشت ستون‌ها ناقص است (کد، نام، مقدار و واحد الزامی).' }, 400);
+                    }
+
+                    const live = invEnsure(readLive());
+                    const startIdx = hasHeader ? 1 : 0;
+
+                    let imported = 0, createdItems = 0;
+                    const errors = [];
+                    const seenCodes = {};
+
+                    for (let ri = startIdx; ri < rows.length; ri++) {
+                        const r = rows[ri] || [];
+                        const isEmpty = r.every(function (c) { return String(c || '').trim() === ''; });
+                        if (isEmpty) continue;
+
+                        const code = String(r[colCode] || '').trim().toUpperCase();
+                        const name = String(r[colName] || '').trim();
+                        const qty = impNormNum32(r[colQty]);
+                        const unit = String(r[colUnit] || '').trim();
+                        const wh = colWh >= 0 ? String(r[colWh] || '').trim() : defWh;
+                        const lot = colLot >= 0 ? String(r[colLot] || '').trim() : '';
+
+                        const rowNo = ri + 1;
+
+                        if (!code) { errors.push({ row: rowNo, reason: 'کد کالا خالی است' }); continue; }
+                        if (!name) { errors.push({ row: rowNo, reason: 'نام کالا خالی است' }); continue; }
+                        if (!Number.isFinite(qty) || qty <= 0) { errors.push({ row: rowNo, reason: 'مقدار نامعتبر است' }); continue; }
+                        if (!unit) { errors.push({ row: rowNo, reason: 'واحد خالی است' }); continue; }
+
+                        if (seenCodes[code]) { errors.push({ row: rowNo, reason: 'کد تکراری در فایل: ' + code }); continue; }
+                        seenCodes[code] = true;
+
+                        let item = live.inventory_items.find(function (x) { return x.code === code; });
+
+                        if (!item) {
+                            item = {
+                                id: 'itm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri,
+                                code: code,
+                                name: name,
+                                category: 'سایر',
+                                unit: unit,
+                                reorder_point: 0, min_stock: 0, max_stock: 0,
+                                batch_tracking: false,
+                                active: true,
+                                description: 'ایجادشده از ایمپورت اکسل',
+                                created_at: new Date().toISOString(),
+                                created_by: String((req.user && req.user.username) || '')
+                            };
+                            live.inventory_items.push(item);
+                            createdItems++;
+                        }
+
+                        const rec = {
+                            id: 'grn-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + ri,
+                            request_id: 'import-' + Date.now(),
+                            receipt_no: 'GRN-' + Date.now() + '-' + ri,
+                            item_id: item.id,
+                            quantity: qty,
+                            unit: item.unit,
+                            lot_no: lot,
+                            warehouse: wh,
+                            location: '',
+                            stock_status: 'available',
+                            receipt_type: 'opening_balance',
+                            supplier: 'ایمپورت اکسل (' + filename + ')',
+                            created_at: new Date().toISOString(),
+                            created_by: String((req.user && req.user.username) || '')
+                        };
+                        live.inventory_receipts.push(rec);
+                        imported++;
+                    }
+
+                    invSave(live, req, 'inventory.import', { file: filename, imported: imported, created_items: createdItems, errors: errors.length });
+
+                    return sendJson(res, {
+                        ok: true,
+                        total_rows: rows.length - startIdx,
+                        imported: imported,
+                        created_items: createdItems,
+                        error_count: errors.length,
+                        errors: errors.slice(0, 50)
+                    });
+
+                } catch (e) {
+
+                    return sendJson(
+                        res,
+                        {
+                            error:
+                                'خطا در پردازش فایل: ' + e.message
+                        },
+                        400
+                    );
+                }
+            })
+            .catch(e => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+
+    // ================================================================
     // STOCK ADJUSTMENT
     // ================================================================
 
