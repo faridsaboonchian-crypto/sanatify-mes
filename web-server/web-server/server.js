@@ -2157,7 +2157,7 @@ function appRequestHandler(req, res) {
     // ===== FEAT-EM-12b (begin): مدیریت انرژی — energy_logs در live.json + endpoint ثبت/فهرست/آمار با نقش و ممیزی =====
     const EM_READ_ROLES = ['admin', 'engineering', 'planner', 'manager', 'supervisor', 'operator', 'warehouse', 'viewer', 'quality', 'qc'];
     const EM_WRITE_ROLES = ['admin', 'engineering'];
-    const EM_LINES = { mill: 'خط نورد گرم', furnace: 'کوره/ذوب', pack: 'بسته‌بندی بندیل', aux: 'تاسیسات و کمپرسور', plant: 'سراسر کارخانه' };
+    const EM_LINES = { injection: 'سالن تزریق', dryer: 'خشک‌کن و آسیاب', pack: 'بسته‌بندی', aux: 'تاسیسات و کمپرسور', plant: 'سراسر کارخانه', mill: 'سالن تزریق', furnace: 'خشک‌کن و آسیاب' };
     function emFaToEn(s) { return String(s || '').replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776)); }
     function emDayKey(iso) { const t = Date.parse(iso); return isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10); }
     if (req.method === 'GET' && pathname === '/api/energy/logs') {

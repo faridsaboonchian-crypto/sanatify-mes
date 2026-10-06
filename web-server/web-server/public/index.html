@@ -1851,9 +1851,14 @@
                             </label>
                             <label class="flbl">دستگاه تزریق:
                                 <select id="fpMachine" class="fsel">
-                                    <option value="inj-180t">دستگاه تزریق ۱۸۰ تن</option>
-                                    <option value="inj-250t">دستگاه تزریق ۲۵۰ تن</option>
-                                    <option value="inj-400t">دستگاه تزریق ۴۰۰ تن</option>
+                                    <option value="IM-01">دستگاه تزریق ۱</option>
+                                    <option value="IM-02">دستگاه تزریق ۲</option>
+                                    <option value="IM-03">دستگاه تزریق ۳</option>
+                                    <option value="IM-04">دستگاه تزریق ۴</option>
+                                    <option value="IM-05">دستگاه تزریق ۵</option>
+                                    <option value="IM-06">دستگاه تزریق ۶</option>
+                                    <option value="IM-07">دستگاه تزریق ۷</option>
+                                    <option value="IM-08">دستگاه تزریق ۸</option>
                                 </select>
                             </label>
                             <label class="flbl">تعداد قطعه سالم:
@@ -2743,9 +2748,9 @@
                         </label>
                         <label>خط:
                             <select id="emLine" class="fsel">
-                                <option value="mill">خط نورد گرم</option>
-                                <option value="furnace">کوره/ذوب</option>
-                                <option value="pack">بسته‌بندی بندیل</option>
+                                <option value="injection">سالن تزریق</option>
+                                <option value="dryer">خشک‌کن و آسیاب</option>
+                                <option value="pack">بسته‌بندی</option>
                                 <option value="aux">تاسیسات و کمپرسور</option>
                                 <option value="plant">سراسر کارخانه</option>
                             </select>
@@ -4051,7 +4056,7 @@
         const REASON_FA = { 'roll_change': 'تعویض غلتک / قفسه', 'billet_jam': 'کوبیدگی شمش', 'furnace_temp': 'دمای کوره', 'shear_adjust': 'تنظیم قیچی', 'mech_elec': 'خرابی مکانیکی / برقی', 'crop-ends': 'کراپ دو سر', 'bearing': 'شکستگی بلبرینگ', 'roll': 'شکستگی/پوشش غلتک', 'shear_blade': 'تیغه قیچی', 'electrical': 'خرابی برقی', 'hydraulic': 'خرابی هیدرولیک', 'furnace': 'مشعل/نسوز کوره', 'leak-failed': 'عیب آزمون فشار (سابقه)', 'deformed-body': 'دفرمگی محصول', 'scratch-lining': 'خراش سطح', 'weld-defect': 'عیب جوش (سابقه)', 'seam-wheel-change': 'تعویض چرخ برش (سابقه)', 'paint-booth-cleaning': 'تمیزکاری ایستگاه (سابقه)', 'forming-adjust': 'تنظیم دستگاه شکل‌دهی (سابقه)', 'coil-feed-jam': 'گیرش شمش در فیدر (سابقه)', 'other': 'سایر', 'melt-temp': 'دمای نامناسب مذاب/سیلندر', 'mold-temp': 'دمای نامناسب قالب', 'inj-pressure': 'فشار یا سرعت تزریق نامناسب', 'material-moist': 'رطوبت گرانول/مواد', 'material-qc': 'کیفیت نامناسب مواد اولیه', 'mold-wear': 'سایش یا آسیب قالب', 'clamp-setup': 'تنظیم نبودن گیره/قالب', 'mold-change': 'تعویض قالب', 'mold-setup': 'نصب و راه‌اندازی قالب', 'mold-damage': 'آسیب / خرابی قالب', 'machine-breakdown': 'خرابی دستگاه تزریق', 'cooling-issue': 'اختلال سیستم خنک‌کننده', 'material-shortage': 'کمبود / تأخیر مواد اولیه', 'power-outage': 'قطعی برق', 'planned-pm': 'سرویس و نگهداری برنامه‌ریزی‌شده' };
         const reasonFa = (v) => REASON_FA[String(v || '')] || (v ? String(v) : '-');
         let WEB_USER = null;
-        const STATIONS = { 'st-cut': 'برش شمش گرم', 'st-form': 'نورد گرم (شکل‌دهی)', 'st-weld': 'جوش/اتصال (سابقه)', 'st-seam': 'قیچی و برش', 'st-rib': 'آج‌زنی', 'st-test': 'آزمون کشش/خمش (QC)', 'st-lin': 'پوشش/ضدزنگ', 'st-pack': 'بسته‌بندی بندیل', 'st-ends': 'انقیاد سر بندیل', 'mach-forming-01': 'نورد گرم (شکل‌دهی) ۱', 'mach-forming-02': 'نورد گرم (شکل‌دهی) ۲', 'mach-weld-01': 'جوش/اتصال (سابقه)', 'mach-seamer-01': 'بسته‌بندی بندیل (سابقه) ۱', 'mach-seamer-02': 'بسته‌بندی بندیل (سابقه) ۲', 'mach-paint-01': 'پوشش/ضدزنگ', 'mach-feed-01': 'بارگذاری شمش', 'mach-test-01': 'آزمون کشش (QC)', 'inj-180t': 'دستگاه تزریق ۱۸۰ تن', 'inj-250t': 'دستگاه تزریق ۲۵۰ تن', 'inj-400t': 'دستگاه تزریق ۴۰۰ تن' };
+        const STATIONS = { 'IM-01': 'دستگاه تزریق ۱', 'IM-02': 'دستگاه تزریق ۲', 'IM-03': 'دستگاه تزریق ۳', 'IM-04': 'دستگاه تزریق ۴', 'IM-05': 'دستگاه تزریق ۵', 'IM-06': 'دستگاه تزریق ۶', 'IM-07': 'دستگاه تزریق ۷', 'IM-08': 'دستگاه تزریق ۸', 'dryer-01': 'خشک‌کن گرانول', 'grinder-01': 'آسیاب', 'quality_lab': 'آزمایشگاه (QC)', 'pack-01': 'بسته‌بندی' };
         /* ===== FIX-STEEL-8c (begin): نگاشت نمایشی رکوردهای قدیمی واحد قبلی به دامنهٔ فولاد میلگرد — دادهٔ واقعی دست‌نخورده ===== */
         const STEEL_LEGACY_FA = {};
         STEEL_LEGACY_FA['DR-22' + '0L'] = 'محصول قدیمی — خارج از کاتالوگ میلگرد'; STEEL_LEGACY_FA['DR-12' + '0L'] = 'محصول قدیمی — خارج از کاتالوگ میلگرد';
@@ -4174,13 +4179,18 @@
         const STATION_OPTIONS = Object.entries(STATIONS)
             .map(([v, l]) => '<option value="' + v + '">' + l + '</option>')
             .join('');
-        /* POLYMER: ایستگاه توقف — فقط دستگاه‌های تزریق */
-        const DOWNTIME_STATION_OPTIONS = ['inj-180t', 'inj-250t', 'inj-400t']
+        /* POLYMER: ایستگاه توقف — ۸ دستگاه تزریق */
+        const DOWNTIME_STATION_OPTIONS = ['IM-01', 'IM-02', 'IM-03', 'IM-04', 'IM-05', 'IM-06', 'IM-07', 'IM-08']
             .filter((v) => STATIONS[v])
             .map((v) => '<option value="' + v + '">' + STATIONS[v] + '</option>')
             .join('');
-        /* POLYMER: ایستگاه کشف ضایعات — فقط دستگاه‌های تزریق + آزمایشگاه (نه ایستگاه‌های فولادی) */
-        const WASTE_STATION_OPTIONS = ['inj-180t', 'inj-250t', 'inj-400t', 'quality_lab']
+        /* POLYMER: ایستگاه کشف ضایعات — دستگاه‌های تزریق + آزمایشگاه */
+        const WASTE_STATION_OPTIONS = ['IM-01', 'IM-02', 'IM-03', 'IM-04', 'IM-05', 'IM-06', 'IM-07', 'IM-08', 'quality_lab']
+            .filter((v) => STATIONS[v])
+            .map((v) => '<option value="' + v + '">' + STATIONS[v] + '</option>')
+            .join('');
+        /* POLYMER: ایستگاه برنامه‌ریزی — فقط ۸ دستگاه تزریق */
+        const PLAN_STATION_OPTIONS = ['IM-01', 'IM-02', 'IM-03', 'IM-04', 'IM-05', 'IM-06', 'IM-07', 'IM-08']
             .filter((v) => STATIONS[v])
             .map((v) => '<option value="' + v + '">' + STATIONS[v] + '</option>')
             .join('');
@@ -10631,7 +10641,7 @@ showRes();
         panel.classList.remove('hidden');
         planFillProduct();
         const mach = document.getElementById('plMachine');
-        if (mach && !mach.options.length) mach.innerHTML = STATION_OPTIONS;
+        if (mach && !mach.options.length) mach.innerHTML = PLAN_STATION_OPTIONS;
         const today = planJalaliToday();
         if (prefill) {
             planEditingId = null; planPrefillMeta = prefill.meta || null;
@@ -10641,7 +10651,7 @@ showRes();
             document.getElementById('plProduct').value = prefill.product_size || 'RB-14';
             document.getElementById('plTarget').value = prefill.target_tonnage || '';
             document.getElementById('plBillets').value = prefill.required_billets || '';
-            document.getElementById('plMachine').value = STATIONS[prefill.machine] ? prefill.machine : 'st-form';
+            document.getElementById('plMachine').value = STATIONS[prefill.machine] ? prefill.machine : 'IM-01';
             document.getElementById('plShift').value = prefill.shift_id || 'shift-morning-301';
             document.getElementById('planPriority').value = prefill.priority || 'medium'; /* FIX-PLAN-10d: id یکتا */
             const meta = prefill.meta || {};
@@ -10654,7 +10664,7 @@ showRes();
             document.getElementById('plProduct').value = 'RB-14';
             document.getElementById('plTarget').value = '';
             document.getElementById('plBillets').value = '';
-            document.getElementById('plMachine').value = 'st-form';
+            document.getElementById('plMachine').value = 'IM-01';
             document.getElementById('plShift').value = 'shift-morning-301';
             document.getElementById('planPriority').value = 'medium';
             document.getElementById('plMeta').textContent = '';
@@ -10715,7 +10725,7 @@ showRes();
         document.getElementById('plProduct').value = p.product_size || 'RB-14';
         document.getElementById('plTarget').value = p.target_tonnage || '';
         document.getElementById('plBillets').value = p.required_billets || '';
-        document.getElementById('plMachine').value = STATIONS[p.machine] ? p.machine : 'st-form';
+        document.getElementById('plMachine').value = STATIONS[p.machine] ? p.machine : 'IM-01';
         document.getElementById('plShift').value = p.shift_id || 'shift-morning-301';
         document.getElementById('planPriority').value = p.priority || 'medium';
     }
