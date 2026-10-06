@@ -10470,7 +10470,7 @@ showRes();
     const planCache = { plans: [], suggestions: [], engine: '', aiConfigured: false, meta: null, outages: [], pattern: null };
     let planEditingId = null, planPrefillMeta = null, planChart = null;
 
-    const planCanWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'planner';
+    const planCanWrite = () => WEB_ROLE === 'admin' || WEB_ROLE === 'planner' || WEB_ROLE === 'vendor' || WEB_ROLE === 'owner';
     const planCanStart = () => planCanWrite() || WEB_ROLE === 'supervisor';
     const planRid = () => 'req-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     const planFaNum = (x) => (x === null || x === undefined || x === '') ? '—' : toFaDigits(String(x));
