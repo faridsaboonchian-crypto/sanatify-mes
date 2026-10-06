@@ -1856,8 +1856,9 @@ function appRequestHandler(req, res) {
        محدودیت شمش در شروع سرد از انبار خوانده نمی‌شود (انبار پنهان/خالی است) — سناریوها کپ نمی‌شوند و
        پرچم کمبود فقط وقتی زده می‌شود که واقعاً دادهٔ انبار موجود و کمتر از نیاز باشد. */
     const COLD_MIN_DAYS_35 = 7; /* آستانهٔ شروع سرد: کمتر از ۷ روز ثبت تولید واقعی */
-    const COLD_RATE_TON_35 = { 'RB-8': 45, 'RB-10': 55, 'RB-12': 65, 'RB-14': 75, 'RB-16': 85, 'RB-18': 95, 'RB-20': 105, 'RB-22': 115, 'RB-25': 125, 'RB-28': 135, 'RB-32': 145, '5SP': 110 }; /* نرخ اسمی مهندسی per سایز (تن/روز) — خط نورد تک‌خطی؛ قابل تنظیم توسط سازنده */
-    const COLD_MIX_35 = { 'RB-14': 0.34, 'RB-16': 0.33, 'RB-22': 0.33 }; /* ترکیب مهندسی سه‌سایز متداول میلگرد A3 */
+    /* POLYMER-PLAN-1: نرخ اسمی مهندسی per محصول پلیمری (قطعه/شیفت — ۸ دستگاه تزریق فعال)؛ قابل تنظیم توسط سازنده */
+    const COLD_RATE_PCS_35 = { 'CT': 50000, 'WG': 20000 };
+    const COLD_MIX_35 = { 'CT': 0.6, 'WG': 0.4 }; /* ترکیب مهندسی محصولات پلیمری: بست کمربندی / گوه */
     const COLD_CONF_CAP_35 = 55; /* سقف اطمینان مونت‌کارلو در حالت شروع سرد — صداقت: اطمینان پایین */
     /* ===== COLDSTART-35 (end) ===== */
     // مدل داده: live.production_plans[] + live.power_outages[] (افزاینده، سازگار با live.json قدیمی)
@@ -1898,77 +1899,62 @@ function appRequestHandler(req, res) {
         return isNaN(d.getTime()) ? null : d.toISOString();
     }
 
-    /* تناژ واقعی هر برنامه از دادهٔ زندهٔ تولید (production_logs + بندیل‌ها) */
-    function planActualTonnage(live, plan) {
+    /* POLYMER-PLAN-1: خروجی واقعی هر برنامه از دادهٔ زندهٔ تولید (تعداد قطعه سالم) */
+    function planActualOutput(live, plan) {
         if (!plan || !plan.start_ts) return null;
         const fromMs = Date.parse(plan.start_ts); if (isNaN(fromMs)) return null;
-        const days = plan.period === 'week' ? 7 : (plan.period === 'shift' ? 0.5 : 1);
+        const days = plan.period === 'week' ? 7 : (plan.period === 'shift' ? 0.34 : 1);
         const toMs = fromMs + days * 86400000;
-        const target = String(plan.product_size || '');
-        const sizeNum = Number((target.match(/(\d+)/) || [])[1] || NaN);
-        let kg = 0;
-        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
-            const t = Date.parse(b.produced_at || ''); if (isNaN(t) || t < fromMs || t >= toMs) return;
-            if (Number.isFinite(sizeNum) && Number(b.rebar_size) !== sizeNum) return;
-            kg += Number(b.net_weight_kg) || 0;
-        });
+        const target = String(plan.product_id || plan.product_size || '');
+        let pcs = 0;
         (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
             const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < fromMs || t >= toMs) return;
             const pid = String(p.product_id || '');
-            const pidSize = Number((pid.match(/^RB-(\d+)$/) || [])[1] || NaN);
-            if (Number.isFinite(pidSize)) { if (Number.isFinite(sizeNum) && pidSize !== sizeNum) return; kg += (Number(p.good_quantity) || 0) * 0.0061654 * pidSize * pidSize * 12; }
-            else if (pid === target) { const s = Number((target.match(/(\d+)/) || [])[1] || 0); kg += (Number(p.good_quantity) || 0) * 0.0061654 * s * s * 12; }
+            if (target && pid !== target) return;
+            pcs += Number(p.good_quantity) || 0;
         });
-        return Math.round(kg / 10) / 100;
+        return Math.round(pcs);
     }
+    /* سازگاری با کد قدیمی */
+    function planActualTonnage(live, plan) { return planActualOutput(live, plan); }
 
     /* موتور داخلی: هیوریستیک آماری روی دادهٔ زنده — همیشه فعال (فقط سایزهای میلگرد معتبر ۶..۵۰) */
+    /* POLYMER-PLAN-1: موتور داخلی برنامه‌ریزی تزریق پلاستیک — هیوریستیک آماری روی دادهٔ زنده */
     function planningEngineInternal(live) {
         const now = Date.now();
         const dAgo = (n) => new Date(now - n * 86400000).toISOString();
         const d90 = dAgo(90), d30 = dAgo(30);
         const rounds = (x) => Math.round((Number(x) || 0) * 100) / 100;
-        const REBAR_MIN = 6, REBAR_MAX = 50;
+        /* محصولات پلیمری: CT=بست کمربندی، WG=گوه */
+        const POLY_PRODUCTS = ['CT', 'WG'];
 
-        /* ۱) نرخ تولید واقعی per سایز (kg/day فعال) — بندیل‌ها + لاگ تولید (فرمول جرم فقط برای سایز معتبر) */
+        /* ۱) نرخ تولید واقعی per محصول (قطعه/روز فعال) */
         const sizes = {};
-        const bump = (k) => (sizes[k] = sizes[k] || { kg: 0, bars: 0, daysMap: {} });
+        const bump = (k) => (sizes[k] = sizes[k] || { pcs: 0, daysMap: {} });
         const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
-        (Array.isArray(live.rebar_bundles) ? live.rebar_bundles : []).forEach((b) => {
-            const t = Date.parse(b.produced_at || ''); if (isNaN(t) || t < d90) return;
-            const n = Number(b.rebar_size); const g = String(b.rebar_grade || '');
-            let k = null;
-            if (n >= REBAR_MIN && n <= REBAR_MAX) k = 'RB-' + n;
-            else if (g === '5SP') k = '5SP';
-            if (!k) return;
-            const s = bump(k); s.kg += Number(b.net_weight_kg) || 0; s.daysMap[dayOf(t)] = 1;
-        });
         (Array.isArray(live.production_logs) ? live.production_logs : []).forEach((p) => {
             const t = Date.parse(p.timestamp || ''); if (isNaN(t) || t < d90) return;
             const pid = String(p.product_id || ''); if (!pid) return;
-            const m = /^RB-(\d+)$/.exec(pid); const n = m ? Number(m[1]) : NaN;
-            if (Number.isFinite(n) && n >= REBAR_MIN && n <= REBAR_MAX) {
-                const s = bump('RB-' + n); const q = Number(p.good_quantity) || 0;
-                s.bars += q; s.kg += q * 0.0061654 * n * n * 12; s.daysMap[dayOf(t)] = 1;
-            } else if (pid === '5SP') {
-                const s = bump('5SP'); s.bars += Number(p.good_quantity) || 0; s.daysMap[dayOf(t)] = 1;
-            }
+            let k = null;
+            if (POLY_PRODUCTS.indexOf(pid) >= 0) k = pid;
+            else if (pid.indexOf('CT') >= 0 || pid.indexOf('بست') >= 0) k = 'CT';
+            else if (pid.indexOf('WG') >= 0 || pid.indexOf('گوه') >= 0) k = 'WG';
+            if (!k) return;
+            const s = bump(k); s.pcs += Number(p.good_quantity) || 0; s.daysMap[dayOf(t)] = 1;
         });
-        /* COLDSTART-35: روزهای واقعی ثبت تولید (اتحاد روزهای همهٔ سایزها) */
+        /* COLDSTART-35: روزهای واقعی ثبت تولید (اتحاد روزهای همهٔ محصولات) */
         const prodDaysSet35i = {};
         Object.keys(sizes).forEach((k) => { Object.keys(sizes[k].daysMap).forEach((d) => { prodDaysSet35i[d] = 1; }); });
         const prodDays35i = Object.keys(prodDaysSet35i).length;
-        Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.kgPerDay = s.kg / s.days; delete s.daysMap; });
+        Object.keys(sizes).forEach((k) => { const s = sizes[k]; s.days = Math.max(1, Object.keys(s.daysMap).length); s.pcsPerDay = s.pcs / s.days; delete s.daysMap; });
 
-        /* ۲) ضایعات وزنی ۳۰ روز */
+        /* ۲) ضایعات ۳۰ روز (کیلوگرم) */
         let wasteKg = 0;
         (Array.isArray(live.waste_logs) ? live.waste_logs : []).forEach((w) => {
             const t = Date.parse(w.timestamp || ''); if (isNaN(t) || t < d30) return;
-            wasteKg += wasteKgOf26a(w); /* FIX-WASTE-26a: بر پایهٔ تناژ — رکوردهای legacy (تعداد) حذف از جمع وزنی */
+            wasteKg += wasteKgOf26a(w);
         });
-        let prodKg30 = 0;
-        Object.keys(sizes).forEach((k) => { prodKg30 += sizes[k].kg; });
-        const wastePct = (prodKg30 + wasteKg) > 0 ? wasteKg / (prodKg30 + wasteKg) * 100 : 0;
+        const wastePct = 5; /* پیش‌فرض مهندسی تزریق پلاستیک */
 
         /* ۳) الگوی توقفات — سهم برق/برقی */
         let elecMin = 0, allDays = {};
@@ -1987,7 +1973,7 @@ function appRequestHandler(req, res) {
         outages.forEach((o) => {
             const h = Number(o.duration_hours) || 0;
             outageCut = Math.max(outageCut, Math.min(50, h / 12 * 100));
-            outageReasons.push('قطعی برنامه‌ریزی‌شدهٔ برق (' + toFa(String(o.note || (o.shift_id === 'shift-night-302' ? 'شیفت شب' : 'شیفت صبح')) ) + ' — ' + fa(h) + ' ساعت)');
+            outageReasons.push('قطعی برنامه‌ریزی‌شدهٔ برق (' + toFa(String(o.note || (o.shift_id === 'shift-night-302' ? 'شیفت شب' : 'شیفت عصر'))) + ' — ' + fa(h) + ' ساعت)');
         });
 
         /* ۵) PM نزدیک (۷ روز آینده) — بدون تکرار */
@@ -2003,69 +1989,56 @@ function appRequestHandler(req, res) {
             }
         });
 
-        /* ۶) موجودی مواد اولیه از انبار (شمش/بیلت) */
+        /* ۶) موجودی مواد اولیه از انبار (گرانول/مستربچ) */
         let rawAvail = 0;
         const items = Array.isArray(live.inventory_items) ? live.inventory_items : [];
         const rawIds = {};
         items.forEach((it) => {
             const hay = String((it.name || '') + ' ' + (it.code || '') + ' ' + (it.category || '')).toLowerCase();
-            if (hay.indexOf('شمش') !== -1 || hay.indexOf('بیلت') !== -1 || hay.indexOf('billet') !== -1) rawIds[it.id] = 1;
+            if (hay.indexOf('گرانول') !== -1 || hay.indexOf('مستربچ') !== -1 || hay.indexOf('granule') !== -1 || hay.indexOf('masterbatch') !== -1 || hay.indexOf('مواد اولیه') !== -1) rawIds[it.id] = 1;
         });
         if (Object.keys(rawIds).length) {
             const sum = (arr, f) => (Array.isArray(arr) ? arr : []).reduce((s, r) => s + (rawIds[r.item_id] ? (Number(f(r)) || 0) : 0), 0);
             rawAvail = Math.max(0, sum(live.inventory_receipts, (r) => r.quantity) - sum(live.inventory_issues, (r) => r.quantity) + sum(live.inventory_adjustments, (r) => r.delta_quantity));
         }
-        let billetAvgKg = 0, billetCount = 0;
-        (Array.isArray(live.billets) ? live.billets : []).forEach((b) => { const w = Number(b.initial_weight_kg) || 0; if (w > 0) { billetAvgKg += w; billetCount++; } });
-        billetAvgKg = billetCount ? Math.round(billetAvgKg / billetCount) : 0;
 
         const capFactor = Math.max(0.35, 1 - elecPctDay / 100 - outageCut / 100 - pmCut / 100);
-        const keyFa = (k) => (k.indexOf('RB-') === 0 ? 'میلگرد سایز ' + k.slice(3) : (k === '5SP' ? 'میلگرد گرید 5SP' : k));
+        const keyFa = (k) => (k === 'CT' ? 'بست کمربندی' : (k === 'WG' ? 'گوه' : k));
+        /* وزن تقریبی هر قطعه (گرم) — برای محاسبه مواد اولیه */
+        const pcsWeightG = { 'CT': 2.5, 'WG': 15 };
 
-        const ranked = Object.keys(sizes).filter((k) => sizes[k].kg > 0).sort((a, b) => sizes[b].kg - sizes[a].kg).slice(0, 3);
+        const ranked = Object.keys(sizes).filter((k) => sizes[k].pcs > 0).sort((a, b) => sizes[b].pcs - sizes[a].pcs).slice(0, 3);
         let suggestions = [];
         ranked.forEach((k, i) => {
             const s = sizes[k];
-            let target = (s.kgPerDay / 1000) * capFactor * 0.9; /* تن */
+            let target = Math.round((s.pcsPerDay / 3) * capFactor * 0.9); /* قطعه در شیفت */
             let capped = null;
-            if (rawAvail > 0) { const cap = (rawAvail * 0.8) / 1000; if (target > cap) { capped = cap; target = cap; } }
-            target = Math.min(2000, Math.max(0.1, rounds(target)));
+            const matPerPcs = (pcsWeightG[k] || 5) / 1000; /* کیلوگرم مواد per قطعه */
+            if (rawAvail > 0) { const capPcs = Math.floor((rawAvail * 0.8) / matPerPcs); if (target > capPcs) { capped = capPcs; target = capPcs; } }
+            target = Math.min(200000, Math.max(100, target));
             const conf = Math.min(92, Math.max(45, Math.round(40 + s.days * 1.8 - wastePct / 2 + (rawAvail > 0 ? 4 : 0))));
             const reasons = [];
-            reasons.push('میانگین تولید واقعی ' + keyFa(k) + ' در ۹۰ روز اخیر: ' + fa(rounds(s.kgPerDay / 1000)) + ' تن در روز');
+            reasons.push('میانگین تولید واقعی ' + keyFa(k) + ' در ۹۰ روز اخیر: ' + fa(target * 3) + ' قطعه در روز (۸ دستگاه)');
             if (elecPctDay > 1) reasons.push('کاهش ' + fa(Math.round(elecPctDay)) + '٪ ظرفیت به‌دلیل الگوی قطعی/اختلال برق');
             outageReasons.slice(0, 2).forEach((r) => reasons.push(r));
             pmReasons.slice(0, 2).forEach((r) => reasons.push(r));
-            if (wastePct > 0.5) reasons.push('نرخ ضایعات ۳۰ روز اخیر: ' + fa(Math.round(wastePct * 10) / 10) + '٪ لحاظ شد');
-            if (capped !== null) reasons.push('سقف موجودی قابل‌مصرف مواد اولیه انبار: ' + fa(rounds(rawAvail / 1000)) + ' تن');
-            else if (rawAvail > 0) reasons.push('موجودی قابل‌مصرف مواد اولیه: ' + fa(rounds(rawAvail / 1000)) + ' تن — محدودیتی نیست');
-            else reasons.push('موجودی شمش در انبار ثبت نشده؛ بر پایهٔ ورودی اخیر شمش تخمین زده شد');
+            reasons.push('نرخ ضایعات استاندارد تزریق پلاستیک: ' + fa(wastePct) + '٪ لحاظ شد');
+            if (capped !== null) reasons.push('سقف موجودی قابل‌مصرف گرانول انبار: ' + fa(Math.round(rawAvail)) + ' کیلوگرم');
+            else if (rawAvail > 0) reasons.push('موجودی قابل‌مصرف گرانول: ' + fa(Math.round(rawAvail)) + ' کیلوگرم — محدودیتی نیست');
+            else reasons.push('موجودی گرانول در انبار ثبت نشده؛ بر پایهٔ نرخ اسمی تخمین زده شد');
             reasons.push('ضریب اطمینان بر پایهٔ ' + fa(s.days) + ' روز دادهٔ واقعی');
             suggestions.push({
                 title: 'پیشنهاد ' + fa(i + 1) + ' — ' + keyFa(k),
-                period: 'day', product_size: k, target_tonnage: target,
-                required_billets: billetAvgKg > 200 ? Math.ceil(target * 1000 / billetAvgKg) : null,
-                machine: 'st-form', shift_id: i === 1 ? 'shift-night-302' : 'shift-morning-301',
+                period: 'shift', product_id: k, product_size: k, target_pieces: target,
+                target_tonnage: rounds(target * matPerPcs / 1000),
+                required_material_kg: Math.ceil(target * matPerPcs * 1.05),
+                machine: 'IM-0' + (i + 1), shift_id: ['shift-morning-301', 'shift-evening-303', 'shift-night-302'][i % 3],
                 priority: i === 0 ? 'high' : 'medium', confidence: conf,
                 reasons: Array.from(new Set(reasons)).slice(0, 6),
-                engine: 'internal', based_on: 'نرخ ۹۰ روزه + ضایعات ۳۰ روزه + توقفات + PM + انبار + قطعی برق'
+                engine: 'internal', based_on: 'نرخ ۹۰ روزه + ضایعات + توقفات + PM + انبار + قطعی برق (تزریق پلاستیک)'
             });
         });
-        if (ranked.length) {
-            const best = suggestions[0];
-            suggestions.push({
-                title: 'گزینهٔ شیفت شب — ' + best.title.replace(/^پیشنهاد \d+ — /, ''),
-                period: 'shift', product_size: best.product_size,
-                target_tonnage: Math.max(0.1, rounds(best.target_tonnage * 0.45)),
-                required_billets: best.required_billets ? Math.max(1, Math.ceil(best.required_billets * 0.45)) : null,
-                machine: best.machine, shift_id: 'shift-night-302', priority: 'low',
-                confidence: Math.max(40, best.confidence - 12),
-                reasons: Array.from(new Set(['نصف ظرفیت روزانه برای شیفت شب (الگوی دو شیفت ۱۲ساعته)'].concat(best.reasons.slice(1, 3)))),
-                engine: 'internal', based_on: best.based_on
-            });
-        }
-        /* COLDSTART-35 (begin): در شروع سرد پیشنهاد از پارامتر مهندسی با تناژ منطقی تولید می‌شود (نه ۰٫۱ تن)؛
-           با دادهٔ ناقص (۱ تا ۶ روز) پیشنهادهای واقعی نگه داشته می‌شوند ولی اطمینان سقف‌دار و برچسب شروع سرد صادق است */
+        /* COLDSTART-35 (begin): در شروع سرد پیشنهاد از پارامتر مهندسی */
         const cold35i = prodDays35i < COLD_MIN_DAYS_35;
         if (cold35i && suggestions.length) {
             suggestions.forEach((sg) => {
@@ -2077,28 +2050,31 @@ function appRequestHandler(req, res) {
         if (!suggestions.length) {
             if (cold35i) {
                 Object.keys(COLD_MIX_35).forEach((k35, i35) => {
-                    const target35 = Math.min(2000, Math.max(1, rounds(COLD_RATE_TON_35[k35] * capFactor * 0.9)));
+                    const target35 = Math.min(200000, Math.max(1000, Math.round(COLD_RATE_PCS_35[k35] * capFactor * 0.9)));
+                    const matPerPcs35 = (pcsWeightG[k35] || 5) / 1000;
                     suggestions.push({
                         title: 'پیشنهاد ' + fa(i35 + 1) + ' — ' + keyFa(k35),
-                        period: 'day', product_size: k35, target_tonnage: target35, required_billets: null,
-                        machine: 'st-form', shift_id: i35 === 1 ? 'shift-night-302' : 'shift-morning-301',
+                        period: 'shift', product_id: k35, product_size: k35, target_pieces: target35,
+                        target_tonnage: rounds(target35 * matPerPcs35 / 1000),
+                        required_material_kg: Math.ceil(target35 * matPerPcs35 * 1.05),
+                        machine: 'IM-0' + (i35 + 1), shift_id: ['shift-morning-301', 'shift-evening-303', 'shift-night-302'][i35 % 3],
                         priority: i35 === 0 ? 'high' : 'medium', confidence: Math.min(45, COLD_CONF_CAP_35 - 10),
-                        reasons: ['🧊 شروع سرد — پایهٔ مهندسی: نرخ اسمی ' + keyFa(k35) + ' حدود ' + fa(COLD_RATE_TON_35[k35]) + ' تن در روز', 'با ثبت واقعی تولید، خودکالیبره می‌شود (آستانه: ' + fa(COLD_MIN_DAYS_35) + ' روز)'],
+                        reasons: ['🧊 شروع سرد — پایهٔ مهندسی: نرخ اسمی ' + keyFa(k35) + ' حدود ' + fa(COLD_RATE_PCS_35[k35]) + ' قطعه در شیفت (۸ دستگاه)', 'با ثبت واقعی تولید، خودکالیبره می‌شود (آستانه: ' + fa(COLD_MIN_DAYS_35) + ' روز)'],
                         engine: 'internal', based_on: 'پایهٔ مهندسی (شروع سرد COLDSTART-35)'
                     });
                 });
             } else {
             suggestions.push({
-                title: 'دادهٔ کافی برای پیشنهاد تناژ موجود نیست',
-                period: 'day', product_size: '', target_tonnage: 1, required_billets: null,
-                machine: 'st-form', shift_id: 'shift-morning-301', priority: 'low', confidence: 15,
-                reasons: ['تا امروز تولیدی با سایز استاندارد میلگرد (۶ تا ۵۰) یا گرید 5SP ثبت نشده است.', 'می‌توانید برنامه را دستی ثبت کنید؛ با ثبت دادهٔ تولید، موتور پیشنهاد دقیق‌تر می‌شود.'],
+                title: 'دادهٔ کافی برای پیشنهاد تولید موجود نیست',
+                period: 'shift', product_id: '', product_size: '', target_pieces: 1000, target_tonnage: 0.01, required_material_kg: null,
+                machine: 'IM-01', shift_id: 'shift-morning-301', priority: 'low', confidence: 15,
+                reasons: ['تا امروز تولیدی برای بست کمربندی یا گوه ثبت نشده است.', 'می‌توانید برنامه را دستی ثبت کنید؛ با ثبت دادهٔ تولید، موتور پیشنهاد دقیق‌تر می‌شود.'],
                 engine: 'internal', based_on: 'بدون دادهٔ کافی'
             });
             }
         }
         /* COLDSTART-35 (end) */
-        return { engine: 'internal', ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), suggestions: suggestions.slice(0, 5), meta: { wastePct: rounds(wastePct), elecPctDay: rounds(elecPctDay), pmCut, outageCut, rawAvailKg: rounds(rawAvail), obsDays, prodDays: prodDays35i, mode: cold35i ? 'cold-start' : 'normal' } }; /* COLDSTART-35: +prodDays/mode */
+        return { engine: 'internal', ai_configured: !!(process.env.AI_PLANNING_URL && typeof fetch === 'function'), suggestions: suggestions.slice(0, 5), meta: { wastePct: rounds(wastePct), elecPctDay: rounds(elecPctDay), pmCut, outageCut, rawAvailKg: rounds(rawAvail), obsDays, prodDays: prodDays35i, mode: cold35i ? 'cold-start' : 'normal', machines: 8, shifts: 3 } };
     }
     function toFa(s) { return String(s == null ? '' : s).replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d))); }
     function fa(x) { return toFa(String(x)); }
@@ -2124,7 +2100,7 @@ function appRequestHandler(req, res) {
                     model: process.env.AI_PLANNING_MODEL || 'gpt-4o-mini',
                     temperature: 0.2,
                     messages: [
-                        { role: 'system', content: 'تو مشاور برنامه‌ریزی تولید یک کارخانه نورد میلگرد فولاد ایران هستی. فقط و فقط یک آرایه JSON معتبر برگردان (بدون متن اضافه) با ۳ تا ۵ پیشنهاد. هر آیتم: {"title":"فارسی","period":"day|shift|week","product_size":"RB-8..32 یا 5SP","target_tonnage":عدد تن,"required_billets":عدد یا null,"machine":"st-form","shift_id":"shift-morning-301|shift-night-302","priority":"low|medium|high","confidence":عدد 0..100,"reasons":["دلایل فارسی انسانی‌خوان"]}. بر پایهٔ دادهٔ آماری کارخانه که برایت می‌فرستم.' },
+                        { role: 'system', content: 'تو مشاور برنامه‌ریزی تولید یک کارخانه تزریق پلاستیک ایران هستی (۸ دستگاه تزریق فعال، ۳ شیفت، محصولات: بست کمربندی و گوه). فقط و فقط یک آرایه JSON معتبر برگردان (بدون متن اضافه) با ۳ تا ۵ پیشنهاد. هر آیتم: {"title":"فارسی","period":"day|shift|week","product_size":"RB-8..32 یا 5SP","target_tonnage":عدد تن,"required_billets":عدد یا null,"machine":"st-form","shift_id":"shift-morning-301|shift-night-302","priority":"low|medium|high","confidence":عدد 0..100,"reasons":["دلایل فارسی انسانی‌خوان"]}. بر پایهٔ دادهٔ آماری کارخانه که برایت می‌فرستم.' },
                         { role: 'user', content: JSON.stringify(stats) }
                     ]
                 })
