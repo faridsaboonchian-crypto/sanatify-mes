@@ -3505,6 +3505,11 @@
 <!-- ===== FIX-INV-0-HARDENING: فرم رزرو مردهٔ تکراری حذف شد (id تکراری invReserveForm مطابق endpoint مردهٔ دوم) ===== -->
 <div class="kpis" id="invKpis"></div>
 
+<!-- POLYMER-WH-6: باکس هشدار خودکار کمبود موجودی -->
+<div id="invAlertBox" class="hidden" style="margin:12px 0;padding:12px;border:2px solid #dc2626;border-radius:8px;background:#fef2f2;">
+    <h4 style="margin:0 0 8px 0;color:#dc2626;">⚠️ هشدار کمبود موجودی (<span id="invAlertCount">0</span> قلم)</h4>
+    <div id="invAlertList" style="font-size:13px;max-height:150px;overflow:auto;"></div>
+</div>
 
                 <h3 class="inv-subtitle">
                     موجودی لحظه‌ای انبار
@@ -7198,6 +7203,25 @@ document.getElementById('btnAddWaste').addEventListener('click', () => { documen
                 { l: 'موجودی قرنطینه', v: invQty(summary.quarantine_quantity), c: 'amber' },
                 { l: 'اقلام زیر نقطه سفارش', v: groupFa(summary.low_stock_count), c: summary.low_stock_count ? 'red' : 'green' }
             ].map(k => '<div class="kpi ' + k.c + '"><div class="v">' + k.v + '</div><div class="l">' + esc(k.l) + '</div></div>').join('');
+            /* POLYMER-WH-6: باکس هشدار خودکار */
+            try {
+                const lows = (inventoryData.stockview || []).filter(x => x.status === 'low' || x.status === 'warn');
+                const box = document.getElementById('invAlertBox');
+                if (lows.length && box) {
+                    box.classList.remove('hidden');
+                    document.getElementById('invAlertCount').textContent = lows.length;
+                    document.getElementById('invAlertList').innerHTML = lows.slice(0, 20).map(x =>
+                        '<div style="padding:4px 0;border-bottom:1px solid #fecaca;">' +
+                        '<b>' + esc(x.code) + '</b> — ' + esc(x.name) +
+                        ' | موجودی: <b>' + invQty(x.available) + '</b>' +
+                        (x.reorder_point ? ' | نقطه سفارش: ' + invQty(x.reorder_point) : '') +
+                        ' | <span style="color:#666">' + esc(INV_WAREHOUSES[x.warehouse] || x.warehouse || '') + '</span>' +
+                        '</div>'
+                    ).join('') + (lows.length > 20 ? '<div style="color:#666;margin-top:4px;">... و ' + (lows.length - 20) + ' قلم دیگر</div>' : '');
+                } else if (box) {
+                    box.classList.add('hidden');
+                }
+            } catch (e) {}
             invRenderStock();
             invRenderItems();
             invRenderTx();
