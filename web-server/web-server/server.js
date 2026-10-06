@@ -390,7 +390,8 @@ function sanitizeInput15b(obj, depth) {
     if (t === 'string') {
         let s = obj;
         const isDataUrl15c = s.indexOf('data:image/') === 0; /* SEC-15c: dataURL لوگو از سقف رشته مستثنی */
-        if (!isDataUrl15c && s.length > INPUT_MAX_STR_15B) s = s.slice(0, INPUT_MAX_STR_15B);
+        const isBase64Upload15d = /^[A-Za-z0-9+/=]+$/.test(s.slice(0, 100)) && s.length > 50000; /* POLYMER-IMP-5: محتوای base64 فایل آپلودی از سقف مستثنی */
+        if (!isDataUrl15c && !isBase64Upload15d && s.length > INPUT_MAX_STR_15B) s = s.slice(0, INPUT_MAX_STR_15B);
         s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''); // کنترل‌کاراکترها (به‌جز \n \r \t)
         s = s.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return s;
