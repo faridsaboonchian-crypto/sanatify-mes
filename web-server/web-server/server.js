@@ -4578,8 +4578,14 @@ function appRequestHandler(req, res) {
         const stock = invBuildStock(live);
         const items = live.inventory_items.filter(x => x.active !== false);
         const stockview = [];
+        /* POLYMER-WH-2: انبارها داینامیک — از رسیدها استخراج می‌شود نه هاردکد */
+        const whSet = {};
+        (live.inventory_receipts || []).forEach(r => { if (r.warehouse) whSet[r.warehouse] = 1; });
+        (live.inventory_issues || []).forEach(r => { if (r.warehouse) whSet[r.warehouse] = 1; });
+        ['raw', 'product', 'spare', 'quarantine'].forEach(w => whSet[w] = 1);
+        const whList = Object.keys(whSet);
         items.forEach(item => {
-            Object.keys({ raw: 1, product: 1, spare: 1, quarantine: 1 }).forEach(wh => {
+            whList.forEach(wh => {
                 const agg = invAggWarehouse(live, item.id, wh);
                 if (agg.physical === 0 && agg.reserved === 0 && agg.available === 0) return;
                 const min = Number(item.min_stock || 0);
@@ -5611,6 +5617,8 @@ function appRequestHandler(req, res) {
                             const name = String(r[map32.name] || '').trim();
                             const qty = impNormNum32(r[map32.quantity]);
                             const unit = String(r[map32.unit] || '').trim();
+                            const minStock = map32.min_stock !== undefined ? impNormNum32(r[map32.min_stock]) : 0;
+                            const maxStock = map32.max_stock !== undefined ? impNormNum32(r[map32.max_stock]) : 0;
                             const wh = whName32;
                             const lot = '';
 
@@ -5635,7 +5643,7 @@ function appRequestHandler(req, res) {
                                     name: name,
                                     category: 'سایر',
                                     unit: unit,
-                                    reorder_point: 0, min_stock: 0, max_stock: 0,
+                                    reorder_point: Number(minStock) || 0, min_stock: Number(minStock) || 0, max_stock: Number(maxStock) || 0,
                                     batch_tracking: false,
                                     active: true,
                                     description: 'ایجادشده از ایمپورت سپیدار',
@@ -5673,7 +5681,7 @@ function appRequestHandler(req, res) {
 
                     if (sepidarSheets) {
                         /* حالت سپیدار: هر شیت = یک انبار، نگاشت ثابت */
-                        const sepMap32 = { code: 0, name: 1, quantity: 14, unit: 21 };
+                        const sepMap32 = { code: 0, name: 1, quantity: 14, unit: 21, min_stock: 18, max_stock: 19 };
                         sepidarSheets.forEach(function (sh32) {
                             const n32 = impRunRows32(sh32.rows, 1, sepMap32, sh32.name, '«' + sh32.name + '»');
                             sheetSummary.push({ warehouse: sh32.name, imported: n32 });

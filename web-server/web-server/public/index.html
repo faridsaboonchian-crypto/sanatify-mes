@@ -3477,10 +3477,17 @@
                     <input id="invStockSearch" class="fsel" placeholder="جستجوی نام / کد کالا..." style="min-width:180px" />
 <select id="invWhFilter" class="fsel">
                         <option value="">همه انبارها</option>
+                        <option value="انبار محصول">انبار محصول</option>
+                        <option value="انبار معینی">انبار معینی</option>
+                        <option value="انبار مواد اولیه">انبار مواد اولیه</option>
+                        <option value="انبار مواد مصرفی">انبار مواد مصرفی</option>
+                        <option value="انبار کار در جریان">انبار کار در جریان</option>
                         <option value="raw">مواد اولیه/قطعات/ملزومات</option>
                         <option value="product">محصول نهایی</option>
-                        <option value="spare">مواد اولیه/قطعات/ملزومات (سابقه)</option>
                         <option value="quarantine">قرنطینه</option>
+                    </select>
+                    <select id="invCatFilter" class="fsel">
+                        <option value="">همه گروه‌ها</option>
                     </select>
                 </div>
                 <div class="tablewrap">
@@ -6995,7 +7002,7 @@ document.getElementById('btnAddWaste').addEventListener('click', () => { documen
 
             raw: 'مواد اولیه/قطعات/ملزومات',
 
-            product: 'محصول (میلگرد)',
+            product: 'محصول نهایی',
 
             spare: 'مواد اولیه/قطعات/ملزومات (سابقه)',
 
@@ -7128,6 +7135,16 @@ document.getElementById('btnAddWaste').addEventListener('click', () => { documen
             if (!inventoryData) return;
             invRefreshFormOptions();
             invFillCardexSelect();
+            /* POLYMER-WH-1: پر کردن فیلتر گروه کالا */
+            try {
+                const catSel = document.getElementById('invCatFilter');
+                if (catSel) {
+                    const cats = [...new Set((inventoryData.items || []).map(i => i.category).filter(Boolean))].sort();
+                    const cur = catSel.value;
+                    catSel.innerHTML = '<option value="">همه گروه‌ها</option>' + cats.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+                    if (cats.includes(cur)) catSel.value = cur;
+                }
+            } catch (e) {}
             try { invFillReserveSelects(); } catch (e) { /* FIX-FLT-4g: بی‌ضرر */ }
             const summary = inventoryData.summary || {};
             document.getElementById('invKpis').innerHTML = [
@@ -7179,7 +7196,8 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
         function invRenderStock() {
             if (!inventoryData) return;
             const wh = (document.getElementById('invWhFilter') || {}).value || '';
-            const rows = (inventoryData.stockview || []).filter(x => !wh || x.warehouse === wh);
+            const cat = (document.getElementById('invCatFilter') || {}).value || '';
+            const rows = (inventoryData.stockview || []).filter(x => (!wh || x.warehouse === wh) && (!cat || (x.category || '') === cat));
             let html = '<thead><tr><th>کد کالا</th><th>نام کالا</th><th>گروه</th><th>واحد</th><th>انبار</th><th>فیزیکی</th><th>مسدود</th><th>رزرو</th><th>قابل مصرف</th><th>تن (۳ رقم)</th><th>حداقل</th><th>نقطه سفارش</th><th>وضعیت</th></tr></thead><tbody>';
             if (!rows.length) html += '<tr><td colspan="13" class="empty">موجودی ثبت نشده است.</td></tr>';
             rows.forEach(r => {
@@ -7526,7 +7544,7 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
                     } else if (/\.xls$/i.test(impFileName)) {
                         isSepidar32 = true;
                         /* xls سپیدار: تشخیص خودکار — نیازی به نگاشت دستی نیست */
-                        prevEl.innerHTML = '<div style="padding:10px;font-size:13px;">فایل سپیدار شناسایی شد: <b>' + impFileName + '</b><br>✅ ستون‌ها خودکار نگاشت می‌شوند (کد=۰، عنوان=۱، موجودی=۱۴، واحد=۲۱)<br>هر شیت = یک انبار. دکمه «شروع ایمپورت» را بزنید.</div>';
+                        prevEl.innerHTML = '<div style="padding:10px;font-size:13px;">فایل سپیدار شناسایی شد: <b>' + impFileName + '</b><br>✅ ستون‌ها خودکار نگاشت می‌شوند (کد=۰، عنوان=۱، موجودی=۱۴، واحد=۲۱، حداقل=۱۸، حداکثر=۱۹)<br>هر شیت = یک انبار. دکمه «شروع ایمپورت» را بزنید.</div>';
                         prevWrap.classList.remove('hidden');
                         mapWrap.classList.add('hidden');
                         /* نگاشت خودکار سپیدار */
@@ -8495,6 +8513,8 @@ fetch('/api/inventory/reserve/release', { method: 'POST', headers: { 'Content-Ty
 .finally(function () { btn.disabled = false; });
 });
 document.getElementById('invStockSearch')?.addEventListener('input', function () { invRenderStock(); });
+document.getElementById('invWhFilter')?.addEventListener('change', function () { invRenderStock(); });
+document.getElementById('invCatFilter')?.addEventListener('change', function () { invRenderStock(); });
 
 // ===== END RESERVE UI =====
 // ===== FEAT-UI-4c (begin): تم سراسری روز/شب/خودکار — کلید san.theme با مهاجرت از febi.dark =====
