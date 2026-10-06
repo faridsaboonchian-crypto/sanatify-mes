@@ -4328,6 +4328,9 @@ function appRequestHandler(req, res) {
         live.inventory_transfers = Array.isArray(live.inventory_transfers) ? live.inventory_transfers : [];
         live.inventory_adjustments = Array.isArray(live.inventory_adjustments) ? live.inventory_adjustments : [];
         live.inventory_reservations = Array.isArray(live.inventory_reservations) ? live.inventory_reservations : [];
+        /* POLYMER-STK-1: انبارگردانی */
+        live.inventory_stocktakes = Array.isArray(live.inventory_stocktakes) ? live.inventory_stocktakes : [];
+        live.inventory_stocktake_lines = Array.isArray(live.inventory_stocktake_lines) ? live.inventory_stocktake_lines : [];
         return live;
     }
 
@@ -5551,6 +5554,140 @@ function appRequestHandler(req, res) {
         });
         invSave(live, req, 'inventory.recategorize', { updated });
         return sendJson(res, { ok: true, updated, groups });
+    }
+
+    /* ===== POLYMER-STK-1: انبارگردانی ===== */
+    /* ایجاد جلسه انبارگردانی */
+    if (req.method === 'POST' && pathname === '/api/inventory/stocktake') {
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        }
+        readBody(req).then(bodyRaw => {
+            const live = invEnsure(readLive());
+            const body = JSON.parse(bodyRaw || '{}');
+            const warehouse = String(body.warehouse || '').trim();
+            const category = String(body.category || '').trim();
+            const notes = String(body.notes || '').trim();
+
+            const items = live.inventory_items.filter(x => x.active !== false);
+            const lines = [];
+            items.forEach(item => {
+                if (category && (item.category || '') !== category) return;
+                const agg = invAggWarehouse(live, item.id, warehouse || undefined);
+                if (agg.physical === 0 && agg.available === 0) return;
+                lines.push({
+                    id: 'stl-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+                    item_id: item.id,
+                    code: item.code,
+                    name: item.name,
+                    unit: item.unit,
+                    warehouse: warehouse || '',
+                    system_qty: agg.physical,
+                    counted_qty: null,
+                    difference: null,
+                    notes: ''
+                });
+            });
+
+            if (!lines.length) {
+                return sendJson(res, { error: 'قلم دارای موجودی برای شمارش یافت نشد.' }, 400);
+            }
+
+            const st = {
+                id: 'stk-' + Date.now().toString(36),
+                code: 'ST-' + String(live.inventory_stocktakes.length + 1).padStart(4, '0'),
+                warehouse, category, notes,
+                status: 'counting',
+                line_count: lines.length,
+                counted_count: 0,
+                created_at: new Date().toISOString(),
+                created_by: String((req.user && req.user.username) || '')
+            };
+            live.inventory_stocktakes.push(st);
+            lines.forEach(l => { l.stocktake_id = st.id; live.inventory_stocktake_lines.push(l); });
+            invSave(live, req, 'inventory.stocktake.create', { code: st.code, lines: lines.length });
+            return sendJson(res, { ok: true, stocktake: st });
+        }).catch(e => sendJson(res, { error: 'خطا: ' + e.message }, 500));
+        return;
+    }
+
+    /* لیست جلسات انبارگردانی */
+    if (req.method === 'GET' && pathname === '/api/inventory/stocktakes') {
+        const live = invEnsure(readLive());
+        return sendJson(res, { ok: true, stocktakes: live.inventory_stocktakes || [] });
+    }
+
+    /* جزئیات یک جلسه + خطوط */
+    if (req.method === 'GET' && pathname.startsWith('/api/inventory/stocktake/')) {
+        const live = invEnsure(readLive());
+        const id = pathname.split('/').pop();
+        const st = (live.inventory_stocktakes || []).find(x => x.id === id);
+        if (!st) return sendJson(res, { error: 'یافت نشد.' }, 404);
+        const lines = (live.inventory_stocktake_lines || []).filter(l => l.stocktake_id === id);
+        return sendJson(res, { ok: true, stocktake: st, lines });
+    }
+
+    /* ثبت شمارش */
+    if (req.method === 'POST' && pathname.endsWith('/count') && pathname.includes('/api/inventory/stocktake/')) {
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        }
+        readBody(req).then(bodyRaw => {
+            const live = invEnsure(readLive());
+            const parts = pathname.split('/');
+            const id = parts[parts.length - 2];
+            const st = (live.inventory_stocktakes || []).find(x => x.id === id);
+            if (!st || st.status !== 'counting') return sendJson(res, { error: 'جلسه قابل شمارش نیست.' }, 400);
+            const body = JSON.parse(bodyRaw || '{}');
+            const counts = body.counts || {};
+            let n = 0;
+            (live.inventory_stocktake_lines || []).forEach(l => {
+                if (l.stocktake_id !== id) return;
+                if (counts[l.id] !== undefined && counts[l.id] !== null && counts[l.id] !== '') {
+                    l.counted_qty = Number(counts[l.id]);
+                    l.difference = round2(l.counted_qty - Number(l.system_qty || 0));
+                    n++;
+                }
+            });
+            st.counted_count = (live.inventory_stocktake_lines || []).filter(l => l.stocktake_id === id && l.counted_qty !== null).length;
+            if (st.counted_count >= st.line_count) st.status = 'review';
+            invSave(live, req, 'inventory.stocktake.count', { code: st.code, counted: n });
+            return sendJson(res, { ok: true, counted: n, status: st.status });
+        }).catch(e => sendJson(res, { error: 'خطا: ' + e.message }, 500));
+        return;
+    }
+
+    /* تأیید و صدور سند اصلاح مغایرت */
+    if (req.method === 'POST' && pathname.endsWith('/approve') && pathname.includes('/api/inventory/stocktake/')) {
+        if (!auth.requireRole(req, ['warehouse'])) {
+            return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        }
+        const live = invEnsure(readLive());
+        const parts = pathname.split('/');
+        const id = parts[parts.length - 2];
+        const st = (live.inventory_stocktakes || []).find(x => x.id === id);
+        if (!st || st.status !== 'review') return sendJson(res, { error: 'جلسه آماده تأیید نیست.' }, 400);
+        const lines = (live.inventory_stocktake_lines || []).filter(l => l.stocktake_id === id && l.difference);
+        let adj = 0;
+        lines.forEach(l => {
+            if (!l.difference) return;
+            live.inventory_adjustments.push({
+                id: 'adj-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                adjustment_no: 'ADJ-' + st.code + '-' + (adj + 1),
+                item_id: l.item_id,
+                warehouse: l.warehouse,
+                delta_quantity: l.difference,
+                reason: 'انبارگردانی ' + st.code,
+                created_at: new Date().toISOString(),
+                created_by: String((req.user && req.user.username) || '')
+            });
+            adj++;
+        });
+        st.status = 'approved';
+        st.approved_at = new Date().toISOString();
+        st.adjustment_count = adj;
+        invSave(live, req, 'inventory.stocktake.approve', { code: st.code, adjustments: adj });
+        return sendJson(res, { ok: true, adjustments: adj });
     }
 
     if (

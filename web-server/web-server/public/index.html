@@ -3133,6 +3133,10 @@
                             📥 ایمپورت اکسل
                         </button>
 
+                        <button class="act" id="btnStocktake" style="background:#7c3aed;">
+                            📋 انبارگردانی
+                        </button>
+
                     </span>
                 </h2>
 
@@ -3237,6 +3241,37 @@
                         <span id="impResult" style="font-size:13px;"></span>
                     </div>
 
+                </div>
+
+                <!-- POLYMER-STK-1: پنل انبارگردانی -->
+                <div id="stkPanel" class="filters hidden" style="margin-top:12px;">
+                    <h3>📋 انبارگردانی</h3>
+                    <div class="frow">
+                        <label>انبار: <select id="stkWarehouse" class="fsel">
+                            <option value="">همه انبارها</option>
+                            <option value="انبار محصول">انبار محصول</option>
+                            <option value="انبار معینی">انبار معینی</option>
+                            <option value="انبار مواد اولیه">انبار مواد اولیه</option>
+                            <option value="انبار مواد مصرفی">انبار مواد مصرفی</option>
+                            <option value="انبار کار در جریان">انبار کار در جریان</option>
+                        </select></label>
+                        <label>گروه: <select id="stkCategory" class="fsel"><option value="">همه گروه‌ها</option></select></label>
+                        <label>توضیح: <input id="stkNotes" placeholder="اختیاری" style="width:150px" /></label>
+                        <button class="act" id="stkCreate">➕ شروع شمارش جدید</button>
+                    </div>
+                    <div id="stkList" style="margin-top:10px;"></div>
+                    <div id="stkDetail" class="hidden" style="margin-top:10px;">
+                        <h4 id="stkDetailTitle"></h4>
+                        <div class="tablewrap" style="max-height:400px;overflow:auto;">
+                            <table id="tbl-stk-lines"></table>
+                        </div>
+                        <div class="frow" style="margin-top:8px;">
+                            <button class="act" id="stkSaveCounts">💾 ثبت شمارش</button>
+                            <button class="act" id="stkApprove" style="background:#15803d;">✅ تأیید و صدور اصلاح</button>
+                            <button class="act" id="stkClose" style="background:#666;">بستن</button>
+                            <span id="stkResult" style="font-size:13px;"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="filters hidden" id="invReceiptForm">
@@ -7139,11 +7174,20 @@ document.getElementById('btnAddWaste').addEventListener('click', () => { documen
             /* POLYMER-WH-1: پر کردن فیلتر گروه کالا */
             try {
                 const catSel = document.getElementById('invCatFilter');
-                if (catSel) {
+                const stkCatSel = document.getElementById('stkCategory');
+                if (catSel || stkCatSel) {
                     const cats = [...new Set((inventoryData.items || []).map(i => i.category).filter(Boolean))].sort();
-                    const cur = catSel.value;
-                    catSel.innerHTML = '<option value="">همه گروه‌ها</option>' + cats.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
-                    if (cats.includes(cur)) catSel.value = cur;
+                    const opts = '<option value="">همه گروه‌ها</option>' + cats.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+                    if (catSel) {
+                        const cur = catSel.value;
+                        catSel.innerHTML = opts;
+                        if (cats.includes(cur)) catSel.value = cur;
+                    }
+                    if (stkCatSel) {
+                        const cur2 = stkCatSel.value;
+                        stkCatSel.innerHTML = opts;
+                        if (cats.includes(cur2)) stkCatSel.value = cur2;
+                    }
                 }
             } catch (e) {}
             try { invFillReserveSelects(); } catch (e) { /* FIX-FLT-4g: بی‌ضرر */ }
@@ -7659,6 +7703,91 @@ document.getElementById('invCardexItem')?.addEventListener('change', invRenderCa
             });
         })();
 
+        /* ===== POLYMER-STK-1: انبارگردانی ===== */
+        let stkCurrentId = null;
+        document.getElementById('btnStocktake')?.addEventListener('click', () => {
+            const p = document.getElementById('stkPanel');
+            p.classList.toggle('hidden');
+            if (!p.classList.contains('hidden')) stkLoadList();
+        });
+        async function stkLoadList() {
+            const el = document.getElementById('stkList');
+            try {
+                const out = await (await fetch('/api/inventory/stocktakes')).json();
+                if (!out.ok || !out.stocktakes.length) { el.innerHTML = '<p class="note">جلسه‌ای ثبت نشده است.</p>'; return; }
+                const stFa = { counting: 'در حال شمارش', review: 'آماده بررسی', approved: 'تأییدشده' };
+                el.innerHTML = '<table border="1" cellpadding="6" style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr><th>کد</th><th>انبار</th><th>وضعیت</th><th>شمارش‌شده</th><th>تاریخ</th><th></th></tr></thead><tbody>' +
+                    out.stocktakes.map(s => '<tr><td>' + esc(s.code) + '</td><td>' + esc(s.warehouse || 'همه') + '</td><td>' + (stFa[s.status] || s.status) + '</td><td>' + (s.counted_count || 0) + '/' + (s.line_count || 0) + '</td><td>' + esc((s.created_at || '').slice(0, 10)) + '</td><td><button class="act" data-stk="' + s.id + '" style="padding:4px 10px;font-size:11px">مشاهده</button></td></tr>').join('') +
+                    '</tbody></table>';
+                el.querySelectorAll('[data-stk]').forEach(b => b.addEventListener('click', () => stkLoadDetail(b.dataset.stk)));
+            } catch (e) { el.innerHTML = '<p class="note">خطا در بارگذاری.</p>'; }
+        }
+        document.getElementById('stkCreate')?.addEventListener('click', async () => {
+            const resEl = document.getElementById('stkResult');
+            resEl.textContent = '⏳ در حال ایجاد...';
+            try {
+                const resp = await fetch('/api/inventory/stocktake', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        warehouse: document.getElementById('stkWarehouse').value,
+                        category: document.getElementById('stkCategory').value,
+                        notes: document.getElementById('stkNotes').value
+                    })
+                });
+                const out = await resp.json();
+                if (out.ok) { resEl.textContent = '✅ جلسه ' + out.stocktake.code + ' با ' + out.stocktake.line_count + ' قلم ایجاد شد.'; stkLoadList(); stkLoadDetail(out.stocktake.id); }
+                else resEl.textContent = '❌ ' + (out.error || 'خطا');
+            } catch (e) { resEl.textContent = '❌ خطای ارتباط'; }
+        });
+        async function stkLoadDetail(id) {
+            stkCurrentId = id;
+            const d = document.getElementById('stkDetail');
+            d.classList.remove('hidden');
+            try {
+                const out = await (await fetch('/api/inventory/stocktake/' + id)).json();
+                if (!out.ok) return;
+                const st = out.stocktake;
+                document.getElementById('stkDetailTitle').textContent = 'جلسه ' + st.code + ' — ' + (st.warehouse || 'همه انبارها') + ' (' + (st.counted_count || 0) + '/' + (st.line_count || 0) + ')';
+                const ro = st.status !== 'counting';
+                document.getElementById('tbl-stk-lines').innerHTML = '<thead><tr><th>کد</th><th>نام کالا</th><th>واحد</th><th>موجودی سیستم</th><th>شمارش‌شده</th><th>مغایرت</th></tr></thead><tbody>' +
+                    out.lines.map(l => {
+                        const diff = l.difference;
+                        const dc = diff > 0 ? 'style="color:green;font-weight:bold"' : diff < 0 ? 'style="color:red;font-weight:bold"' : '';
+                        return '<tr><td>' + esc(l.code) + '</td><td>' + esc(l.name) + '</td><td>' + esc(l.unit) + '</td><td>' + l.system_qty + '</td>' +
+                            '<td><input type="number" data-line="' + l.id + '" value="' + (l.counted_qty !== null ? l.counted_qty : '') + '" style="width:90px" ' + (ro ? 'disabled' : '') + ' /></td>' +
+                            '<td ' + dc + '>' + (diff !== null ? diff : '-') + '</td></tr>';
+                    }).join('') + '</tbody>';
+                document.getElementById('stkSaveCounts').style.display = ro ? 'none' : '';
+                document.getElementById('stkApprove').style.display = st.status === 'review' ? '' : 'none';
+            } catch (e) {}
+        }
+        document.getElementById('stkSaveCounts')?.addEventListener('click', async () => {
+            if (!stkCurrentId) return;
+            const counts = {};
+            document.querySelectorAll('#tbl-stk-lines input[data-line]').forEach(i => { if (i.value !== '') counts[i.dataset.line] = Number(i.value); });
+            const resEl = document.getElementById('stkResult');
+            resEl.textContent = '⏳ در حال ثبت...';
+            try {
+                const out = await (await fetch('/api/inventory/stocktake/' + stkCurrentId + '/count', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ counts })
+                })).json();
+                if (out.ok) { resEl.textContent = '✅ ' + out.counted + ' قلم ثبت شد.'; stkLoadDetail(stkCurrentId); stkLoadList(); if (typeof refreshInventory === 'function') refreshInventory(); }
+                else resEl.textContent = '❌ ' + (out.error || 'خطا');
+            } catch (e) { resEl.textContent = '❌ خطای ارتباط'; }
+        });
+        document.getElementById('stkApprove')?.addEventListener('click', async () => {
+            if (!stkCurrentId || !confirm('مغایرت‌ها به‌صورت سند اصلاح ثبت و موجودی سیستم به‌روز می‌شود. ادامه می‌دهید؟')) return;
+            const resEl = document.getElementById('stkResult');
+            try {
+                const out = await (await fetch('/api/inventory/stocktake/' + stkCurrentId + '/approve', { method: 'POST' })).json();
+                if (out.ok) { resEl.textContent = '✅ تأیید شد — ' + out.adjustments + ' سند اصلاح صادر شد.'; stkLoadDetail(stkCurrentId); stkLoadList(); if (typeof refreshInventory === 'function') refreshInventory(); }
+                else resEl.textContent = '❌ ' + (out.error || 'خطا');
+            } catch (e) { resEl.textContent = '❌ خطای ارتباط'; }
+        });
+        document.getElementById('stkClose')?.addEventListener('click', () => {
+            document.getElementById('stkDetail').classList.add('hidden');
+            stkCurrentId = null;
+        });
 
         document
             .getElementById(
