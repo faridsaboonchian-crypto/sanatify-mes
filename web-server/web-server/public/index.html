@@ -8466,9 +8466,17 @@ invRender = function () { var r = __origInvRender.apply(this, arguments); try { 
 var __origRenderStock = invRenderStock;
 invRenderStock = function () {
 var q = ((document.getElementById('invStockSearch') || {}).value || '').trim().toLowerCase();
-if (q && inventoryData && inventoryData.stockview) {
+/* POLYMER-WH-5: نرمالایز حروف عربی/فارسی برای جستجوی هوشمند */
+function normFa(s) {
+    return String(s || '').toLowerCase()
+        .replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/ة/g, 'ه')
+        .replace(/ؤ/g, 'و').replace(/إ/g, 'ا').replace(/أ/g, 'ا').replace(/آ/g, 'ا')
+        .replace(/\s+/g, ' ').trim();
+}
+var nq = normFa(q);
+if (nq && inventoryData && inventoryData.stockview) {
 var orig = inventoryData.stockview;
-inventoryData.stockview = orig.filter(function (x) { return String(x.name || '').toLowerCase().indexOf(q) !== -1 || String(x.code || '').toLowerCase().indexOf(q) !== -1; });
+inventoryData.stockview = orig.filter(function (x) { return normFa(x.name).indexOf(nq) !== -1 || normFa(x.code).indexOf(nq) !== -1 || normFa(x.category).indexOf(nq) !== -1; });
 try { return __origRenderStock(); } finally { inventoryData.stockview = orig; }
 }
 return __origRenderStock();
