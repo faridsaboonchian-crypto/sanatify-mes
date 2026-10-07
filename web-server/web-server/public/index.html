@@ -1712,7 +1712,7 @@
         <div class="nav-group">کیفیت و ردیابی</div>
         <button data-tab="quality">کنترل کیفیت</button>
         <button data-tab="genealogy">ردیابی تولید</button>
-        <button data-tab="balance">بالانس شمش</button>
+        <!-- POLYMER-STEEL-1: تب «بالانس شمش» حذف شد — مفهوم هیت/شمش فولادی است -->
         <div class="nav-group">پشتیبانی</div>
         <button data-tab="warehouse">انبار و موجودی</button>
         <button data-tab="maintenance">تعمیرات و PM</button>
@@ -1751,7 +1751,7 @@
                     </select></label>
                 <label>محصول: <select id="filterProduct">
                         <option value="all">همه</option>
-                        <option value="RB-8">میلگرد A3 سایز ۸</option><option value="RB-10">میلگرد A3 سایز ۱۰</option><option value="RB-12">میلگرد A3 سایز ۱۲</option><option value="RB-14">میلگرد A3 سایز ۱۴</option><option value="RB-16">میلگرد A3 سایز ۱۶</option><option value="RB-18">میلگرد A3 سایز ۱۸</option><option value="RB-20">میلگرد A3 سایز ۲۰</option><option value="RB-22">میلگرد A3 سایز ۲۲</option><option value="RB-25">میلگرد A3 سایز ۲۵</option><option value="RB-28">میلگرد A3 سایز ۲۸</option><option value="RB-32">میلگرد A3 سایز ۳۲</option>
+                        <option value="INJ-A">قطعه تزریقی A</option><option value="INJ-B">قطعه تزریقی B</option><option value="INJ-C">قطعه تزریقی C</option>
                         
                     </select></label>
                 <button id="applyFilter">🔍 اعمال فیلتر</button>
@@ -2401,7 +2401,7 @@
         </section>
         <section id="tab-genealogy" class="hidden">
             <div class="panel">
-                <h2>ردیابی تولید (شمش تا میلگرد) <span class="toolbar"><input type="text" id="heatInput"
+                <h2>ردیابی تولید <span class="toolbar"><input type="text" id="heatInput"
                             placeholder="کد هیت ذوب (مثال: HT-1405-01)" /><button class="act"
                             id="btnGenealogy">استعلام</button><button class="act excel" id="expGenealogy">خروجی اکسل
                             📊</button></span></h2>
@@ -2960,7 +2960,7 @@
                     <h3>ثبت سند دستی (دوطرفه)</h3>
                     <div class="frow">
                         <label>تاریخ: <input type="text" inputmode="numeric" data-jp="findate" id="finDate" placeholder="۱۴۰۵/۰۶/۱۲" style="width:110px;text-align:center"></label>
-                        <label>شرح سند: <input id="finDesc" placeholder="مثلاً فروش نقدی میلگرد سایز ۱۸" style="min-width:240px"></label>
+                        <label>شرح سند: <input id="finDesc" placeholder="مثلاً فروش نقدی قطعه تزریقی" style="min-width:240px"></label>
                     </div>
                     <div id="finLines"></div>
                     <div class="frow">
@@ -4121,7 +4121,7 @@
         const groupFa = (n) => { if (n === null || n === undefined || n === '') return '-'; const s = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); return s.replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d))); };
         const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const toFaDigits = (s) => String(s == null ? '' : s).replace(/[0-9]/g, (d) => String.fromCharCode(1776 + Number(d)));
-        const REASON_FA = { 'roll_change': 'تعویض غلتک / قفسه', 'billet_jam': 'کوبیدگی شمش', 'furnace_temp': 'دمای کوره', 'shear_adjust': 'تنظیم قیچی', 'mech_elec': 'خرابی مکانیکی / برقی', 'crop-ends': 'کراپ دو سر', 'bearing': 'شکستگی بلبرینگ', 'roll': 'شکستگی/پوشش غلتک', 'shear_blade': 'تیغه قیچی', 'electrical': 'خرابی برقی', 'hydraulic': 'خرابی هیدرولیک', 'furnace': 'مشعل/نسوز کوره', 'leak-failed': 'عیب آزمون فشار (سابقه)', 'deformed-body': 'دفرمگی محصول', 'scratch-lining': 'خراش سطح', 'weld-defect': 'عیب جوش (سابقه)', 'seam-wheel-change': 'تعویض چرخ برش (سابقه)', 'paint-booth-cleaning': 'تمیزکاری ایستگاه (سابقه)', 'forming-adjust': 'تنظیم دستگاه شکل‌دهی (سابقه)', 'coil-feed-jam': 'گیرش شمش در فیدر (سابقه)', 'other': 'سایر', 'melt-temp': 'دمای نامناسب مذاب/سیلندر', 'mold-temp': 'دمای نامناسب قالب', 'inj-pressure': 'فشار یا سرعت تزریق نامناسب', 'material-moist': 'رطوبت گرانول/مواد', 'material-qc': 'کیفیت نامناسب مواد اولیه', 'mold-wear': 'سایش یا آسیب قالب', 'clamp-setup': 'تنظیم نبودن گیره/قالب', 'mold-change': 'تعویض قالب', 'mold-setup': 'نصب و راه‌اندازی قالب', 'mold-damage': 'آسیب / خرابی قالب', 'machine-breakdown': 'خرابی دستگاه تزریق', 'cooling-issue': 'اختلال سیستم خنک‌کننده', 'material-shortage': 'کمبود / تأخیر مواد اولیه', 'power-outage': 'قطعی برق', 'planned-pm': 'سرویس و نگهداری برنامه‌ریزی‌شده' };
+        const REASON_FA = { 'mech_elec': 'خرابی مکانیکی / برقی', 'bearing': 'شکستگی بلبرینگ', 'electrical': 'خرابی برقی', 'hydraulic': 'خرابی هیدرولیک', 'deformed-body': 'دفرمگی محصول', 'scratch-lining': 'خراش سطح', 'other': 'سایر', 'melt-temp': 'دمای نامناسب مذاب/سیلندر', 'mold-temp': 'دمای نامناسب قالب', 'inj-pressure': 'فشار یا سرعت تزریق نامناسب', 'material-moist': 'رطوبت گرانول/مواد', 'material-qc': 'کیفیت نامناسب مواد اولیه', 'mold-wear': 'سایش یا آسیب قالب', 'clamp-setup': 'تنظیم نبودن گیره/قالب', 'mold-change': 'تعویض قالب', 'mold-setup': 'نصب و راه‌اندازی قالب', 'mold-damage': 'آسیب / خرابی قالب', 'machine-breakdown': 'خرابی دستگاه تزریق', 'cooling-issue': 'اختلال سیستم خنک‌کننده', 'material-shortage': 'کمبود / تأخیر مواد اولیه', 'power-outage': 'قطعی برق', 'planned-pm': 'سرویس و نگهداری برنامه‌ریزی‌شده' };
         const reasonFa = (v) => REASON_FA[String(v || '')] || (v ? String(v) : '-');
         let WEB_USER = null;
         const STATIONS = { 'IM-01': 'دستگاه تزریق ۱', 'IM-02': 'دستگاه تزریق ۲', 'IM-03': 'دستگاه تزریق ۳', 'IM-04': 'دستگاه تزریق ۴', 'IM-05': 'دستگاه تزریق ۵', 'IM-06': 'دستگاه تزریق ۶', 'IM-07': 'دستگاه تزریق ۷', 'IM-08': 'دستگاه تزریق ۸', 'dryer-01': 'خشک‌کن گرانول', 'grinder-01': 'آسیاب', 'quality_lab': 'آزمایشگاه (QC)', 'pack-01': 'بسته‌بندی' };
@@ -4133,7 +4133,7 @@
         const steelLegacy = (v) => { const s = String(v == null ? '' : v); if (STEEL_LEGACY_FA[s]) return STEEL_LEGACY_FA[s]; return LEGACY_OP_RE.test(s) ? 'اپراتور خط تولید (سابقه)' : s; };
         /* ===== FIX-STEEL-8c: stationFa با نگاشت قدیمی‌ها ===== */
         const stationFa = (v) => STATIONS[String(v || '')] || (v ? String(steelLegacy(v)) : '-');
-        const WTYPE_FA = { 'sheet': 'شمش', 'body': 'میلگرد', 'ends': 'کراپ دو سر', 'full': 'بندیل کامل', 'short': 'قطعه ناقص (شورت‌شات)', 'flash': 'پلیسه (فلش)', 'burn': 'سوختگی / تغییر رنگ', 'warpage': 'تابیدگی (وارپج)', 'voids': 'حباب و مک', 'contam': 'ناخالصی مواد', 'runner': 'راهگاه و اسپرو' };
+        const WTYPE_FA = { 'short': 'قطعه ناقص (شورت‌شات)', 'flash': 'پلیسه (فلش)', 'burn': 'سوختگی / تغییر رنگ', 'warpage': 'تابیدگی (وارپج)', 'voids': 'حباب و مک', 'contam': 'ناخالصی مواد', 'runner': 'راهگاه و اسپرو' };
         /* ===== FIX-WASTE-26a (begin): ضایعات وزنی — پایان شیفت بر اساس تُن اعلام می‌شود ===== */
         const wkg26a = (r) => (r && Number(r.tonnage_ton) > 0) ? Number(r.tonnage_ton) * 1000 : 0; /* kg معادل تناژ — رکورد legacy (فقط تعداد) در جمع‌های وزنی مشارکت نمی‌کند */
         const faTon26a = (v) => fa(String(Math.round(Number(v) * 1000) / 1000)).replace('.', '٫'); /* ۲٫۵ اعشاری فارسی */
