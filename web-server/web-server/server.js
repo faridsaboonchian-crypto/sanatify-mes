@@ -3569,7 +3569,7 @@ function appRequestHandler(req, res) {
         if (!url || typeof fetch !== 'function' || !scenarios.length) return;
         const hash = planApsDataHash(live);
         if (apsAiCache.hash === hash) return;
-        const prompt = 'برنامه‌ریز تولید فولاد. خلاصهٔ کوتاه فارسی (حداکثر ۳ جمله) از این سناریوهای APS برای مدیر تولید بنویس: ' + JSON.stringify(scenarios.map((s) => ({ title: s.title, p50: s.kpis.healthy_tonnage_p50, risk: s.kpis.risk, oee: s.kpis.oee_pct, conf: s.kpis.confidence_mc_pct })));
+        const prompt = 'برنامه‌ریز تولید پلیمری. خلاصهٔ کوتاه فارسی (حداکثر ۳ جمله) از این سناریوهای APS برای مدیر تولید بنویس: ' + JSON.stringify(scenarios.map((s) => ({ title: s.title, p50: s.kpis.healthy_tonnage_p50, risk: s.kpis.risk, oee: s.kpis.oee_pct, conf: s.kpis.confidence_mc_pct })));
         const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch (e) { } }, 8000);
         fetch(url, {
