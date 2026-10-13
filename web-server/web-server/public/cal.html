@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sanatify MES — کالیبراسیون ابزار</title>
+    <style>
+        body { font-family: Vazirmatn, Tahoma, sans-serif; background: #f1f5f9; margin: 0; color: #0f172a }
+        header { background: #1e3d59; color: #fff; padding: 14px 20px; font-weight: bold; font-size: 17px }
+        header a { color: #9fd0ff; font-size: 13px; font-weight: normal; margin-right: 16px }
+        .wrap { max-width: 1100px; margin: 18px auto; padding: 0 14px }
+        .panel { background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08) }
+        .panel h3 { margin: 0 0 12px; font-size: 15px; color: #1e3d59; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px }
+        .row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px }
+        label { font-size: 12px; color: #475569; display: block; margin-bottom: 4px }
+        input, select, button { font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px }
+        button { background: #1e3d59; color: #fff; border: none; cursor: pointer; padding: 9px 18px }
+        button:hover { background: #2c5478 }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px }
+        th, td { border: 1px solid #e2e8f0; padding: 7px 9px; text-align: right }
+        th { background: #eef4fa; color: #1e3d59 }
+        .ok { color: #15803d; font-weight: bold } .err { color: #b91c1c; font-weight: bold }
+        .tag { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; margin: 1px }
+        .tag.overdue { background: #fee2e2; color: #991b1b } .tag.soon { background: #fef3c7; color: #92400e } .tag.ok { background: #dcfce7; color: #166534 }
+        #msg { position: fixed; bottom: 18px; right: 18px; max-width: 420px; z-index: 50 }
+        .toast { background: #0f172a; color: #fff; border-radius: 10px; padding: 12px 16px; margin-top: 8px; font-size: 13px }
+        .toast.err { background: #991b1b } .toast.ok { background: #15803d }
+    </style>
+</head>
+<body>
+<header>📏 کالیبراسیون ابزار اندازه‌گیری <a href="/">← بازگشت به سامانه</a></header>
+<div class="wrap">
+
+    <div class="panel">
+        <h3>ابزارهای دارای سررسید (معوق / نزدیک)</h3>
+        <button onclick="loadDue()">به‌روزرسانی</button>
+        <div id="dueList"></div>
+    </div>
+
+    <div class="panel">
+        <h3>تعریف ابزار جدید</h3>
+        <div class="row">
+            <div><label>کد ابزار *</label><input id="i_code" style="width:140px" placeholder="CAL-001"></div>
+            <div><label>نام *</label><input id="i_name" style="width:200px" placeholder="کولیس دیجیتال"></div>
+            <div><label>نوع</label><input id="i_type" style="width:130px" placeholder="طولی"></div>
+            <div><label>محل</label><input id="i_loc" style="width:130px" placeholder="آزمایشگاه"></div>
+            <div><label>دوره (ماه)</label><input id="i_int" type="number" min="1" max="60" value="12" style="width:80px"></div>
+            <div style="align-self:flex-end"><button onclick="createInstrument()">ثبت ابزار</button></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>فهرست ابزارها</h3>
+        <button onclick="loadInstruments()">بارگذاری</button>
+        <div id="instList"></div>
+    </div>
+
+    <div class="panel">
+        <h3>ثبت رکورد کالیبراسیون</h3>
+        <div class="row">
+            <div><label>کد ابزار *</label><input id="r_code" style="width:140px"></div>
+            <div><label>تاریخ</label><input id="r_date" type="date" style="width:150px"></div>
+            <div><label>نتیجه *</label><select id="r_result"><option value="pass">قبول (Pass)</option><option value="fail">رد (Fail)</option></select></div>
+            <div><label>شماره گواهی</label><input id="r_cert" style="width:150px"></div>
+            <div><label>انجام‌دهنده</label><input id="r_by" style="width:140px"></div>
+            <div style="align-self:flex-end"><button onclick="createRecord()">ثبت رکورد</button></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>سوابق کالیبراسیون</h3>
+        <div class="row">
+            <div><label>کد ابزار (اختیاری)</label><input id="h_code" style="width:140px"></div>
+            <div style="align-self:flex-end"><button onclick="loadRecords()">بارگذاری</button></div>
+        </div>
+        <div id="recList"></div>
+    </div>
+
+</div>
+<div id="msg"></div>
+<script>
+function toast(t, cls) {
+    var d = document.createElement('div'); d.className = 'toast ' + (cls || ''); d.textContent = t;
+    document.getElementById('msg').appendChild(d);
+    setTimeout(function () { d.remove(); }, 6000);
+}
+async function api(method, url, body) {
+    var opt = { method: method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opt.body = JSON.stringify(body);
+    var r = await fetch(url, opt);
+    var j = await r.json().catch(function () { return { error: 'پاسخ نامعتبر از سرور' }; });
+    if (!r.ok || j.error) { toast(j.error || ('خطای ' + r.status), 'err'); throw new Error(j.error || r.status); }
+    return j;
+}
+function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+async function createInstrument() {
+    var j = await api('POST', '/api/cal/instruments', {
+        code: document.getElementById('i_code').value, name: document.getElementById('i_name').value,
+        type: document.getElementById('i_type').value, location: document.getElementById('i_loc').value,
+        interval_months: Number(document.getElementById('i_int').value)
+    }).catch(function () { return null; });
+    if (!j) return;
+    toast('ابزار ' + j.instrument.code + ' ثبت شد', 'ok');
+    loadInstruments(); loadDue();
+}
+async function loadInstruments() {
+    var j = await api('GET', '/api/cal/instruments').catch(function () { return null; });
+    if (!j) return;
+    var h = '<table><tr><th>کد</th><th>نام</th><th>نوع</th><th>محل</th><th>دوره (ماه)</th><th>آخرین کالیبراسیون</th><th>سررسید بعدی</th><th>وضعیت</th></tr>';
+    j.instruments.forEach(function (x) {
+        h += '<tr><td><b>' + esc(x.code) + '</b></td><td>' + esc(x.name) + '</td><td>' + esc(x.type || '-') + '</td><td>' + esc(x.location || '-') +
+            '</td><td>' + esc(x.interval_months) + '</td><td>' + esc(x.last_calibration || '—') + '</td><td>' + esc(x.next_due_date || '—') +
+            '</td><td>' + (x.status === 'active' ? '<span class="ok">فعال</span>' : '<span class="err">غیرفعال</span>') + '</td></tr>';
+    });
+    document.getElementById('instList').innerHTML = h + '</table>';
+}
+async function createRecord() {
+    var j = await api('POST', '/api/cal/records', {
+        instrument_id: document.getElementById('r_code').value, date: document.getElementById('r_date').value,
+        result: document.getElementById('r_result').value, certificate_no: document.getElementById('r_cert').value,
+        performed_by: document.getElementById('r_by').value
+    }).catch(function () { return null; });
+    if (!j) return;
+    toast('رکورد ثبت شد — سررسید بعدی: ' + j.record.next_due_date, 'ok');
+    loadInstruments(); loadDue(); loadRecords();
+}
+async function loadRecords() {
+    var code = document.getElementById('h_code').value.trim();
+    var j = await api('GET', '/api/cal/records' + (code ? '?instrument_id=' + encodeURIComponent(code) : '')).catch(function () { return null; });
+    if (!j) return;
+    var h = '<table><tr><th>ابزار</th><th>تاریخ</th><th>نتیجه</th><th>گواهی</th><th>انجام‌دهنده</th><th>سررسید بعدی</th></tr>';
+    j.records.forEach(function (x) {
+        h += '<tr><td><b>' + esc(x.instrument_code) + '</b> ' + esc(x.instrument_name || '') + '</td><td>' + esc(x.date) + '</td><td>' +
+            (x.result === 'pass' ? '<span class="ok">قبول</span>' : '<span class="err">رد</span>') + '</td><td>' + esc(x.certificate_no || '-') +
+            '</td><td>' + esc(x.performed_by || '-') + '</td><td>' + esc(x.next_due_date) + '</td></tr>';
+    });
+    document.getElementById('recList').innerHTML = h + '</table>';
+}
+async function loadDue() {
+    var j = await api('GET', '/api/cal/due').catch(function () { return null; });
+    if (!j) return;
+    var h = '';
+    if (!j.due.length) h = '<p class="ok">همه ابزارها در مهلت معتبرند.</p>';
+    else {
+        h = '<table><tr><th>کد</th><th>نام</th><th>سررسید</th><th>وضعیت</th></tr>';
+        j.due.forEach(function (d) {
+            h += '<tr><td><b>' + esc(d.instrument.code) + '</b></td><td>' + esc(d.instrument.name) + '</td><td>' + esc(d.instrument.next_due_date) + '</td><td>' +
+                (d.due_state === 'overdue' ? '<span class="tag overdue">معوق</span>' : '<span class="tag soon">نزدیک (۳۰ روز)</span>') + '</td></tr>';
+        });
+        h += '</table>';
+    }
+    document.getElementById('dueList').innerHTML = h;
+}
+loadDue(); loadInstruments();
+</script>
+</body>
+</html>

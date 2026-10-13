@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sanatify MES — کنترل مدارک</title>
+    <style>
+        body { font-family: Vazirmatn, Tahoma, sans-serif; background: #f1f5f9; margin: 0; color: #0f172a }
+        header { background: #1e3d59; color: #fff; padding: 14px 20px; font-weight: bold; font-size: 17px }
+        header a { color: #9fd0ff; font-size: 13px; font-weight: normal; margin-right: 16px }
+        .wrap { max-width: 1100px; margin: 18px auto; padding: 0 14px }
+        .panel { background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08) }
+        .panel h3 { margin: 0 0 12px; font-size: 15px; color: #1e3d59; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px }
+        .row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px }
+        label { font-size: 12px; color: #475569; display: block; margin-bottom: 4px }
+        input, select, textarea, button { font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px }
+        button { background: #1e3d59; color: #fff; border: none; cursor: pointer; padding: 9px 18px }
+        button:hover { background: #2c5478 }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px }
+        th, td { border: 1px solid #e2e8f0; padding: 7px 9px; text-align: right }
+        th { background: #eef4fa; color: #1e3d59 }
+        .ok { color: #15803d; font-weight: bold } .mut { color: #94a3b8 }
+        .tag { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; margin: 1px }
+        .tag.active { background: #dcfce7; color: #166534 } .tag.obsolete { background: #f1f5f9; color: #64748b }
+        #msg { position: fixed; bottom: 18px; right: 18px; max-width: 420px; z-index: 50 }
+        .toast { background: #0f172a; color: #fff; border-radius: 10px; padding: 12px 16px; margin-top: 8px; font-size: 13px }
+        .toast.err { background: #991b1b } .toast.ok { background: #15803d }
+    </style>
+</head>
+<body>
+<header>📄 کنترل مدارک — کنترل‌پلن، دستورکار، فرم <a href="/">← بازگشت به سامانه</a></header>
+<div class="wrap">
+
+    <div class="panel">
+        <h3>ثبت سند جدید / ویرایش جدید (ویرایش قبلی خودکار منسوخ می‌شود)</h3>
+        <div class="row">
+            <div><label>کد سند *</label><input id="d_code" style="width:150px" placeholder="CP-EN-403-01"></div>
+            <div><label>عنوان *</label><input id="d_title" style="width:260px" placeholder="کنترل‌پلن Outlet Duct"></div>
+            <div><label>نوع</label><select id="d_type">
+                <option value="control_plan">کنترل‌پلن</option>
+                <option value="work_instruction">دستورکار</option>
+                <option value="form">فرم</option>
+                <option value="other">سایر</option>
+            </select></div>
+            <div><label>ویرایش (خالی = بعدی خودکار)</label><input id="d_rev" type="number" min="1" style="width:90px"></div>
+            <div><label>تاریخ اجرا</label><input id="d_eff" type="date" style="width:150px"></div>
+        </div>
+        <div class="row">
+            <div style="flex:1;min-width:260px"><label>یادداشت</label><textarea id="d_note" rows="2" style="width:100%"></textarea></div>
+        </div>
+        <button onclick="createDoc()">ثبت سند</button>
+    </div>
+
+    <div class="panel">
+        <h3>فهرست اسناد</h3>
+        <div class="row">
+            <div><label>وضعیت</label><select id="f_status"><option value="">همه</option><option value="active">فعال</option><option value="obsolete">منسوخ</option></select></div>
+            <div><label>نوع</label><select id="f_type"><option value="">همه</option><option value="control_plan">کنترل‌پلن</option><option value="work_instruction">دستورکار</option><option value="form">فرم</option><option value="other">سایر</option></select></div>
+            <div><label>کد سند</label><input id="f_code" style="width:150px"></div>
+            <div style="align-self:flex-end"><button onclick="loadDocs()">بارگذاری</button></div>
+        </div>
+        <div id="docList"></div>
+    </div>
+
+</div>
+<div id="msg"></div>
+<script>
+var TYPE_FA = { control_plan: 'کنترل‌پلن', work_instruction: 'دستورکار', form: 'فرم', other: 'سایر' };
+function toast(t, cls) {
+    var d = document.createElement('div'); d.className = 'toast ' + (cls || ''); d.textContent = t;
+    document.getElementById('msg').appendChild(d);
+    setTimeout(function () { d.remove(); }, 6000);
+}
+async function api(method, url, body) {
+    var opt = { method: method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opt.body = JSON.stringify(body);
+    var r = await fetch(url, opt);
+    var j = await r.json().catch(function () { return { error: 'پاسخ نامعتبر از سرور' }; });
+    if (!r.ok || j.error) { toast(j.error || ('خطای ' + r.status), 'err'); throw new Error(j.error || r.status); }
+    return j;
+}
+function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+async function createDoc() {
+    var j = await api('POST', '/api/docs', {
+        doc_code: document.getElementById('d_code').value, title: document.getElementById('d_title').value,
+        type: document.getElementById('d_type').value, rev: document.getElementById('d_rev').value || undefined,
+        effective_date: document.getElementById('d_eff').value, note: document.getElementById('d_note').value
+    }).catch(function () { return null; });
+    if (!j) return;
+    toast('سند ' + j.document.doc_code + ' ویرایش ' + j.document.rev + ' ثبت شد' + (j.obsoleted_previous ? ' (ویرایش قبلی منسوخ شد)' : ''), 'ok');
+    loadDocs();
+}
+async function loadDocs() {
+    var qs = [];
+    var st = document.getElementById('f_status').value, ty = document.getElementById('f_type').value, dc = document.getElementById('f_code').value.trim();
+    if (st) qs.push('status=' + encodeURIComponent(st));
+    if (ty) qs.push('type=' + encodeURIComponent(ty));
+    if (dc) qs.push('doc_code=' + encodeURIComponent(dc));
+    var j = await api('GET', '/api/docs' + (qs.length ? '?' + qs.join('&') : '')).catch(function () { return null; });
+    if (!j) return;
+    var h = '<table><tr><th>کد سند</th><th>عنوان</th><th>نوع</th><th>ویرایش</th><th>تاریخ اجرا</th><th>وضعیت</th><th>ثبت‌کننده</th></tr>';
+    j.documents.forEach(function (x) {
+        h += '<tr><td><b>' + esc(x.doc_code) + '</b></td><td>' + esc(x.title) + '</td><td>' + esc(TYPE_FA[x.type] || x.type) +
+            '</td><td><b>' + esc(x.rev) + '</b></td><td>' + esc(x.effective_date || '—') + '</td><td>' +
+            (x.status === 'active' ? '<span class="tag active">فعال</span>' : '<span class="tag obsolete">منسوخ</span>') +
+            '</td><td>' + esc(x.created_by || '-') + '</td></tr>';
+    });
+    document.getElementById('docList').innerHTML = h + '</table>';
+}
+loadDocs();
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sanatify MES — ردیابی تولید پلیمری</title>
+    <style>
+        body { font-family: Vazirmatn, Tahoma, sans-serif; background: #f1f5f9; margin: 0; color: #0f172a }
+        header { background: #1e3d59; color: #fff; padding: 14px 20px; font-weight: bold; font-size: 17px }
+        header a { color: #9fd0ff; font-size: 13px; font-weight: normal; margin-right: 16px }
+        .wrap { max-width: 1100px; margin: 18px auto; padding: 0 14px }
+        .panel { background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08) }
+        .panel h3 { margin: 0 0 12px; font-size: 15px; color: #1e3d59; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px }
+        .row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px }
+        label { font-size: 12px; color: #475569; display: block; margin-bottom: 4px }
+        input, select, button { font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px }
+        button { background: #1e3d59; color: #fff; border: none; cursor: pointer; padding: 9px 18px }
+        button:hover { background: #2c5478 }
+        button.sec { background: #64748b }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px }
+        th, td { border: 1px solid #e2e8f0; padding: 7px 9px; text-align: right }
+        th { background: #eef4fa; color: #1e3d59 }
+        .ok { color: #15803d; font-weight: bold } .err { color: #b91c1c; font-weight: bold }
+        .chain { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin: 8px 0; font-size: 13px }
+        .chain b { color: #1e3d59 }
+        .tag { display: inline-block; background: #e0f2fe; color: #075985; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; margin: 1px }
+        .tag.q { background: #fef3c7; color: #92400e }
+        .tag.bad { background: #fee2e2; color: #991b1b }
+        #msg { position: fixed; bottom: 18px; right: 18px; max-width: 420px; z-index: 50 }
+        .toast { background: #0f172a; color: #fff; border-radius: 10px; padding: 12px 16px; margin-top: 8px; font-size: 13px }
+        .toast.err { background: #991b1b } .toast.ok { background: #15803d }
+    </style>
+</head>
+<body>
+<header>🔗 ردیابی تولید پلیمری — لات گرانول ← بچ تولید ← کارتن <a href="/">← بازگشت به سامانه</a></header>
+<div class="wrap">
+
+    <div class="panel">
+        <h3>ثبت بچ تولید جدید</h3>
+        <div class="row">
+            <div><label>شیفت</label><input id="b_shift" placeholder="مثلاً صبح"></div>
+            <div><label>دستگاه</label><input id="b_machine" placeholder="IM-01"></div>
+            <div><label>قالب</label><input id="b_mold" placeholder="M-104"></div>
+            <div><label>کد قطعه</label><input id="b_partcode" placeholder="INJ-A"></div>
+            <div><label>نام قطعه</label><input id="b_partname" placeholder="Outlet Duct"></div>
+            <div><label>نقشه</label><input id="b_drawing" placeholder="EN-403-01"></div>
+            <div><label>تولید (kg)</label><input id="b_qty" type="number" min="0" step="0.01"></div>
+            <div><label>ضایعات (kg)</label><input id="b_scrap" type="number" min="0" step="0.01" value="0"></div>
+        </div>
+        <h4 style="font-size:13px;color:#475569;margin:10px 0 6px">مواد مصرفی (لات‌های گرانول)</h4>
+        <div id="inputs"></div>
+        <div class="row">
+            <button class="sec" onclick="addInputRow()">+ افزودن لات</button>
+            <button onclick="createBatch()">ثبت بچ تولید</button>
+        </div>
+        <div id="batchResult"></div>
+    </div>
+
+    <div class="panel">
+        <h3>ثبت کارتن از بچ</h3>
+        <div class="row">
+            <div><label>شماره بچ (PB-...)</label><input id="c_batch" style="width:200px"></div>
+            <div><label>تعداد کارتن</label><input id="c_count" type="number" min="1" value="1" style="width:90px"></div>
+            <div><label>مقدار هر کارتن (عدد)</label><input id="c_qty" type="number" min="0" step="1" style="width:110px"></div>
+            <div style="align-self:flex-end"><button onclick="createCartons()">ثبت کارتن‌ها</button></div>
+        </div>
+        <div id="cartonResult"></div>
+    </div>
+
+    <div class="panel">
+        <h3>ردیابی روبه‌جلو — از لات گرانول</h3>
+        <div class="row">
+            <div><label>شماره لات</label><input id="f_lot" style="width:200px"></div>
+            <div style="align-self:flex-end"><button onclick="traceForward()">اجرای ردیابی</button></div>
+        </div>
+        <div id="forwardResult"></div>
+    </div>
+
+    <div class="panel">
+        <h3>ردیابی روبه‌عقب — از کارتن</h3>
+        <div class="row">
+            <div><label>شماره کارتن (CT-...)</label><input id="b_carton" style="width:220px"></div>
+            <div style="align-self:flex-end"><button onclick="traceBackward()">اجرای ردیابی</button></div>
+        </div>
+        <div id="backwardResult"></div>
+    </div>
+
+    <div class="panel">
+        <h3>برنامهٔ FIFO مصرف یک کالا</h3>
+        <div class="row">
+            <div><label>شناسه کالا (item_id)</label><input id="fp_item" style="width:220px"></div>
+            <div><label>انبار (اختیاری)</label><input id="fp_wh" style="width:140px"></div>
+            <div style="align-self:flex-end"><button onclick="fifoPlan()">نمایش ترتیب FIFO</button></div>
+        </div>
+        <div id="fifoResult"></div>
+    </div>
+
+</div>
+<div id="msg"></div>
+<script>
+function toast(t, cls) {
+    var d = document.createElement('div'); d.className = 'toast ' + (cls || ''); d.textContent = t;
+    document.getElementById('msg').appendChild(d);
+    setTimeout(function () { d.remove(); }, 6000);
+}
+async function api(method, url, body) {
+    var opt = { method: method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opt.body = JSON.stringify(body);
+    var r = await fetch(url, opt);
+    var j = await r.json().catch(function () { return { error: 'پاسخ نامعتبر از سرور' }; });
+    if (!r.ok || j.error) { toast(j.error || ('خطای ' + r.status), 'err'); throw new Error(j.error || r.status); }
+    return j;
+}
+function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function addInputRow() {
+    var d = document.createElement('div'); d.className = 'row inrow';
+    d.innerHTML = '<div><label>شماره لات</label><input class="in-lot" style="width:170px"></div>' +
+        '<div><label>مقدار (kg)</label><input class="in-qty" type="number" min="0" step="0.01" style="width:120px"></div>' +
+        '<div style="align-self:flex-end"><button class="sec" onclick="this.closest(\'.inrow\').remove()">حذف</button></div>';
+    document.getElementById('inputs').appendChild(d);
+}
+async function createBatch() {
+    var inputs = [];
+    document.querySelectorAll('#inputs .inrow').forEach(function (r) {
+        inputs.push({ lot_no: r.querySelector('.in-lot').value, qty_kg: Number(r.querySelector('.in-qty').value) });
+    });
+    var body = {
+        shift: document.getElementById('b_shift').value, machine_no: document.getElementById('b_machine').value,
+        mold_no: document.getElementById('b_mold').value, part_code: document.getElementById('b_partcode').value,
+        part_name: document.getElementById('b_partname').value, drawing_no: document.getElementById('b_drawing').value,
+        qty_produced: Number(document.getElementById('b_qty').value), scrap_qty: Number(document.getElementById('b_scrap').value),
+        inputs: inputs
+    };
+    var j = await api('POST', '/api/trace/batches', body).catch(function () { return null; });
+    if (!j) return;
+    toast('بچ ' + j.batch.batch_no + ' ثبت شد', 'ok');
+    document.getElementById('batchResult').innerHTML = '<div class="chain"><b>بچ:</b> ' + esc(j.batch.batch_no) +
+        ' | تولید: ' + esc(j.batch.qty_produced) + ' kg | ضایعات: ' + esc(j.batch.scrap_qty) + ' kg<br>' +
+        '<b>مصرف:</b> ' + j.batch.inputs.map(function (i) { return '<span class="tag">' + esc(i.lot_no) + ': ' + esc(i.qty_kg) + ' kg</span>'; }).join(' ') + '</div>';
+}
+async function createCartons() {
+    var j = await api('POST', '/api/trace/cartons', {
+        batch_no: document.getElementById('c_batch').value,
+        count: Number(document.getElementById('c_count').value),
+        qty: Number(document.getElementById('c_qty').value)
+    }).catch(function () { return null; });
+    if (!j) return;
+    toast(j.cartons.length + ' کارتن ثبت شد', 'ok');
+    document.getElementById('cartonResult').innerHTML = '<div class="chain"><b>کارتن‌ها:</b> ' +
+        j.cartons.map(function (c) { return '<span class="tag">' + esc(c.carton_no) + ' (' + esc(c.qty) + ')</span>'; }).join(' ') + '</div>';
+}
+async function traceForward() {
+    var lot = document.getElementById('f_lot').value.trim();
+    if (!lot) { toast('شماره لات را وارد کنید', 'err'); return; }
+    var j = await api('GET', '/api/trace/forward?lot_no=' + encodeURIComponent(lot)).catch(function () { return null; });
+    if (!j) return;
+    var h = '<div class="chain"><b>لات گرانول:</b> ' + esc(j.lot_no) +
+        ' | رسیدها: ' + j.receipts.length + ' | آزمون‌های ورودی: ' + j.incoming_qc.length + '</div>';
+    j.incoming_qc.forEach(function (t) {
+        h += '<div class="chain">🧪 آزمون <b>' + esc(t.test_no) + '</b> — وضعیت: ' +
+            (t.status === 'approved' ? '<span class="ok">تأیید</span>' : t.status === 'rejected' ? '<span class="err">رد</span>' : esc(t.status)) + '</div>';
+    });
+    j.batches.forEach(function (bch) {
+        h += '<div class="chain">🏭 <b>بچ ' + esc(bch.batch_no) + '</b> — ' + esc(bch.part_name || '') + ' | دستگاه ' + esc(bch.machine_no) +
+            ' | تولید ' + esc(bch.qty_produced) + ' kg | شیفت ' + esc(bch.shift || '-') + '</div>';
+    });
+    j.cartons.forEach(function (c) {
+        h += '<div class="chain">📦 کارتن <b>' + esc(c.carton_no) + '</b> — بچ ' + esc(c.batch_no) + ' | ' + esc(c.qty) + ' عدد | وضعیت: ' +
+            (c.status === 'quarantine' ? '<span class="tag q">قرنطینه</span>' : '<span class="tag">آزاد</span>') + '</div>';
+    });
+    j.coas.forEach(function (c) {
+        h += '<div class="chain">📜 CoA <b>' + esc(c.coa_no) + '</b> — بچ‌ها: ' + esc((c.batches || []).join(', ')) + '</div>';
+    });
+    j.ncrs.forEach(function (n) {
+        h += '<div class="chain"><span class="tag bad">NCR</span> ' + esc(n.ncr_no) + ' — ' + esc(n.description || '') + ' (' + esc(n.status) + ')</div>';
+    });
+    if (!j.batches.length) h += '<div class="chain">هنوز هیچ بچی از این لات مصرف نکرده است.</div>';
+    document.getElementById('forwardResult').innerHTML = h;
+}
+async function traceBackward() {
+    var cn = document.getElementById('b_carton').value.trim();
+    if (!cn) { toast('شماره کارتن را وارد کنید', 'err'); return; }
+    var j = await api('GET', '/api/trace/backward?carton_no=' + encodeURIComponent(cn)).catch(function () { return null; });
+    if (!j) return;
+    var h = '<div class="chain">📦 <b>کارتن ' + esc(j.carton.carton_no) + '</b> — ' + esc(j.carton.qty) + ' عدد | وضعیت: ' + esc(j.carton.status) + '</div>';
+    if (j.batch) {
+        h += '<div class="chain">🏭 <b>بچ ' + esc(j.batch.batch_no) + '</b> — ' + esc(j.batch.part_name || '') + ' (' + esc(j.batch.part_code || '') + ')' +
+            ' | نقشه ' + esc(j.batch.drawing_no || '-') + ' ویرایش ' + esc(j.batch.rev || '-') + ' | دستگاه ' + esc(j.batch.machine_no) + ' | قالب ' + esc(j.batch.mold_no) +
+            ' | تولید ' + esc(j.batch.qty_produced) + ' kg | ضایعات ' + esc(j.batch.scrap_qty) + ' kg</div>';
+        j.lots.forEach(function (l) {
+            var qc = (l.incoming_qc || []).map(function (t) { return t.test_no + ':' + t.status; }).join(', ');
+            h += '<div class="chain">🛢️ <b>لات ' + esc(l.lot_no) + '</b> — مصرف ' + esc(l.qty_kg) + ' kg | آزمون ورودی: ' + esc(qc || '—') + '</div>';
+        });
+    }
+    j.ncrs.forEach(function (n) {
+        h += '<div class="chain"><span class="tag bad">NCR</span> ' + esc(n.ncr_no) + ' — ' + esc(n.description || '') + ' (' + esc(n.status) + ')</div>';
+    });
+    document.getElementById('backwardResult').innerHTML = h;
+}
+async function fifoPlan() {
+    var item = document.getElementById('fp_item').value.trim();
+    var wh = document.getElementById('fp_wh').value.trim();
+    if (!item) { toast('شناسه کالا را وارد کنید', 'err'); return; }
+    var j = await api('GET', '/api/trace/fifo-plan?item_id=' + encodeURIComponent(item) + (wh ? '&warehouse=' + encodeURIComponent(wh) : '')).catch(function () { return null; });
+    if (!j) return;
+    var h = '<div class="chain"><b>کالا:</b> ' + esc((j.item && (j.item.name || j.item.code)) || item) + ' | مجموع قابل مصرف: <b>' + esc(j.total_available) + '</b></div>';
+    h += '<table><tr><th>ترتیب</th><th>لات</th><th>موجودی قابل مصرف</th><th>انبار</th><th>اولین رسید</th></tr>';
+    j.fifo_order.forEach(function (l) {
+        h += '<tr><td>' + l.order + '</td><td><b>' + esc(l.lot_no) + '</b></td><td>' + esc(l.qty_available) + '</td><td>' + esc(l.warehouse || '-') + '</td><td>' + esc(l.first_receipt ? l.first_receipt.slice(0, 10) : '—') + '</td></tr>';
+    });
+    h += '</table>';
+    document.getElementById('fifoResult').innerHTML = h;
+}
+addInputRow();
+</script>
+</body>
+</html>
