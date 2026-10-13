@@ -1,5 +1,5 @@
 {
-  "generated_at": null,
+  "generated_at": "2026-10-13T19:46:14.659Z",
   "production_logs": [],
   "waste_logs": [],
   "downtime_logs": [],
@@ -9,9 +9,103 @@
   "rebar_bundles": [],
   "maintenance_logs": [],
   "pm_plans": [],
-  "inventory_items": [],
-  "inventory_receipts": [],
-  "inventory_issues": [],
+  "inventory_items": [
+    {
+      "id": "itm-pp-demo",
+      "code": "PP-GRANULE",
+      "name": "گرانول پلی‌پروپیلن",
+      "category": "مواد اولیه",
+      "unit": "kg",
+      "reorder_point": 0,
+      "min_stock": 0,
+      "max_stock": 0,
+      "batch_tracking": true,
+      "active": true,
+      "description": "",
+      "created_at": "2026-10-13T19:46:14.526Z",
+      "created_by": "testadmin"
+    }
+  ],
+  "inventory_receipts": [
+    {
+      "id": "grn-mv73d2o4b5j3",
+      "request_id": "demo-r1",
+      "receipt_no": "GRN-1791920774596",
+      "item_id": "itm-pp-demo",
+      "quantity": 500,
+      "unit": "kg",
+      "lot_no": "LOT-PP-14050715",
+      "warehouse": "مواد اولیه",
+      "location": "A-01",
+      "stock_status": "available",
+      "receipt_type": "purchase",
+      "supplier": "تأمین‌کننده نمونه گرانول",
+      "document_no": "",
+      "source_ref": "",
+      "heat_number": "",
+      "description": "گرانول پلی‌پروپیلن هموپلیمر تزریقی",
+      "timestamp": "2026-10-07T08:00:00.000Z",
+      "operator_id": "testadmin"
+    },
+    {
+      "id": "grn-mv73d2pulue0",
+      "request_id": "demo-r2",
+      "receipt_no": "GRN-1791920774658",
+      "item_id": "itm-pp-demo",
+      "quantity": 750,
+      "unit": "kg",
+      "lot_no": "LOT-PP-14050720",
+      "warehouse": "مواد اولیه",
+      "location": "A-02",
+      "stock_status": "available",
+      "receipt_type": "purchase",
+      "supplier": "تأمین‌کننده نمونه گرانول",
+      "document_no": "",
+      "source_ref": "",
+      "heat_number": "",
+      "description": "گرانول پلی‌پروپیلن هموپلیمر تزریقی",
+      "timestamp": "2026-10-12T08:00:00.000Z",
+      "operator_id": "testadmin"
+    }
+  ],
+  "inventory_issues": [
+    {
+      "id": "gin-mv73d2roh7lf",
+      "request_id": "trace:PB-20261013-001:LOT-PP-14050715",
+      "issue_no": "GIN-1791920774724-PB1",
+      "item_id": "itm-pp-demo",
+      "quantity": 200,
+      "unit": "kg",
+      "lot_no": "LOT-PP-14050715",
+      "warehouse": "مواد اولیه",
+      "location": "A-01",
+      "destination": "PRODUCTION",
+      "destination_ref": "PB-20261013-001",
+      "work_order": "PB-20261013-001",
+      "fifo_override": false,
+      "description": "مصرف در بچ تولید پلیمری PB-20261013-001",
+      "timestamp": "2026-10-13T19:46:14.724Z",
+      "operator_id": "مدیرعامل (CEO)"
+    },
+    {
+      "id": "gin-mv73d2rodd85",
+      "request_id": "trace:PB-20261013-001:LOT-PP-14050720",
+      "issue_no": "GIN-1791920774724-PB2",
+      "item_id": "itm-pp-demo",
+      "quantity": 100,
+      "unit": "kg",
+      "lot_no": "LOT-PP-14050720",
+      "warehouse": "مواد اولیه",
+      "location": "A-02",
+      "destination": "PRODUCTION",
+      "destination_ref": "PB-20261013-001",
+      "work_order": "PB-20261013-001",
+      "fifo_override": false,
+      "description": "مصرف در بچ تولید پلیمری PB-20261013-001",
+      "timestamp": "2026-10-13T19:46:14.724Z",
+      "operator_id": "مدیرعامل (CEO)"
+    }
+  ],
   "inventory_transfers": [],
   "inventory_adjustments": [],
   "inventory_reservations": [],
@@ -38,8 +132,385 @@
   "purchase_payments": [],
   "sensor_events": [],
   "qc_specs_24": [],
-  "qc_incoming_24": [],
-  "qc_grades_24": [],
-  "qc_ncr_24": [],
-  "qc_mtc_24": []
+  "qc_incoming_24": [
+    {
+      "id": "inc24-demo-LOT-PP-14050715",
+      "test_no": "INC-00001",
+      "date_jalali": "1405/07/20",
+      "receipt_no": "",
+      "po_no": "",
+      "supplier_name": "تأمین‌کننده نمونه گرانول",
+      "line_index": 0,
+      "item_name": "گرانول پلیمری",
+      "kind": "resin",
+      "heat_number": "LOT-PP-14050715",
+      "size": 0,
+      "grade_id": "gr48-pph",
+      "grade": "PP-H",
+      "quantity_ton": 0,
+      "phys": {
+        "MFI": 12,
+        "DENS": 0.905,
+        "MOIST": 0.02
+      },
+      "mech": {
+        "TS": 32,
+        "IZOD": 4
+      },
+      "method_phys": "MFI — ISO 1133",
+      "method_mech": "کشش — ISO 527",
+      "status": "approved",
+      "notes": "رکورد نمایشی پیش‌ممیزی",
+      "registered_by": "demo-seed",
+      "registered_at": "2026-10-12T08:00:00.000Z",
+      "decided_by": "demo-seed",
+      "decided_at": "2026-10-12T10:00:00.000Z",
+      "quarantine_count": 0
+    },
+    {
+      "id": "inc24-demo-LOT-PP-14050720",
+      "test_no": "INC-00002",
+      "date_jalali": "1405/07/20",
+      "receipt_no": "",
+      "po_no": "",
+      "supplier_name": "تأمین‌کننده نمونه گرانول",
+      "line_index": 0,
+      "item_name": "گرانول پلیمری",
+      "kind": "resin",
+      "heat_number": "LOT-PP-14050720",
+      "size": 0,
+      "grade_id": "gr48-pph",
+      "grade": "PP-H",
+      "quantity_ton": 0,
+      "phys": {
+        "MFI": 12,
+        "DENS": 0.905,
+        "MOIST": 0.02
+      },
+      "mech": {
+        "TS": 32,
+        "IZOD": 4
+      },
+      "method_phys": "MFI — ISO 1133",
+      "method_mech": "کشش — ISO 527",
+      "status": "approved",
+      "notes": "رکورد نمایشی پیش‌ممیزی",
+      "registered_by": "demo-seed",
+      "registered_at": "2026-10-12T08:00:00.000Z",
+      "decided_by": "demo-seed",
+      "decided_at": "2026-10-12T10:00:00.000Z",
+      "quarantine_count": 0
+    }
+  ],
+  "qc_grades_24": [
+    {
+      "id": "gr48-pph",
+      "name": "PP-H",
+      "standard": "ISO 1133 / ISO 527",
+      "phys": {
+        "MFI": {
+          "min": 10,
+          "max": 14
+        },
+        "DENS": {
+          "min": 0.9,
+          "max": 0.91
+        },
+        "MOIST": {
+          "min": null,
+          "max": 0.05
+        }
+      },
+      "mech": {
+        "TS": {
+          "min": 30,
+          "max": null
+        },
+        "IZOD": {
+          "min": 3,
+          "max": null
+        }
+      },
+      "active": true,
+      "notes": "پلی‌پروپیلن هموپلیمر تزریقی — حدود نمونه (دمو)",
+      "_seed": true
+    }
+  ],
+  "qc_ncr_24": [
+    {
+      "id": "ncr24-mv73d2v91xl",
+      "ncr_no": "NCR-00001",
+      "date_jalali": "1405/07/22",
+      "scope": "carton",
+      "carton_code": "CT-20261013-001",
+      "heat_number": "PB-20261013-001",
+      "receipt_no": "",
+      "part": "INJ-A",
+      "ntype": "visual",
+      "severity": "minor",
+      "action": "rework",
+      "quantity_ton": 0,
+      "description": "پلیسه در لبه قطعه — نیاز به پلیسه‌گیری و بازبینی",
+      "status": "closed",
+      "opened_by": "مدیرعامل (CEO)",
+      "opened_at": "2026-10-13T19:46:14.853Z",
+      "closed_at": "2026-10-13T19:46:14.930Z",
+      "closed_by": "مدیرعامل (CEO)",
+      "corrective_action": "پلیسه‌گیری کامل کارتن، بازبینی ۱۰۰٪ لبه‌ها، تنظیم مجدد فشار گیره قالب M-104"
+    }
+  ],
+  "qc_mtc_24": [],
+  "inventory_stocktakes": [],
+  "inventory_stocktake_lines": [],
+  "qc_seq_24": {
+    "incoming": 2,
+    "mtc": 1,
+    "ncr": 1
+  },
+  "qc_master_43": [],
+  "qc_master_rng_43": [],
+  "qc_coa_24": [
+    {
+      "id": "coa24-demo-mv73d2xk",
+      "coa_no": "COA-00001",
+      "verify_id": "COAV2E7B401701",
+      "cert_type": "CoA — گواهی انطباق",
+      "order_id": "",
+      "order_no": "",
+      "exit_no": "",
+      "invoice_no": "",
+      "customer_id": "",
+      "customer_name": "مشتری نمونه (دمو)",
+      "part": "INJ-A",
+      "grade": "PP-H",
+      "standard": "ISO 1133 / ISO 527",
+      "drawing_no": "EN-403-01",
+      "drawing_rev": "A",
+      "machine_no": "IM-01",
+      "mold_no": "M-104",
+      "shift": "صبح",
+      "weight_ton": 0.285,
+      "pieces": 285,
+      "date_jalali": "1405/07/22",
+      "is_export": false,
+      "batches": [
+        "PB-20261013-001"
+      ],
+      "tests": {},
+      "test_source": "demo",
+      "issued_by": "demo-seed",
+      "issued_at": "2026-10-13T19:46:14.936Z",
+      "notes": "رکورد نمایشی پیش‌ممیزی",
+      "hash": "668cc6e3e752fcef082f012f54927c8e"
+    }
+  ],
+  "production_batches": [
+    {
+      "id": "pb25-mv73d2ro8l1",
+      "batch_no": "PB-20261013-001",
+      "date": "2026-10-13",
+      "date_jalali": "1405/07/22",
+      "shift": "صبح",
+      "machine_no": "IM-01",
+      "mold_no": "M-104",
+      "part_code": "INJ-A",
+      "part_name": "Outlet Duct",
+      "drawing_no": "EN-403-01",
+      "rev": "A",
+      "inputs": [
+        {
+          "receipt_id": "",
+          "lot_no": "LOT-PP-14050715",
+          "qty_kg": 200
+        },
+        {
+          "receipt_id": "",
+          "lot_no": "LOT-PP-14050720",
+          "qty_kg": 100
+        }
+      ],
+      "qty_produced": 285,
+      "scrap_qty": 4,
+      "status": "produced",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:14.724Z"
+    }
+  ],
+  "cartons": [
+    {
+      "id": "ct25-mv73d2te6qy-0",
+      "carton_no": "CT-20261013-001",
+      "batch_id": "pb25-mv73d2ro8l1",
+      "batch_no": "PB-20261013-001",
+      "part_code": "INJ-A",
+      "part_name": "Outlet Duct",
+      "qty": 95,
+      "status": "quarantine",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:14.786Z",
+      "qc_note": "قرنطینه — NCR-00001"
+    },
+    {
+      "id": "ct25-mv73d2te4x1-1",
+      "carton_no": "CT-20261013-002",
+      "batch_id": "pb25-mv73d2ro8l1",
+      "batch_no": "PB-20261013-001",
+      "part_code": "INJ-A",
+      "part_name": "Outlet Duct",
+      "qty": 95,
+      "status": "available",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:14.786Z"
+    },
+    {
+      "id": "ct25-mv73d2tepzl-2",
+      "carton_no": "CT-20261013-003",
+      "batch_id": "pb25-mv73d2ro8l1",
+      "batch_no": "PB-20261013-001",
+      "part_code": "INJ-A",
+      "part_name": "Outlet Duct",
+      "qty": 95,
+      "status": "available",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:14.786Z"
+    }
+  ],
+  "cal_instruments": [
+    {
+      "id": "cal25-mv73d2z8t7b",
+      "code": "CAL-D01",
+      "name": "کولیس دیجیتال",
+      "type": "طولی",
+      "location": "آزمایشگاه",
+      "interval_months": 12,
+      "status": "active",
+      "last_calibration": "2025-11-12",
+      "next_due_date": "2026-11-12",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:14.996Z"
+    },
+    {
+      "id": "cal25-mv73d33a3eq",
+      "code": "CAL-D02",
+      "name": "ترازوی دیجیتال",
+      "type": "وزنی",
+      "location": "انبار مواد",
+      "interval_months": 6,
+      "status": "active",
+      "last_calibration": "2026-08-14",
+      "next_due_date": "2027-02-14",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:15.142Z"
+    },
+    {
+      "id": "cal25-mv73d37dvxl",
+      "code": "CAL-D03",
+      "name": "گیج فشار",
+      "type": "فشار",
+      "location": "سالن تزریق",
+      "interval_months": 12,
+      "status": "active",
+      "last_calibration": "2025-09-08",
+      "next_due_date": "2026-09-08",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:15.289Z"
+    },
+    {
+      "id": "cal25-mv73d3asxp1",
+      "code": "CAL-D04",
+      "name": "میکرومتر",
+      "type": "طولی",
+      "location": "آزمایشگاه",
+      "interval_months": 12,
+      "status": "active",
+      "last_calibration": "2026-09-13",
+      "next_due_date": "2027-09-13",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:15.412Z"
+    }
+  ],
+  "cal_records": [
+    {
+      "id": "calr25-mv73d30zct7",
+      "instrument_id": "cal25-mv73d2z8t7b",
+      "instrument_code": "CAL-D01",
+      "instrument_name": "کولیس دیجیتال",
+      "date": "2025-11-12",
+      "result": "pass",
+      "certificate_no": "CERT-DEMO-CAL-D01",
+      "performed_by": "واحد کیفیت",
+      "next_due_date": "2026-11-12",
+      "created_at": "2026-10-13T19:46:15.059Z"
+    },
+    {
+      "id": "calr25-mv73d35mxb9",
+      "instrument_id": "cal25-mv73d33a3eq",
+      "instrument_code": "CAL-D02",
+      "instrument_name": "ترازوی دیجیتال",
+      "date": "2026-08-14",
+      "result": "pass",
+      "certificate_no": "CERT-DEMO-CAL-D02",
+      "performed_by": "واحد کیفیت",
+      "next_due_date": "2027-02-14",
+      "created_at": "2026-10-13T19:46:15.226Z"
+    },
+    {
+      "id": "calr25-mv73d3929io",
+      "instrument_id": "cal25-mv73d37dvxl",
+      "instrument_code": "CAL-D03",
+      "instrument_name": "گیج فشار",
+      "date": "2025-09-08",
+      "result": "pass",
+      "certificate_no": "CERT-DEMO-CAL-D03",
+      "performed_by": "واحد کیفیت",
+      "next_due_date": "2026-09-08",
+      "created_at": "2026-10-13T19:46:15.350Z"
+    },
+    {
+      "id": "calr25-mv73d3cp44n",
+      "instrument_id": "cal25-mv73d3asxp1",
+      "instrument_code": "CAL-D04",
+      "instrument_name": "میکرومتر",
+      "date": "2026-09-13",
+      "result": "pass",
+      "certificate_no": "CERT-DEMO-CAL-D04",
+      "performed_by": "واحد کیفیت",
+      "next_due_date": "2027-09-13",
+      "created_at": "2026-10-13T19:46:15.481Z"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc25-mv73d3egk0t",
+      "doc_code": "CP-EN-403-01",
+      "title": "کنترل‌پلن Outlet Duct",
+      "type": "control_plan",
+      "rev": 1,
+      "effective_date": "2026-10-13",
+      "status": "active",
+      "note": "نسخه اول — پیش‌ممیزی",
+      "file_ref": "",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:15.544Z"
+    },
+    {
+      "id": "doc25-mv73d3g53gx",
+      "doc_code": "WI-INJ-01",
+      "title": "دستورکار تزریق پلاستیک",
+      "type": "work_instruction",
+      "rev": 1,
+      "effective_date": "2026-10-13",
+      "status": "active",
+      "note": "نسخه اول",
+      "file_ref": "",
+      "created_by": "مدیرعامل (CEO)",
+      "created_at": "2026-10-13T19:46:15.605Z"
+    }
+  ],
+  "trace_seq_25": {
+    "batch": 1,
+    "carton": 3
+  },
+  "__ver": 10,
+  "__integrity_18a": "sha256:c82c7b3691e863f6cb9a452d671a0b3287a61b5f6b0ad6073a1536f9c94ae64a"
 }
