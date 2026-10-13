@@ -4501,9 +4501,19 @@ function appRequestHandler(req, res) {
         if (agg.available < qty - 1e-9) return null;
         const availRows = agg.rows.filter(x => x.stock_status === 'available' && Number(x.quantity) > 0);
         const ordered = [];
-        const exact = availRows.find(x => (x.location || '') === (location || '') && (x.lot_no || '') === (lot || ''));
-        if (exact) ordered.push(exact);
-        availRows.filter(x => x !== exact).sort((a, b) => Number(b.quantity) - Number(a.quantity)).forEach(x => ordered.push(x));
+        const manualLot = !!(lot && String(lot).trim());
+        if (manualLot) {
+            /* FIFO-25: لات دستی = override — ابتدا همان لات، بقیه به ترتیب FIFO */
+            const exact = availRows.find(x => (x.location || '') === (location || '') && (x.lot_no || '') === String(lot).trim());
+            if (exact) ordered.push(exact);
+        }
+        /* FIFO-25: ترتیب واقعی FIFO — قدیمی‌ترین لات (بر اساس تاریخ رسید) اول؛ تساوی تاریخ ⇒ بزرگ‌ترین موجودی */
+        availRows.filter(x => ordered.indexOf(x) === -1).sort((a, b) => {
+            const ta = fifoLotFirstTs25(live, itemId, warehouse, String(a.lot_no || ''));
+            const tb = fifoLotFirstTs25(live, itemId, warehouse, String(b.lot_no || ''));
+            if (ta !== tb) return ta - tb;
+            return Number(b.quantity) - Number(a.quantity);
+        }).forEach(x => ordered.push(x));
         const sources = [];
         let remain = round2(qty);
         for (const row of ordered) {
@@ -5210,7 +5220,9 @@ function appRequestHandler(req, res) {
                 if (duplicate) return sendJson(res, { ok: true, duplicate: true, record: duplicate });
                 if (!item) return sendJson(res, { error: 'کالای انتخاب‌شده یافت نشد.' }, 400);
                 if (!Number.isFinite(qty) || qty <= 0) return sendJson(res, { error: 'مقدار حواله باید بیشتر از صفر باشد.' }, 400);
-                if (item.batch_tracking && !lot) return sendJson(res, { error: 'برای این کالا شماره بچ/لات الزامی است.' }, 400);
+                /* FIFO-25: لات مشخص نشده ⇒ انتخاب خودکار FIFO (قدیمی‌ترین لات اول) — لات دستی = override با ثبت دلیل */
+                const fifoOverride = !!(item.batch_tracking && lot);
+                const overrideReason = fifoOverride ? String(b.override_reason || '').trim().slice(0, 300) : '';
                 const warehouse = String(b.warehouse || '').trim();
                 const location = String(b.location || '').trim();
                 if (!warehouse || !location || !String(b.destination || '').trim()) return sendJson(res, { error: 'انبار، محل و مقصد حواله الزامی است.' }, 400);
@@ -5238,6 +5250,7 @@ function appRequestHandler(req, res) {
                         destination_ref: String(b.destination_ref || '').trim(),
                         work_order: String(b.work_order || '').trim(),
                         description: String(b.description || '').slice(0, 500),
+                        fifo_override: fifoOverride, override_reason: overrideReason,
                         timestamp: new Date().toISOString(),
                         operator_id: String((req.user && req.user.username) || '')
                     };
@@ -5245,7 +5258,7 @@ function appRequestHandler(req, res) {
                     if (!mainRec) mainRec = rec;
                 });
                 invSave(live, req, 'inventory.issue.insert', mainRec);
-                return sendJson(res, { ok: true, record: mainRec }, 201);
+                return sendJson(res, { ok: true, record: mainRec, fifo_plan: sources, fifo_override: fifoOverride }, 201);
             } catch (e) {
                 return sendJson(res, { error: 'داده نامعتبر: ' + e.message }, 400);
             }
@@ -8821,6 +8834,473 @@ live.inventory_reservations.splice(idx, 1);
         });
     }
     // ===== FEAT-QC-PRO-24b (end) =====
+
+    // ===== AUDIT-TRACE-25 (begin): زنجیرهٔ ردیابی پلیمری + FIFO واقعی + کالیبراسیون + کنترل مدارک =====
+    const TRACE_W_25 = ['admin', 'qc', 'quality', 'warehouse', 'engineering', 'manager'];
+    const TRACE_R_25 = ['admin', 'qc', 'quality', 'warehouse', 'engineering', 'manager', 'finance', 'sales'];
+    const CAL_W_25 = ['admin', 'qc', 'quality', 'engineering'];
+    const CAL_R_25 = ['admin', 'qc', 'quality', 'warehouse', 'engineering', 'manager'];
+    const DOC_W_25 = ['admin', 'qc', 'quality', 'engineering', 'manager'];
+    const DOC_R_25 = ['admin', 'qc', 'quality', 'warehouse', 'engineering', 'manager', 'finance', 'sales'];
+    function traceEnsure25(live) {
+        live.production_batches = Array.isArray(live.production_batches) ? live.production_batches : [];
+        live.cartons = Array.isArray(live.cartons) ? live.cartons : [];
+        live.cal_instruments = Array.isArray(live.cal_instruments) ? live.cal_instruments : [];
+        live.cal_records = Array.isArray(live.cal_records) ? live.cal_records : [];
+        live.documents = Array.isArray(live.documents) ? live.documents : [];
+        live.trace_seq_25 = (live.trace_seq_25 && typeof live.trace_seq_25 === 'object') ? live.trace_seq_25 : {};
+        return live;
+    }
+    function traceNextNo25(live, key, prefix) {
+        live.trace_seq_25[key] = (Number(live.trace_seq_25[key]) || 0) + 1;
+        const _d25 = new Date();
+        const _ymd25 = _d25.getFullYear() + String(_d25.getMonth() + 1).padStart(2, '0') + String(_d25.getDate()).padStart(2, '0');
+        return prefix + '-' + _ymd25 + '-' + String(live.trace_seq_25[key]).padStart(3, '0');
+    }
+    /* FIFO-25: اولین تاریخ رسید یک لات (مبنای ترتیب FIFO) — ناموجود ⇒ بی‌نهایت */
+    function fifoLotFirstTs25(live, itemId, warehouse, lot) {
+        let best = null;
+        (live.inventory_receipts || []).forEach((r) => {
+            if (String(r.item_id || '') !== String(itemId)) return;
+            if (warehouse && String(r.warehouse || '') !== String(warehouse)) return;
+            if (String(r.lot_no || '').trim() !== String(lot)) return;
+            const ts = Date.parse(r.timestamp || '') || 0;
+            if (best == null || (ts && ts < best)) best = ts;
+        });
+        return best == null ? Infinity : best;
+    }
+    /* FIFO-25: لات‌های مصرف‌پذیر یک کالا به ترتیب FIFO (قدیمی‌ترین اول)؛ موجودی خالص پس از کسر رزروهای باز */
+    function fifoLots25(live, itemId, warehouse) {
+        const rows = invBuildStock(live).filter((x) => String(x.item_id) === String(itemId) && (!warehouse || x.warehouse === warehouse) && String(x.stock_status || '') === 'available' && Number(x.quantity) > 1e-9 && String(x.lot_no || '').trim());
+        const byLot = {};
+        rows.forEach((x) => {
+            const lot = String(x.lot_no).trim();
+            const e = byLot[lot] || (byLot[lot] = { lot_no: lot, qty: 0, first_ts: fifoLotFirstTs25(live, itemId, warehouse, lot), warehouse: x.warehouse || '' });
+            e.qty = round2(e.qty + Number(x.quantity));
+        });
+        let reserved = round2((live.inventory_reservations || []).filter((r) => String(r.item_id) === String(itemId) && (!warehouse || String(r.warehouse || '') === String(warehouse)) && String(r.status || '') === 'open').reduce((s, r) => s + (Number(r.quantity) || 0), 0));
+        const net = Object.keys(byLot).map((k) => Object.assign({}, byLot[k])).sort((a, b) => (a.first_ts - b.first_ts) || (a.lot_no < b.lot_no ? -1 : 1));
+        for (let i = net.length - 1; i >= 0 && reserved > 1e-9; i--) { /* رزروها از جدیدترین لات‌ها کسر می‌شوند */
+            const t = Math.min(net[i].qty, reserved);
+            net[i].qty = round2(net[i].qty - t);
+            reserved = round2(reserved - t);
+        }
+        return net.filter((l) => l.qty > 1e-9);
+    }
+    /* FIFO-25: برنامهٔ مصرف qty از قدیمی‌ترین لات‌ها — کافی نبودن ⇒ null */
+    function fifoConsumePlan25(live, itemId, warehouse, qty) {
+        const lots = fifoLots25(live, itemId, warehouse);
+        const total = round2(lots.reduce((s, l) => s + l.qty, 0));
+        if (total < Number(qty) - 1e-9) return null;
+        const plan = []; let remain = round2(Number(qty));
+        for (const l of lots) {
+            if (remain <= 1e-9) break;
+            const take = round2(Math.min(l.qty, remain));
+            if (take <= 1e-9) continue;
+            plan.push({ lot_no: l.lot_no, qty: take, warehouse: l.warehouse, first_receipt_ts: l.first_ts === Infinity ? null : l.first_ts });
+            remain = round2(remain - take);
+        }
+        return remain > 1e-9 ? null : plan;
+    }
+    /* FIFO-25: وضعیت تصمیم QC ورودی برای یک لات — approved | rejected | pending | none */
+    function lotQcStatus25(live, lot) {
+        const recs = (live.qc_incoming_24 || []).filter((t) => String(t.heat_number || '') === String(lot) || String(t.lot_no || '') === String(lot));
+        if (!recs.length) return 'none';
+        if (recs.some((t) => String(t.status || '') === 'rejected')) return 'rejected';
+        if (recs.some((t) => String(t.status || '') === 'approved')) return 'approved';
+        return 'pending';
+    }
+    function traceActor25(req) { return String((req.user && (req.user.name || req.user.username)) || ''); }
+
+    /* ---------- PHASE 1: بچ تولید پلیمری ---------- */
+    if (req.method === 'POST' && pathname === '/api/trace/batches') {
+        if (!auth.requireRole(req, TRACE_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت بچ تولید فقط برای تولید/انبار/QC مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(qcEnsure24b(qcEnsure24a(invEnsure(readLive()))));
+                const inputs = Array.isArray(b.inputs) ? b.inputs : [];
+                if (!inputs.length) return sendJson(res, { error: 'مواد مصرفی بچ (inputs) الزامی است.' }, 400);
+                const normInputs = [];
+                for (const inp of inputs) {
+                    const lot = String((inp && inp.lot_no) || '').trim();
+                    const qty = round2(Number((inp && inp.qty_kg) || 0));
+                    if (!lot) return sendJson(res, { error: 'شماره لات در یکی از ورودی‌ها خالی است.' }, 400);
+                    if (!(qty > 0)) return sendJson(res, { error: 'مقدار مصرف لات ' + lot + ' باید بیشتر از صفر باشد.' }, 400);
+                    const lotRows = invBuildStock(live).filter((x) => String(x.lot_no || '').trim() === lot);
+                    if (!lotRows.length) return sendJson(res, { error: 'لاتی با شمارهٔ ' + lot + ' در موجودی یافت نشد.' }, 404);
+                    if (lotRows.some((x) => String(x.stock_status || '') === 'quarantine')) return sendJson(res, { error: 'لات ' + lot + ' قرنطینه است — مصرف آن مجاز نیست.' }, 409);
+                    const availQty = round2(lotRows.filter((x) => String(x.stock_status || '') === 'available').reduce((s, x) => s + (Number(x.quantity) || 0), 0));
+                    if (availQty < qty - 1e-9) return sendJson(res, { error: 'موجودی لات ' + lot + ' کافی نیست (موجود: ' + availQty + ' | درخواست: ' + qty + ').' }, 409);
+                    const qs = lotQcStatus25(live, lot);
+                    if (qs === 'rejected') return sendJson(res, { error: 'لات ' + lot + ' در QC ورودی رد شده است.' }, 409);
+                    if (qs !== 'approved') return sendJson(res, { error: 'لات ' + lot + ' هنوز تأیید QC ورودی ندارد (وضعیت: ' + (qs === 'pending' ? 'در انتظار تصمیم' : 'بدون آزمون') + ').' }, 409);
+                    const firstRow = lotRows[0];
+                    const itm = invFindItem(live, String(firstRow.item_id || ''));
+                    normInputs.push({ receipt_id: String((inp && inp.receipt_id) || ''), lot_no: lot, qty_kg: qty, item_id: String(firstRow.item_id || ''), warehouse: String(firstRow.warehouse || ''), location: String(firstRow.location || ''), unit: (itm && itm.unit) || 'kg' });
+                }
+                const batchNo = traceNextNo25(live, 'batch', 'PB');
+                const nowIso = new Date().toISOString();
+                const batch = {
+                    id: 'pb25-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    batch_no: batchNo,
+                    date: String(b.date || nowIso.slice(0, 10)), date_jalali: finIsoToJalali(nowIso),
+                    shift: String(b.shift || '').trim().slice(0, 20),
+                    machine_no: String(b.machine_no || '').trim().slice(0, 20),
+                    mold_no: String(b.mold_no || '').trim().slice(0, 20),
+                    part_code: String(b.part_code || '').trim().slice(0, 40),
+                    part_name: String(b.part_name || '').trim().slice(0, 120),
+                    drawing_no: String(b.drawing_no || '').trim().slice(0, 40),
+                    rev: String(b.rev || '').trim().slice(0, 10),
+                    inputs: normInputs.map((x) => ({ receipt_id: x.receipt_id, lot_no: x.lot_no, qty_kg: x.qty_kg })),
+                    qty_produced: round2(Number(b.qty_produced) || 0),
+                    scrap_qty: round2(Number(b.scrap_qty) || 0),
+                    status: 'produced',
+                    created_by: traceActor25(req), created_at: nowIso
+                };
+                const issues = [];
+                normInputs.forEach((inp, idx) => {
+                    const rec = {
+                        id: 'gin-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                        request_id: 'trace:' + batchNo + ':' + inp.lot_no,
+                        issue_no: 'GIN-' + Date.now() + '-PB' + (idx + 1),
+                        item_id: inp.item_id, quantity: inp.qty_kg, unit: inp.unit,
+                        lot_no: inp.lot_no, warehouse: inp.warehouse, location: inp.location,
+                        destination: 'PRODUCTION', destination_ref: batchNo, work_order: batchNo,
+                        fifo_override: false,
+                        description: ('مصرف در بچ تولید پلیمری ' + batchNo).slice(0, 500),
+                        timestamp: nowIso, operator_id: traceActor25(req)
+                    };
+                    live.inventory_issues.push(rec);
+                    issues.push(rec);
+                });
+                live.production_batches.push(batch);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ بچ تولید انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'trace.batch.create', { batch_no: batchNo, part: batch.part_code, inputs: batch.inputs.map((x) => x.lot_no + ':' + x.qty_kg).join(','), qty: batch.qty_produced });
+                return sendJson(res, { ok: true, batch: batch, consumption: issues }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت بچ تولید ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/trace/batches') {
+        if (!auth.requireRole(req, TRACE_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(readLive());
+        const q = new URL(req.url, 'http://x').searchParams;
+        const part = String(q.get('part_code') || '').trim(), mach = String(q.get('machine_no') || '').trim(), st = String(q.get('status') || '').trim();
+        const lim = Math.min(200, Math.max(1, Number(q.get('limit')) || 50));
+        let rows = (live.production_batches || []).slice().reverse();
+        if (part) rows = rows.filter((x) => String(x.part_code || '') === part);
+        if (mach) rows = rows.filter((x) => String(x.machine_no || '') === mach);
+        if (st) rows = rows.filter((x) => String(x.status || '') === st);
+        return sendJson(res, { ok: true, total: rows.length, batches: rows.slice(0, lim) });
+    }
+
+    /* ---------- PHASE 1: کارتن ---------- */
+    if (req.method === 'POST' && pathname === '/api/trace/cartons') {
+        if (!auth.requireRole(req, TRACE_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(readLive());
+                const key = String(b.batch_id || b.batch_no || '').trim();
+                if (!key) return sendJson(res, { error: 'شناسهٔ بچ الزامی است.' }, 400);
+                const batch = (live.production_batches || []).find((x) => x.id === key || x.batch_no === key);
+                if (!batch) return sendJson(res, { error: 'بچ تولید یافت نشد.' }, 404);
+                if (String(batch.status || '') === 'quarantine') return sendJson(res, { error: 'بچ قرنطینه است — بسته‌بندی مجاز نیست.' }, 409);
+                const count = Math.max(1, Math.min(200, parseInt(b.count, 10) || 1));
+                const qty = round2(Number(b.qty) || 0);
+                if (!(qty > 0)) return sendJson(res, { error: 'مقدار هر کارتن باید بیشتر از صفر باشد.' }, 400);
+                const nowIso = new Date().toISOString();
+                const created = [];
+                for (let i = 0; i < count; i++) {
+                    const rec = {
+                        id: 'ct25-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + '-' + i,
+                        carton_no: traceNextNo25(live, 'carton', 'CT'),
+                        batch_id: batch.id, batch_no: batch.batch_no,
+                        part_code: batch.part_code, part_name: batch.part_name,
+                        qty: qty, status: 'available',
+                        created_by: traceActor25(req), created_at: nowIso
+                    };
+                    live.cartons.push(rec);
+                    created.push(rec);
+                }
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ کارتن‌ها انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'trace.carton.create', { batch_no: batch.batch_no, count: created.length, first: created[0] && created[0].carton_no });
+                return sendJson(res, { ok: true, cartons: created }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت کارتن ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/trace/cartons') {
+        if (!auth.requireRole(req, TRACE_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(readLive());
+        const q = new URL(req.url, 'http://x').searchParams;
+        const bn = String(q.get('batch_no') || '').trim(), st = String(q.get('status') || '').trim();
+        const lim = Math.min(200, Math.max(1, Number(q.get('limit')) || 50));
+        let rows = (live.cartons || []).slice().reverse();
+        if (bn) rows = rows.filter((x) => String(x.batch_no || '') === bn);
+        if (st) rows = rows.filter((x) => String(x.status || '') === st);
+        return sendJson(res, { ok: true, total: rows.length, cartons: rows.slice(0, lim) });
+    }
+
+    /* ---------- PHASE 1: ردیابی روبه‌جلو — لات گرانول ← بچ‌ها ← کارتن‌ها ← QC ورودی + CoA ---------- */
+    if (req.method === 'GET' && pathname === '/api/trace/forward') {
+        if (!auth.requireRole(req, TRACE_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(qcEnsure24b(qcEnsure24a(invEnsure(readLive()))));
+        const q = new URL(req.url, 'http://x').searchParams;
+        const lot = String(q.get('lot_no') || '').trim();
+        if (!lot) return sendJson(res, { error: 'lot_no الزامی است.' }, 400);
+        const receipts = (live.inventory_receipts || []).filter((r) => String(r.lot_no || '').trim() === lot);
+        const batches = (live.production_batches || []).filter((bch) => (bch.inputs || []).some((i) => String(i.lot_no || '') === lot));
+        const batchNos = batches.map((bch) => bch.batch_no);
+        const cartons = (live.cartons || []).filter((c) => batchNos.indexOf(c.batch_no) !== -1);
+        const incoming_qc = (live.qc_incoming_24 || []).filter((t) => String(t.heat_number || '') === lot || String(t.lot_no || '') === lot);
+        const coas = (live.qc_coa_24 || []).filter((c) => (c.batches || []).some((bb) => batchNos.indexOf(String(bb)) !== -1));
+        const ncrs = (live.qc_ncr_24 || []).filter((n) => String(n.heat_number || '') === lot || (n.scope === 'batch' && batchNos.indexOf(String(n.carton_code || n.heat_number || '')) !== -1) || cartons.some((c) => String(n.carton_code || '') === c.carton_no));
+        return sendJson(res, { ok: true, lot_no: lot, receipts: receipts, incoming_qc: incoming_qc, batches: batches, cartons: cartons, coas: coas, ncrs: ncrs });
+    }
+
+    /* ---------- PHASE 1: ردیابی روبه‌عقب — کارتن ← بچ ← لات‌های ورودی + QC ورودی آن‌ها ---------- */
+    if (req.method === 'GET' && pathname === '/api/trace/backward') {
+        if (!auth.requireRole(req, TRACE_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(qcEnsure24b(qcEnsure24a(invEnsure(readLive()))));
+        const q = new URL(req.url, 'http://x').searchParams;
+        const cn = String(q.get('carton_no') || '').trim();
+        if (!cn) return sendJson(res, { error: 'carton_no الزامی است.' }, 400);
+        const carton = (live.cartons || []).find((c) => String(c.carton_no || '') === cn);
+        if (!carton) return sendJson(res, { error: 'کارتن یافت نشد.' }, 404);
+        const batch = (live.production_batches || []).find((bch) => bch.id === carton.batch_id || bch.batch_no === carton.batch_no) || null;
+        const lots = [];
+        if (batch) {
+            (batch.inputs || []).forEach((i) => {
+                const lot = String(i.lot_no || '');
+                lots.push({
+                    lot_no: lot, qty_kg: i.qty_kg,
+                    receipts: (live.inventory_receipts || []).filter((r) => String(r.lot_no || '').trim() === lot),
+                    incoming_qc: (live.qc_incoming_24 || []).filter((t) => String(t.heat_number || '') === lot || String(t.lot_no || '') === lot)
+                });
+            });
+        }
+        const ncrs = (live.qc_ncr_24 || []).filter((n) => String(n.carton_code || '') === cn);
+        return sendJson(res, { ok: true, carton: carton, batch: batch, lots: lots, ncrs: ncrs });
+    }
+
+    /* ---------- PHASE 2: برنامهٔ FIFO مصرف یک کالا ---------- */
+    if (req.method === 'GET' && pathname === '/api/trace/fifo-plan') {
+        if (!auth.requireRole(req, TRACE_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(invEnsure(readLive()));
+        const q = new URL(req.url, 'http://x').searchParams;
+        const itemId = String(q.get('item_id') || '').trim();
+        const warehouse = String(q.get('warehouse') || '').trim();
+        if (!itemId) return sendJson(res, { error: 'item_id الزامی است.' }, 400);
+        const item = invFindItem(live, itemId);
+        const lots = fifoLots25(live, itemId, warehouse || undefined);
+        return sendJson(res, {
+            ok: true, item: item ? { id: item.id, code: item.code, name: item.name, unit: item.unit, batch_tracking: !!item.batch_tracking } : null,
+            fifo_order: lots.map((l, i) => ({ order: i + 1, lot_no: l.lot_no, qty_available: l.qty, warehouse: l.warehouse, first_receipt: l.first_ts === Infinity ? null : new Date(l.first_ts).toISOString() })),
+            total_available: round2(lots.reduce((s, l) => s + l.qty, 0))
+        });
+    }
+
+    /* ---------- PHASE 3: کالیبراسیون ---------- */
+    if (req.method === 'POST' && pathname === '/api/cal/instruments') {
+        if (!auth.requireRole(req, CAL_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز: تعریف ابزار کالیبراسیون فقط برای QC/مهندسی مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(readLive());
+                const code = String(b.code || '').trim().slice(0, 40);
+                if (!code) return sendJson(res, { error: 'کد ابزار الزامی است.' }, 400);
+                if ((live.cal_instruments || []).some((x) => String(x.code || '') === code)) return sendJson(res, { error: 'ابزاری با این کد قبلاً ثبت شده است.' }, 409);
+                const rec = {
+                    id: 'cal25-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    code: code, name: String(b.name || '').trim().slice(0, 120), type: String(b.type || '').trim().slice(0, 60),
+                    location: String(b.location || '').trim().slice(0, 60),
+                    interval_months: Math.max(1, Math.min(60, parseInt(b.interval_months, 10) || 12)),
+                    status: 'active', last_calibration: null, next_due_date: String(b.next_due_date || '').trim().slice(0, 10) || null,
+                    created_by: traceActor25(req), created_at: new Date().toISOString()
+                };
+                live.cal_instruments.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ ابزار انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'cal.instrument.create', { code: rec.code, name: rec.name });
+                return sendJson(res, { ok: true, instrument: rec }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت ابزار ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/cal/instruments') {
+        if (!auth.requireRole(req, CAL_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(readLive());
+        const q = new URL(req.url, 'http://x').searchParams;
+        const st = String(q.get('status') || '').trim();
+        let rows = (live.cal_instruments || []).slice();
+        if (st) rows = rows.filter((x) => String(x.status || '') === st);
+        return sendJson(res, { ok: true, total: rows.length, instruments: rows });
+    }
+
+    if (req.method === 'PUT' && pathname === '/api/cal/instruments') {
+        if (!auth.requireRole(req, CAL_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(readLive());
+                const rec = (live.cal_instruments || []).find((x) => x.id === String(b.id || '') || String(x.code || '') === String(b.id || ''));
+                if (!rec) return sendJson(res, { error: 'ابزار یافت نشد.' }, 404);
+                ['name', 'type', 'location'].forEach((f) => { if (b[f] !== undefined) rec[f] = String(b[f] || '').trim().slice(0, 120); });
+                if (b.interval_months !== undefined) rec.interval_months = Math.max(1, Math.min(60, parseInt(b.interval_months, 10) || rec.interval_months || 12));
+                if (b.status !== undefined) rec.status = ['active', 'inactive'].indexOf(String(b.status)) !== -1 ? String(b.status) : rec.status;
+                rec.updated_by = traceActor25(req); rec.updated_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ ابزار انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'cal.instrument.update', { code: rec.code });
+                return sendJson(res, { ok: true, instrument: rec });
+            } catch (e) { return sendJson(res, { error: 'ویرایش ابزار ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/cal/records') {
+        if (!auth.requireRole(req, CAL_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(readLive());
+                const key = String(b.instrument_id || '').trim();
+                const inst = (live.cal_instruments || []).find((x) => x.id === key || String(x.code || '') === key);
+                if (!inst) return sendJson(res, { error: 'ابزار یافت نشد.' }, 404);
+                const result = ['pass', 'fail'].indexOf(String(b.result || '')) !== -1 ? String(b.result) : null;
+                if (!result) return sendJson(res, { error: 'نتیجه (pass/fail) الزامی است.' }, 400);
+                const dateStr = String(b.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+                const dt = new Date(dateStr + 'T00:00:00Z');
+                if (isNaN(dt.getTime())) return sendJson(res, { error: 'تاریخ نامعتبر است.' }, 400);
+                const next = new Date(dt); next.setUTCMonth(next.getUTCMonth() + (Number(inst.interval_months) || 12));
+                const rec = {
+                    id: 'calr25-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    instrument_id: inst.id, instrument_code: inst.code, instrument_name: inst.name,
+                    date: dateStr, result: result,
+                    certificate_no: String(b.certificate_no || '').trim().slice(0, 40),
+                    performed_by: String(b.performed_by || traceActor25(req)).trim().slice(0, 60),
+                    next_due_date: next.toISOString().slice(0, 10),
+                    created_at: new Date().toISOString()
+                };
+                live.cal_records.push(rec);
+                inst.last_calibration = dateStr;
+                inst.next_due_date = rec.next_due_date;
+                if (result === 'fail') inst.status = 'inactive';
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ رکورد کالیبراسیون انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'cal.record.create', { code: inst.code, result: result, next_due: rec.next_due_date });
+                return sendJson(res, { ok: true, record: rec, instrument: inst }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت رکورد کالیبراسیون ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/cal/records') {
+        if (!auth.requireRole(req, CAL_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(readLive());
+        const q = new URL(req.url, 'http://x').searchParams;
+        const ik = String(q.get('instrument_id') || '').trim();
+        const lim = Math.min(200, Math.max(1, Number(q.get('limit')) || 50));
+        let rows = (live.cal_records || []).slice().reverse();
+        if (ik) rows = rows.filter((x) => String(x.instrument_id || '') === ik || String(x.instrument_code || '') === ik);
+        return sendJson(res, { ok: true, total: rows.length, records: rows.slice(0, lim) });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/cal/due') {
+        if (!auth.requireRole(req, CAL_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(readLive());
+        const today = new Date().toISOString().slice(0, 10);
+        const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+        const rows = (live.cal_instruments || [])
+            .filter((x) => String(x.status || '') === 'active' && x.next_due_date)
+            .map((x) => ({ instrument: x, due_state: String(x.next_due_date) < today ? 'overdue' : (String(x.next_due_date) <= soon ? 'due_soon' : 'ok') }))
+            .filter((x) => x.due_state !== 'ok')
+            .sort((a, b) => String(a.instrument.next_due_date).localeCompare(String(b.instrument.next_due_date)));
+        return sendJson(res, { ok: true, total: rows.length, due: rows });
+    }
+
+    /* ---------- PHASE 4: کنترل مدارک ---------- */
+    if (req.method === 'POST' && pathname === '/api/docs') {
+        if (!auth.requireRole(req, DOC_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز: ثبت سند فقط برای QC/مهندسی/مدیر مجاز است.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(readLive());
+                const docCode = String(b.doc_code || '').trim().slice(0, 40);
+                if (!docCode) return sendJson(res, { error: 'کد سند الزامی است.' }, 400);
+                const title = String(b.title || '').trim().slice(0, 200);
+                if (!title) return sendJson(res, { error: 'عنوان سند الزامی است.' }, 400);
+                const type = ['control_plan', 'work_instruction', 'form', 'other'].indexOf(String(b.type || '')) !== -1 ? String(b.type) : 'other';
+                const prevs = (live.documents || []).filter((x) => String(x.doc_code || '') === docCode).sort((a, b) => (Number(b.rev) || 0) - (Number(a.rev) || 0));
+                const prev = prevs[0] || null;
+                const rev = b.rev != null && b.rev !== '' ? Math.max(1, parseInt(b.rev, 10) || 1) : (prev ? (Number(prev.rev) || 0) + 1 : 1);
+                if (prev && rev <= (Number(prev.rev) || 0)) return sendJson(res, { error: 'ویرایش جدید باید از آخرین ویرایش (' + prev.rev + ') بزرگ‌تر باشد.' }, 409);
+                let obsoleted = 0;
+                if (prev && String(prev.status || '') === 'active') { prev.status = 'obsolete'; prev.obsoleted_at = new Date().toISOString(); obsoleted = 1; }
+                const rec = {
+                    id: 'doc25-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                    doc_code: docCode, title: title, type: type, rev: rev,
+                    effective_date: String(b.effective_date || '').trim().slice(0, 10) || null,
+                    status: 'active', note: String(b.note || '').slice(0, 500),
+                    file_ref: String(b.file_ref || '').trim().slice(0, 200),
+                    created_by: traceActor25(req), created_at: new Date().toISOString()
+                };
+                live.documents.push(rec);
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ سند انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'docs.create', { doc_code: docCode, rev: rev, obsoleted_prev: obsoleted });
+                return sendJson(res, { ok: true, document: rec, obsoleted_previous: obsoleted }, 201);
+            } catch (e) { return sendJson(res, { error: 'ثبت سند ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/docs') {
+        if (!auth.requireRole(req, DOC_R_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        const live = traceEnsure25(readLive());
+        const q = new URL(req.url, 'http://x').searchParams;
+        const st = String(q.get('status') || '').trim(), ty = String(q.get('type') || '').trim(), dc = String(q.get('doc_code') || '').trim();
+        const lim = Math.min(200, Math.max(1, Number(q.get('limit')) || 50));
+        let rows = (live.documents || []).slice().reverse();
+        if (st) rows = rows.filter((x) => String(x.status || '') === st);
+        if (ty) rows = rows.filter((x) => String(x.type || '') === ty);
+        if (dc) rows = rows.filter((x) => String(x.doc_code || '') === dc);
+        return sendJson(res, { ok: true, total: rows.length, documents: rows.slice(0, lim) });
+    }
+
+    if (req.method === 'PUT' && pathname === '/api/docs') {
+        if (!auth.requireRole(req, DOC_W_25)) return sendJson(res, { error: 'دسترسی غیرمجاز.' }, 403);
+        readBody(req).then((raw) => {
+            try {
+                const b = sanitizeInput15b(JSON.parse(raw || '{}'));
+                const live = traceEnsure25(readLive());
+                const key = String(b.id || '').trim();
+                const rec = (live.documents || []).find((x) => x.id === key);
+                if (!rec) return sendJson(res, { error: 'سند یافت نشد.' }, 404);
+                if (b.title !== undefined) rec.title = String(b.title || '').trim().slice(0, 200);
+                if (b.type !== undefined && ['control_plan', 'work_instruction', 'form', 'other'].indexOf(String(b.type)) !== -1) rec.type = String(b.type);
+                if (b.effective_date !== undefined) rec.effective_date = String(b.effective_date || '').trim().slice(0, 10) || null;
+                if (b.note !== undefined) rec.note = String(b.note || '').slice(0, 500);
+                if (b.file_ref !== undefined) rec.file_ref = String(b.file_ref || '').trim().slice(0, 200);
+                if (b.status !== undefined && ['active', 'obsolete'].indexOf(String(b.status)) !== -1) rec.status = String(b.status);
+                rec.updated_by = traceActor25(req); rec.updated_at = new Date().toISOString();
+                if (!writeJson(LIVE_FILE, live)) throw new Error('ذخیرهٔ سند انجام نشد.');
+                cache.data = null; cache.at = 0;
+                auditLog(req, 'docs.update', { doc_code: rec.doc_code, rev: rec.rev, status: rec.status });
+                return sendJson(res, { ok: true, document: rec });
+            } catch (e) { return sendJson(res, { error: 'ویرایش سند ناموفق: ' + e.message }, 400); }
+        }).catch((e) => sendJson(res, { error: e.message }, 500));
+        return;
+    }
+    // ===== AUDIT-TRACE-25 (end) =====
+
 
 
 
